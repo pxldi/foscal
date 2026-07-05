@@ -1,0 +1,104 @@
+package app.calendarium.ui.month
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.calendarium.core.data.CalendarRepository
+import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.model.Event
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
+import javax.inject.Inject
+
+data class MonthUiState(
+    val visibleMonth: YearMonth,
+    val selectedDate: LocalDate?,
+    val eventsByDay: Map<LocalDate, List<Event>> = emptyMap(),
+    val hasVisibleCalendars: Boolean = true,
+    val today: LocalDate = LocalDate.now(),
+)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@HiltViewModel
+class MonthViewModel @Inject constructor(
+    private val repository: CalendarRepository,
+    private val prefs: UserPreferencesRepository,
+) : ViewModel() {
+
+    private val _visibleMonth = MutableStateFlow(YearMonth.now())
+    private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
+    private val zone: ZoneId = ZoneId.systemDefault()
+
+    private val calendarIds = combine(
+        repository.observeCalendars(),
+        prefs.hiddenCalendarIds,
+    ) { all, hidden ->
+        all.asSequence()
+            .filter { it.visible }
+            .filter { it.id.toString() !in hidden }
+            .map { it.id }
+            .toSet()
+    }
+
+    private val monthBounds = _visibleMonth.mapMonthToRange(zone)
+
+    private val events = combine(calendarIds, monthBounds) { ids, range ->
+        Triple(ids, range.first, range.second)
+    }.flatMapLatest { (ids, from, to) ->
+        repository.observeEvents(ids, from, to)
+    }
+
+    val state: StateFlow<MonthUiState> = combine(
+        _visibleMonth,
+        _selectedDate,
+        events,
+        calendarIds,
+    ) { month, selected, evts, ids ->
+        MonthUiState(
+            visibleMonth = month,
+            selectedDate = selected,
+            eventsByDay = evts.groupBy { it.start.atZone(zone).toLocalDate() },
+            hasVisibleCalendars = ids.isNotEmpty(),
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        MonthUiState(YearMonth.now(), LocalDate.now()),
+    )
+
+    fun selectDate(date: LocalDate?) {
+        _selectedDate.value = date
+    }
+
+    fun nextMonth() {
+        _visibleMonth.value = _visibleMonth.value.plusMonths(1)
+    }
+
+    fun previousMonth() {
+        _visibleMonth.value = _visibleMonth.value.minusMonths(1)
+    }
+
+    fun goToMonth(month: YearMonth) {
+        _visibleMonth.value = month
+    }
+}
+
+private fun kotlinx.coroutines.flow.Flow<YearMonth>.mapMonthToRange(
+    zone: ZoneId,
+): kotlinx.coroutines.flow.Flow<Pair<Instant, Instant>> =
+    map { month ->
+        val start = month.atDay(1).minusDays(7).atStartOfDay(zone).toInstant()
+        val end = month.atEndOfMonth().plusDays(7)
+            .atTime(23, 59, 59).atZone(zone).toInstant()
+        start to end
+    }

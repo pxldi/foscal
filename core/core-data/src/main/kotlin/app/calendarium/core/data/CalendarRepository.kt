@@ -2,23 +2,36 @@ package app.calendarium.core.data
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.ContentValues
+import android.content.Context
+import android.database.ContentObserver
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.CalendarContract
 import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.Event
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Reads calendars and events from the Android system [CalendarContract] provider.
  *
- * On Android, the system calendar provider is the single source of truth that other apps
- * (such as DAVx5 for Nextcloud/ownCloud CalDAV, Google, Exchange, local calendars) write to.
- * Calendarium reads and writes through this contract, so any sync adapter the user installs
- * keeps everything in sync automatically.
+ * On Android the system calendar provider is the single source of truth that other apps
+ * (DAVx5 for Nextcloud/ownCloud CalDAV, Google, Exchange, local calendars) write to.
+ * Calendarium reads and writes through this contract, so any sync adapter the user
+ * installs keeps everything in sync automatically — no CalDAV code in this app.
  */
 interface CalendarRepository {
 
@@ -26,19 +39,25 @@ interface CalendarRepository {
 
     suspend fun getCalendars(): List<Calendar>
 
-    suspend fun getVisibleCalendars(): List<Calendar>
+    suspend fun getEvents(calendarIds: Set<Long>, from: Instant, to: Instant): List<Event>
 
-    suspend fun getEvents(
-        calendarIds: Set<Long>,
-        from: Instant,
-        to: Instant,
-    ): List<Event>
+    /** Emits the current list of calendars, then re-emits whenever the provider changes. */
+    fun observeCalendars(): Flow<List<Calendar>>
+
+    fun observeEvents(calendarIds: Set<Long>, from: Instant, to: Instant): Flow<List<Event>>
+
+    /** Creates a fully local (offline) calendar that only this device holds. */
+    suspend fun createLocalCalendar(name: String, color: Int): Long?
+
+    suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean)
 }
 
 @Singleton
 class CalendarContractRepository @Inject constructor(
-    private val resolver: ContentResolver,
+    @ApplicationContext private val context: Context,
 ) : CalendarRepository {
+
+    private val resolver: ContentResolver get() = context.contentResolver
 
     override fun getCalendarUri(calendarId: Long): Uri =
         ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId)
@@ -60,7 +79,7 @@ class CalendarContractRepository @Inject constructor(
             projection,
             null,
             null,
-            null,
+            "${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME} ASC",
         )?.use { c ->
             while (c.moveToNext()) {
                 out += Calendar(
@@ -78,16 +97,64 @@ class CalendarContractRepository @Inject constructor(
         out
     }
 
-    override suspend fun getVisibleCalendars(): List<Calendar> =
-        getCalendars().filter { it.visible }
-
     override suspend fun getEvents(
         calendarIds: Set<Long>,
         from: Instant,
         to: Instant,
     ): List<Event> = withContext(Dispatchers.IO) {
         if (calendarIds.isEmpty()) return@withContext emptyList()
+        queryInstances(calendarIds, from, to)
+    }
 
+    override fun observeCalendars(): Flow<List<Calendar>> = contentChanges(
+        uri = CalendarContract.Calendars.CONTENT_URI,
+    ).onStart { emit(Unit) }.map { getCalendars() }.flowOn(Dispatchers.IO)
+
+    override fun observeEvents(
+        calendarIds: Set<Long>,
+        from: Instant,
+        to: Instant,
+    ): Flow<List<Event>> = contentChanges(CalendarContract.Events.CONTENT_URI)
+        .onStart { emit(Unit) }
+        .map { getEvents(calendarIds, from, to) }
+        .flowOn(Dispatchers.IO)
+
+    override suspend fun createLocalCalendar(name: String, color: Int): Long? =
+        withContext(Dispatchers.IO) {
+            val values = ContentValues().apply {
+                put(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+                put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+                put(CalendarContract.Calendars.NAME, name)
+                put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, name)
+                put(CalendarContract.Calendars.CALENDAR_COLOR, color)
+                put(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.CAL_ACCESS_OWNER)
+                put(CalendarContract.Calendars.OWNER_ACCOUNT, LOCAL_ACCOUNT_NAME)
+                put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+                put(CalendarContract.Calendars.VISIBLE, 1)
+                put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, TimeZone.getDefault().id)
+            }
+            val uri = CalendarContract.Calendars.CONTENT_URI.buildUpon()
+                .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+                .build()
+            resolver.insert(uri, values)?.let { ContentUris.parseId(it) }
+        }
+
+    override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) {
+        withContext(Dispatchers.IO) {
+            val values = ContentValues().apply {
+                put(CalendarContract.Calendars.VISIBLE, if (hidden) 0 else 1)
+            }
+            resolver.update(getCalendarUri(calendarId), values, null, null)
+        }
+    }
+
+    private fun queryInstances(
+        calendarIds: Set<Long>,
+        from: Instant,
+        to: Instant,
+    ): List<Event> {
         val projection = arrayOf(
             CalendarContract.Instances.EVENT_ID,
             CalendarContract.Instances.CALENDAR_ID,
@@ -99,17 +166,15 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.EVENT_TIMEZONE,
         )
-        val uri = CalendarContract.Instances.CONTENT_URI
-        val selection = "${CalendarContract.Instances.CALENDAR_ID} IN (${
-            calendarIds.joinToString(",") { "?" }
-        })"
+        val placeholders = calendarIds.joinToString(",") { "?" }
+        val selection = "${CalendarContract.Instances.CALENDAR_ID} IN ($placeholders)"
         val args = calendarIds.map { it.toString() }.toTypedArray()
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, from.toEpochMilli())
+        ContentUris.appendId(builder, to.toEpochMilli())
         val out = mutableListOf<Event>()
         resolver.query(
-            ContentUris.appendId(
-                ContentUris.appendId(uri.buildUpon(), from.toEpochMilli()),
-                to.toEpochMilli(),
-            ).build(),
+            builder.build(),
             projection,
             selection,
             args,
@@ -131,6 +196,20 @@ class CalendarContractRepository @Inject constructor(
                 )
             }
         }
-        out
+        return out
+    }
+
+    private fun contentChanges(uri: Uri): Flow<Unit> = callbackFlow {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                trySend(Unit)
+            }
+        }
+        resolver.registerContentObserver(uri, /* notifyForDescendants = */ true, observer)
+        awaitClose { resolver.unregisterContentObserver(observer) }
+    }.flowOn(Dispatchers.IO)
+
+    companion object {
+        private const val LOCAL_ACCOUNT_NAME = "Calendarium"
     }
 }
