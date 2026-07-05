@@ -72,6 +72,36 @@ class CalendarContractRepository @Inject constructor(
 
     private val resolver: ContentResolver get() = context.contentResolver
 
+    private fun safeQuery(
+        uri: Uri,
+        projection: Array<String>?,
+        selection: String?,
+        selectionArgs: Array<String>?,
+        sortOrder: String?,
+    ): android.database.Cursor? = try {
+        safeQuery(uri, projection, selection, selectionArgs, sortOrder)
+    } catch (_: SecurityException) {
+        null
+    }
+
+    private fun safeInsert(uri: Uri, values: ContentValues): Uri? = try {
+        safeInsert(uri, values)
+    } catch (_: SecurityException) {
+        null
+    }
+
+    private fun safeUpdate(uri: Uri, values: ContentValues?, where: String?, args: Array<String>?): Int = try {
+        safeUpdate(uri, values, where, args)
+    } catch (_: SecurityException) {
+        0
+    }
+
+    private fun safeDelete(uri: Uri, where: String?, args: Array<String>?): Int = try {
+        safeDelete(uri, where, args)
+    } catch (_: SecurityException) {
+        0
+    }
+
     override fun getCalendarUri(calendarId: Long): Uri =
         ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId)
 
@@ -87,7 +117,7 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Calendars.SYNC_EVENTS,
         )
         val out = mutableListOf<Calendar>()
-        resolver.query(
+        safeQuery(
             CalendarContract.Calendars.CONTENT_URI,
             projection,
             null,
@@ -119,18 +149,21 @@ class CalendarContractRepository @Inject constructor(
         queryInstances(calendarIds, from, to)
     }
 
-    override fun observeCalendars(): Flow<List<Calendar>> = contentChanges(
-        uri = CalendarContract.Calendars.CONTENT_URI,
-    ).onStart { emit(Unit) }.map { getCalendars() }.flowOn(Dispatchers.IO)
+    override fun observeCalendars(): Flow<List<Calendar>> =
+        contentChanges(CalendarContract.Calendars.CONTENT_URI)
+            .onStart { emit(Unit) }
+            .map { getCalendars() }
+            .flowOn(Dispatchers.IO)
 
     override fun observeEvents(
         calendarIds: Set<Long>,
         from: Instant,
         to: Instant,
-    ): Flow<List<Event>> = contentChanges(CalendarContract.Events.CONTENT_URI)
-        .onStart { emit(Unit) }
-        .map { getEvents(calendarIds, from, to) }
-        .flowOn(Dispatchers.IO)
+    ): Flow<List<Event>> =
+        contentChanges(CalendarContract.Events.CONTENT_URI)
+            .onStart { emit(Unit) }
+            .map { getEvents(calendarIds, from, to) }
+            .flowOn(Dispatchers.IO)
 
     override suspend fun createLocalCalendar(name: String, color: Int): Long? =
         withContext(Dispatchers.IO) {
@@ -151,7 +184,7 @@ class CalendarContractRepository @Inject constructor(
                 .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
                 .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
                 .build()
-            resolver.insert(uri, values)?.let { ContentUris.parseId(it) }
+            safeInsert(uri, values)?.let { ContentUris.parseId(it) }
         }
 
     override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) {
@@ -159,13 +192,13 @@ class CalendarContractRepository @Inject constructor(
             val values = ContentValues().apply {
                 put(CalendarContract.Calendars.VISIBLE, if (hidden) 0 else 1)
             }
-            resolver.update(getCalendarUri(calendarId), values, null, null)
+            safeUpdate(getCalendarUri(calendarId), values, null, null)
         }
     }
 
     override suspend fun createEvent(input: EventInput): Long? = withContext(Dispatchers.IO) {
         val values = eventToContentValues(input)
-        val newId = resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+        val newId = safeInsert(CalendarContract.Events.CONTENT_URI, values)
             ?.let { ContentUris.parseId(it) } ?: return@withContext null
         setReminder(newId, input.reminderMinutesBefore)
         newId
@@ -175,9 +208,9 @@ class CalendarContractRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val values = eventToContentValues(input)
             val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
-            val rows = resolver.update(uri, values, null, null)
+            val rows = safeUpdate(uri, values, null, null)
             if (rows > 0) {
-                resolver.delete(
+                safeDelete(
                     CalendarContract.Reminders.CONTENT_URI,
                     "${CalendarContract.Reminders.EVENT_ID} = ?",
                     arrayOf(eventId.toString()),
@@ -191,13 +224,13 @@ class CalendarContractRepository @Inject constructor(
 
     override suspend fun deleteEvent(eventId: Long): Boolean = withContext(Dispatchers.IO) {
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
-        resolver.delete(uri, null, null) > 0
+        safeDelete(uri, null, null) > 0
     }
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> =
         withContext(Dispatchers.IO) {
             val out = mutableListOf<Int>()
-            resolver.query(
+            safeQuery(
                 CalendarContract.Reminders.CONTENT_URI,
                 arrayOf(CalendarContract.Reminders.MINUTES),
                 "${CalendarContract.Reminders.EVENT_ID} = ?",
@@ -218,7 +251,7 @@ class CalendarContractRepository @Inject constructor(
         val events = getEvents(calendarIds, from, to)
         val now = System.currentTimeMillis()
         events.flatMap { event ->
-            val reminders = resolver.query(
+            val reminders = safeQuery(
                 CalendarContract.Reminders.CONTENT_URI,
                 arrayOf(CalendarContract.Reminders.MINUTES),
                 "${CalendarContract.Reminders.EVENT_ID} = ?",
@@ -249,7 +282,7 @@ class CalendarContractRepository @Inject constructor(
             put(CalendarContract.Reminders.MINUTES, minutesBefore)
             put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
         }
-        resolver.insert(CalendarContract.Reminders.CONTENT_URI, values)
+        safeInsert(CalendarContract.Reminders.CONTENT_URI, values)
     }
 
     private fun eventToContentValues(input: EventInput): ContentValues = ContentValues().apply {
@@ -321,7 +354,7 @@ class CalendarContractRepository @Inject constructor(
         ContentUris.appendId(builder, from.toEpochMilli())
         ContentUris.appendId(builder, to.toEpochMilli())
         val out = mutableListOf<Event>()
-        resolver.query(
+        safeQuery(
             builder.build(),
             projection,
             selection,
