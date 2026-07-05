@@ -11,6 +11,8 @@ import android.os.Looper
 import android.provider.CalendarContract
 import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.Event
+import app.calendarium.core.model.EventInput
+import app.calendarium.core.model.Frequency
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -50,6 +52,14 @@ interface CalendarRepository {
     suspend fun createLocalCalendar(name: String, color: Int): Long?
 
     suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean)
+
+    suspend fun createEvent(input: EventInput): Long?
+
+    suspend fun updateEvent(eventId: Long, input: EventInput): Boolean
+
+    suspend fun deleteEvent(eventId: Long): Boolean
+
+    suspend fun getReminderMinutes(eventId: Long): List<Int>
 }
 
 @Singleton
@@ -147,6 +157,108 @@ class CalendarContractRepository @Inject constructor(
                 put(CalendarContract.Calendars.VISIBLE, if (hidden) 0 else 1)
             }
             resolver.update(getCalendarUri(calendarId), values, null, null)
+        }
+    }
+
+    override suspend fun createEvent(input: EventInput): Long? = withContext(Dispatchers.IO) {
+        val values = eventToContentValues(input)
+        val newId = resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+            ?.let { ContentUris.parseId(it) } ?: return@withContext null
+        setReminder(newId, input.reminderMinutesBefore)
+        newId
+    }
+
+    override suspend fun updateEvent(eventId: Long, input: EventInput): Boolean =
+        withContext(Dispatchers.IO) {
+            val values = eventToContentValues(input)
+            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+            val rows = resolver.update(uri, values, null, null)
+            if (rows > 0) {
+                resolver.delete(
+                    CalendarContract.Reminders.CONTENT_URI,
+                    "${CalendarContract.Reminders.EVENT_ID} = ?",
+                    arrayOf(eventId.toString()),
+                )
+                setReminder(eventId, input.reminderMinutesBefore)
+                true
+            } else {
+                false
+            }
+        }
+
+    override suspend fun deleteEvent(eventId: Long): Boolean = withContext(Dispatchers.IO) {
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+        resolver.delete(uri, null, null) > 0
+    }
+
+    override suspend fun getReminderMinutes(eventId: Long): List<Int> =
+        withContext(Dispatchers.IO) {
+            val out = mutableListOf<Int>()
+            resolver.query(
+                CalendarContract.Reminders.CONTENT_URI,
+                arrayOf(CalendarContract.Reminders.MINUTES),
+                "${CalendarContract.Reminders.EVENT_ID} = ?",
+                arrayOf(eventId.toString()),
+                null,
+            )?.use { c ->
+                while (c.moveToNext()) out += c.getInt(0)
+            }
+            out
+        }
+
+    private fun setReminder(eventId: Long, minutesBefore: Int?) {
+        if (minutesBefore == null) return
+        val values = ContentValues().apply {
+            put(CalendarContract.Reminders.EVENT_ID, eventId)
+            put(CalendarContract.Reminders.MINUTES, minutesBefore)
+            put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+        }
+        resolver.insert(CalendarContract.Reminders.CONTENT_URI, values)
+    }
+
+    private fun eventToContentValues(input: EventInput): ContentValues = ContentValues().apply {
+        put(CalendarContract.Events.CALENDAR_ID, input.calendarId)
+        put(CalendarContract.Events.TITLE, input.title.trim().ifEmpty { "(Untitled)" })
+        put(CalendarContract.Events.EVENT_LOCATION, input.location)
+        put(CalendarContract.Events.DESCRIPTION, input.description)
+        put(CalendarContract.Events.ALL_DAY, if (input.allDay) 1 else 0)
+        put(CalendarContract.Events.EVENT_TIMEZONE, input.timezone)
+        put(CalendarContract.Events.DTSTART, input.start.toEpochMilli())
+
+        if (input.frequency == Frequency.NONE) {
+            // Non-recurring: provider requires DTEND (or DURATION), forbids RRULE.
+            put(CalendarContract.Events.DTEND, input.end.toEpochMilli())
+            putNull(CalendarContract.Events.RRULE)
+            putNull(CalendarContract.Events.DURATION)
+        } else {
+            // Recurring: provider requires DURATION, forbids DTEND.
+            put(CalendarContract.Events.DURATION, formatDuration(input.start, input.end, input.allDay))
+            put(CalendarContract.Events.RRULE, "FREQ=${input.frequency.name}")
+            putNull(CalendarContract.Events.DTEND)
+        }
+    }
+
+    /** RFC 5545 duration (P[n]DT[n]H[n]M[n]S, or P[n]W for weeks, or P[n]D for all-day). */
+    private fun formatDuration(start: Instant, end: Instant, allDay: Boolean): String {
+        val totalSeconds = (end.toEpochMilli() - start.toEpochMilli()) / 1000
+        if (allDay) {
+            val days = ((totalSeconds + 86_400 / 2) / 86_400).coerceAtLeast(1)
+            return "P${days}D"
+        }
+        val days = totalSeconds / 86_400
+        val hours = (totalSeconds % 86_400) / 3_600
+        val minutes = (totalSeconds % 3_600) / 60
+        val seconds = totalSeconds % 60
+        return buildString {
+            append('P')
+            if (days > 0) append("${days}D")
+            if (hours > 0 || minutes > 0 || seconds > 0) {
+                append('T')
+                if (hours > 0) append("${hours}H")
+                if (minutes > 0) append("${minutes}M")
+                if (seconds > 0) append("${seconds}S")
+            }
+            if (length == 1) append("T0S") // non-empty body required
         }
     }
 

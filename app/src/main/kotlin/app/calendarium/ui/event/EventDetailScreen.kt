@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,6 +47,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun EventDetailRoute(
     onBack: () -> Unit,
+    onEdit: (Long) -> Unit,
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -57,6 +59,14 @@ fun EventDetailRoute(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close")
+                    }
+                },
+                actions = {
+                    val event = state.event
+                    if (event != null) {
+                        IconButton(onClick = { onEdit(event.id) }) {
+                            Icon(Icons.Outlined.Edit, "Edit")
+                        }
                     }
                 },
             )

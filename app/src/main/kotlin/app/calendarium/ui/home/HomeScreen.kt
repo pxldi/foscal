@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.ui.agenda.AgendaRoute
 import app.calendarium.ui.month.MonthRoute
-import androidx.compose.material3.ExperimentalMaterial3Api
 
 private enum class HomeTab(val label: String, val icon: ImageVector) {
     Month("Month", Icons.Outlined.CalendarMonth),
@@ -33,6 +35,7 @@ private enum class HomeTab(val label: String, val icon: ImageVector) {
 fun HomeRoute(
     onOpenCalendars: () -> Unit,
     onOpenEvent: (Long) -> Unit,
+    onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
     Scaffold(
@@ -53,6 +56,13 @@ fun HomeRoute(
                     label = { Text("Calendars") },
                 )
             }
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { onOpenEditor(null, null, null) },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("New event") },
+            )
         },
     ) { padding ->
         Box(
