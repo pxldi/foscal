@@ -5,30 +5,32 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,87 +47,107 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventDetailRoute(
-    onBack: () -> Unit,
+fun EventDetailSheet(
+    eventId: Long,
+    onDismiss: () -> Unit,
     onEdit: (Long) -> Unit,
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(eventId) { viewModel.load(eventId) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Event") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close")
-                    }
-                },
-                actions = {
-                    val event = state.event
-                    if (event != null) {
-                        IconButton(onClick = { onEdit(event.id) }) {
-                            Icon(Icons.Outlined.Edit, "Edit")
-                        }
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
         when {
             state.loading -> Box(
-                Modifier.fillMaxSize().padding(padding),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CircularProgressIndicator()
             }
 
             state.event == null -> Box(
-                Modifier.fillMaxSize().padding(padding),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Event not found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Event not found.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
-            else -> EventDetailContent(
+            else -> DetailContent(
                 event = state.event!!,
                 calendarName = state.calendar?.displayName ?: "Calendar",
                 calendarColor = state.calendar?.color ?: 0xFF1976D2.toInt(),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                onEdit = { onEdit(eventId) },
             )
         }
     }
 }
 
 @Composable
-private fun EventDetailContent(
+private fun DetailContent(
     event: Event,
     calendarName: String,
     calendarColor: Int,
-    modifier: Modifier = Modifier,
+    onEdit: () -> Unit,
 ) {
     Column(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Hero header: color stripe + title + calendar name + edit
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Box(
-                modifier = Modifier
-                    .size(14.dp)
-                    .clip(CircleShape)
+                Modifier
+                    .width(4.dp)
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(Color(calendarColor)),
             )
-            Text(calendarName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    event.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(calendarColor)),
+                    )
+                    Text(
+                        calendarName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            FilledTonalIconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, contentDescription = "Edit")
+            }
         }
-        Text(
-            event.title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
+
         InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event))
         event.location?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.LocationOn, "Location", it)
@@ -166,7 +188,7 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
                     modifier = Modifier.size(20.dp),
                 )
             }
-            Column(modifier = Modifier.weight(1f)) {
+            Column(Modifier.weight(1f)) {
                 Text(
                     label,
                     style = MaterialTheme.typography.labelSmall,

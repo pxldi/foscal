@@ -16,12 +16,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.ui.agenda.AgendaRoute
+import app.calendarium.ui.event.EventDetailSheet
 import app.calendarium.ui.month.MonthRoute
 import app.calendarium.ui.settings.SettingsSheet
 
@@ -33,11 +35,12 @@ private enum class HomeTab(val label: String, val icon: ImageVector) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeRoute(
-    onOpenEvent: (Long) -> Unit,
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
+    onOpenEditEvent: (Long) -> Unit,
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
     var showSettings by remember { mutableStateOf(false) }
+    var detailEventId by remember { mutableLongStateOf(-1L) }
 
     Scaffold(
         bottomBar = {
@@ -67,12 +70,12 @@ fun HomeRoute(
         ) {
             when (tab) {
                 HomeTab.Month -> MonthRoute(
-                    onEventClick = onOpenEvent,
+                    onEventClick = { id -> detailEventId = id },
                     onNewEvent = { start, end -> onOpenEditor(null, start, end) },
                     onOpenSettings = { showSettings = true },
                 )
                 HomeTab.Agenda -> AgendaRoute(
-                    onEventClick = onOpenEvent,
+                    onEventClick = { id -> detailEventId = id },
                     onOpenSettings = { showSettings = true },
                 )
             }
@@ -81,5 +84,15 @@ fun HomeRoute(
 
     if (showSettings) {
         SettingsSheet(onDismiss = { showSettings = false })
+    }
+    if (detailEventId > 0L) {
+        EventDetailSheet(
+            eventId = detailEventId,
+            onDismiss = { detailEventId = -1L },
+            onEdit = { id ->
+                detailEventId = -1L
+                onOpenEditEvent(id)
+            },
+        )
     }
 }

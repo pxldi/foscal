@@ -7,7 +7,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.calendarium.ui.editor.EventEditorRoute
-import app.calendarium.ui.event.EventDetailRoute
 import app.calendarium.ui.home.HomeRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
@@ -15,10 +14,6 @@ import app.calendarium.ui.permission.PermissionGate
 object Routes {
     const val ONBOARDING = "onboarding"
     const val MAIN = "main"
-
-    /** Edit an existing event by id. */
-    const val EVENT_DETAIL = "event/{eventId}"
-    fun eventDetail(eventId: Long) = "event/$eventId"
 
     /**
      * Editor supports both new and edit. `eventId`, `calendarId`, `start`, `end` are all
@@ -62,21 +57,12 @@ fun CalendariumNavHost(startOnboarding: Boolean) {
         composable(Routes.MAIN) {
             PermissionGate {
                 HomeRoute(
-                    onOpenEvent = { id -> navController.navigate(Routes.eventDetail(id)) },
                     onOpenEditor = { calId, start, end ->
                         navController.navigate(Routes.editorNew(calId, start, end))
                     },
+                    onOpenEditEvent = { id -> navController.navigate(Routes.editorEdit(id)) },
                 )
             }
-        }
-        composable(
-            route = Routes.EVENT_DETAIL,
-            arguments = listOf(navArgument("eventId") { type = NavType.StringType }),
-        ) {
-            EventDetailRoute(
-                onBack = { navController.popBackStack() },
-                onEdit = { id -> navController.navigate(Routes.editorEdit(id)) },
-            )
         }
         composable(
             route = Routes.EVENT_EDITOR,
