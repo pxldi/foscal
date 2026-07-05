@@ -240,12 +240,12 @@ private fun EventBlock(
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
-    val showTime = heightDp >= 34.dp
-    val showLocation = !compact && heightDp >= 56.dp && !event.location.isNullOrBlank()
+    val showTime = !compact && heightDp >= 34.dp
+    val showLocation = !compact && heightDp >= 64.dp && !event.location.isNullOrBlank()
     val textPadding = if (compact) {
         Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 1.dp)
     } else {
-        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 4.dp)
+        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)
     }
     val titleScale = if (compact) 10.sp else 13.sp
     val detailScale = if (compact) 9.sp else 11.sp
