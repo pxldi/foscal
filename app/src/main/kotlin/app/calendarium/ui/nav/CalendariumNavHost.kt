@@ -36,7 +36,7 @@ object Routes {
 }
 
 @Composable
-fun CalendariumNavHost(startOnboarding: Boolean) {
+fun CalendariumNavHost(startOnboarding: Boolean, openEventId: Long = -1L) {
     val navController = rememberNavController()
 
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
@@ -61,6 +61,7 @@ fun CalendariumNavHost(startOnboarding: Boolean) {
                         navController.navigate(Routes.editorNew(calId, start, end))
                     },
                     onOpenEditEvent = { id -> navController.navigate(Routes.editorEdit(id)) },
+                    initialDetailEventId = openEventId,
                 )
             }
         }

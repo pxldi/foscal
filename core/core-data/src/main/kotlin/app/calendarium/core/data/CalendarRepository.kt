@@ -13,6 +13,7 @@ import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.Event
 import app.calendarium.core.model.EventInput
 import app.calendarium.core.model.Frequency
+import app.calendarium.core.model.ScheduledReminder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -60,6 +61,8 @@ interface CalendarRepository {
     suspend fun deleteEvent(eventId: Long): Boolean
 
     suspend fun getReminderMinutes(eventId: Long): List<Int>
+
+    suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder>
 }
 
 @Singleton
@@ -205,6 +208,39 @@ class CalendarContractRepository @Inject constructor(
             }
             out
         }
+
+    override suspend fun getUpcomingReminders(
+        from: Instant,
+        to: Instant,
+    ): List<ScheduledReminder> = withContext(Dispatchers.IO) {
+        val calendarIds = getCalendars().map { it.id }.toSet()
+        if (calendarIds.isEmpty()) return@withContext emptyList()
+        val events = getEvents(calendarIds, from, to)
+        val now = System.currentTimeMillis()
+        events.flatMap { event ->
+            val reminders = resolver.query(
+                CalendarContract.Reminders.CONTENT_URI,
+                arrayOf(CalendarContract.Reminders.MINUTES),
+                "${CalendarContract.Reminders.EVENT_ID} = ?",
+                arrayOf(event.id.toString()),
+                null,
+            )?.use { c ->
+                buildList { while (c.moveToNext()) add(c.getInt(0)) }
+            }.orEmpty()
+            reminders.mapNotNull { minutes ->
+                val trigger = event.start.toEpochMilli() - minutes * 60_000L
+                if (trigger <= now) return@mapNotNull null
+                ScheduledReminder(
+                    eventId = event.id,
+                    calendarId = event.calendarId,
+                    title = event.title,
+                    location = event.location,
+                    startMillis = event.start.toEpochMilli(),
+                    minutesBefore = minutes,
+                )
+            }
+        }
+    }
 
     private fun setReminder(eventId: Long, minutesBefore: Int?) {
         if (minutesBefore == null) return

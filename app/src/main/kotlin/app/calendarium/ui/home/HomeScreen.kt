@@ -44,10 +44,11 @@ private enum class HomeTab(val label: String, val icon: ImageVector) {
 fun HomeRoute(
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
     onOpenEditEvent: (Long) -> Unit,
+    initialDetailEventId: Long = -1L,
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
     var showSettings by remember { mutableStateOf(false) }
-    var detailEventId by remember { mutableLongStateOf(-1L) }
+    var detailEventId by remember { mutableLongStateOf(initialDetailEventId) }
 
     Scaffold(
         bottomBar = {
