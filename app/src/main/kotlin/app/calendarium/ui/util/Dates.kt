@@ -39,15 +39,17 @@ object Dates {
         return date.minusDays(diff.toLong())
     }
 
-    fun monthCells(month: YearMonth, firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY): List<LocalDate?> {
+    /**
+     * Always returns 42 cells (6 weeks × 7 days) so the grid height stays stable
+     * across months. Leading/trailing days are filled with the adjacent month's
+     * dates so the user sees continuity — those days should be rendered as
+     * "out of month" (greyed) by the caller.
+     */
+    fun monthCells(month: YearMonth, firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY): List<LocalDate> {
         val firstOfMonth = month.atDay(1)
         val offset = (firstOfMonth.dayOfWeek.value - firstDayOfWeek.value + 7) % 7
-        val daysInMonth = month.lengthOfMonth()
-        val totalCells = ((offset + daysInMonth + 6) / 7) * 7
-        return (0 until totalCells).map { i ->
-            val day = i - offset + 1
-            if (day in 1..daysInMonth) month.atDay(day) else null
-        }
+        val gridOrigin = firstOfMonth.minusDays(offset.toLong())
+        return (0 until 42).map { i -> gridOrigin.plusDays(i.toLong()) }
     }
 
     fun instantToLocal(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): LocalDateTime =

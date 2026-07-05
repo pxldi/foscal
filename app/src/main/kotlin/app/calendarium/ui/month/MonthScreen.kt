@@ -131,6 +131,7 @@ fun MonthRoute(
                 val cells = remember(month) { Dates.monthCells(month) }
                 MonthGrid(
                     cells = cells,
+                    currentMonth = month,
                     eventsByDay = state.eventsByDay,
                     today = state.today,
                     selected = state.selectedDate,
@@ -188,7 +189,8 @@ private fun WeekHeader() {
 
 @Composable
 private fun MonthGrid(
-    cells: List<LocalDate?>,
+    cells: List<LocalDate>,
+    currentMonth: YearMonth,
     eventsByDay: Map<LocalDate, List<Event>>,
     today: LocalDate,
     selected: LocalDate?,
@@ -202,25 +204,24 @@ private fun MonthGrid(
     ) {
         rows.forEach { week ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 week.forEach { date ->
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .aspectRatio(1f),
+                            .fillMaxSize(),
                     ) {
-                        if (date != null) {
-                            DayCell(
-                                date = date,
-                                events = eventsByDay[date].orEmpty(),
-                                isToday = date == today,
-                                isSelected = date == selected,
-                                onClick = { onSelect(date) },
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
+                        DayCell(
+                            date = date,
+                            isInMonth = date.year == currentMonth.year && date.month == currentMonth.month,
+                            events = eventsByDay[date].orEmpty(),
+                            isToday = date == today,
+                            isSelected = date == selected,
+                            onClick = { onSelect(date) },
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }
@@ -231,6 +232,7 @@ private fun MonthGrid(
 @Composable
 private fun DayCell(
     date: LocalDate,
+    isInMonth: Boolean,
     events: List<Event>,
     isToday: Boolean,
     isSelected: Boolean,
@@ -239,6 +241,8 @@ private fun DayCell(
 ) {
     val shape = RoundedCornerShape(14.dp)
     val primary = MaterialTheme.colorScheme.primary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
     Box(
         modifier = modifier
             .clip(shape)
@@ -254,13 +258,13 @@ private fun DayCell(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(6.dp),
+            horizontalAlignment = Alignment.Start,
         ) {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .padding(start = 2.dp, top = 2.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
                     .background(if (isToday) primary else Color.Transparent),
                 contentAlignment = Alignment.Center,
@@ -269,17 +273,21 @@ private fun DayCell(
                     text = date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isToday) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurface,
+                    color = when {
+                        isToday -> MaterialTheme.colorScheme.onPrimary
+                        !isInMonth -> muted
+                        else -> onSurface
+                    },
                 )
             }
-            EventBars(events.take(3))
+            EventBars(events.take(3), isInMonth = isInMonth)
             if (events.size > 3) {
                 Text(
                     "+${events.size - 3}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (isInMonth) MaterialTheme.colorScheme.primary else muted,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 2.dp),
                 )
             }
         }
@@ -287,10 +295,12 @@ private fun DayCell(
 }
 
 @Composable
-private fun EventBars(events: List<Event>) {
+private fun EventBars(events: List<Event>, isInMonth: Boolean = true) {
     Column(
         verticalArrangement = Arrangement.spacedBy(1.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, start = 2.dp),
     ) {
         events.forEach { event ->
             Box(
@@ -298,7 +308,10 @@ private fun EventBars(events: List<Event>) {
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(event.calendarColorArgb())),
+                    .background(
+                        Color(event.calendarColorArgb())
+                            .copy(alpha = if (isInMonth) 1f else 0.4f),
+                    ),
             )
         }
     }
