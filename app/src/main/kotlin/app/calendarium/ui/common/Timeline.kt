@@ -243,17 +243,17 @@ private fun EventBlock(
     val showTime = !compact && heightDp >= 34.dp
     val showLocation = !compact && heightDp >= 64.dp && !event.location.isNullOrBlank()
     val textPadding = if (compact) {
-        Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 1.dp)
+        Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)
     } else {
-        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp)
+        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 6.dp)
     }
     val titleScale = if (compact) 10.sp else 13.sp
-    val detailScale = if (compact) 9.sp else 11.sp
+    val detailScale = if (compact) 10.sp else 11.sp
+    val maxTitleLines = if (compact) 3 else 2
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius))
-            .background(baseColor.copy(alpha = 0.85f))
+            .background(baseColor.copy(alpha = 0.85f), RoundedCornerShape(cornerRadius))
             .clickable(onClick = onClick),
     ) {
         if (accentStripe) {
@@ -270,7 +270,7 @@ private fun EventBlock(
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
                 fontSize = titleScale,
-                maxLines = if (compact) 1 else 2,
+                maxLines = maxTitleLines,
                 overflow = TextOverflow.Ellipsis,
             )
             if (showTime) {
