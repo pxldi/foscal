@@ -66,6 +66,7 @@ class EventEditorViewModel @Inject constructor(
     private fun load(eventId: Long, startArg: Long?, endArg: Long?, calArg: Long?) {
         viewModelScope.launch {
             val hidden = prefs.hiddenCalendarIds.first()
+            val defaultReminder = prefs.defaultReminderMinutes.first() ?: 15
             val visible = repository.getCalendars()
                 .filter { it.visible && it.id.toString() !in hidden }
             if (eventId > 0L) {
@@ -113,6 +114,7 @@ class EventEditorViewModel @Inject constructor(
                 startTime = defaultStart.toLocalTime(),
                 endDate = defaultEnd.toLocalDate(),
                 endTime = defaultEnd.toLocalTime(),
+                reminderMinutesBefore = defaultReminder,
             )
         }
     }

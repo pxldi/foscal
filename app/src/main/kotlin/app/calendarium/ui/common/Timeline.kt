@@ -240,12 +240,11 @@ private fun EventBlock(
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
-    val showTime = !compact && heightDp >= 34.dp
-    val showLocation = !compact && heightDp >= 64.dp && !event.location.isNullOrBlank()
+    val showTime = !compact && heightDp >= 36.dp
     val textPadding = if (compact) {
         Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)
     } else {
-        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 6.dp)
+        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp)
     }
     val titleScale = if (compact) 10.sp else 13.sp
     val detailScale = if (compact) 10.sp else 11.sp
@@ -281,18 +280,6 @@ private fun EventBlock(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-            if (showLocation) {
-                val loc = event.location
-                if (!loc.isNullOrBlank()) {
-                    Text(
-                        loc,
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                }
             }
         }
     }

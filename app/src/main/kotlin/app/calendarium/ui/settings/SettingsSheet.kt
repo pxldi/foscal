@@ -5,15 +5,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -85,6 +91,22 @@ fun SettingsSheet(
                 )
             }
             item {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Notifications",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            }
+            item {
+                NotificationSettings(
+                    selected = state.defaultReminderMinutes,
+                    onSelect = { viewModel.setDefaultReminder(it) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            item {
                 Text(
                     "Sync for CalDAV calendars (Nextcloud, ownCloud) is managed by DAVx\u2085 or your account app.",
                     style = MaterialTheme.typography.bodySmall,
@@ -149,4 +171,45 @@ private fun ColorDot(colorArgb: Int) {
             .clip(CircleShape)
             .background(Color(colorArgb)),
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NotificationSettings(
+    selected: Int?,
+    onSelect: (Int?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val options = listOf(
+        null to "None",
+        5 to "5 min before",
+        15 to "15 min before",
+        30 to "30 min before",
+        60 to "1 hour before",
+        1440 to "1 day before",
+    )
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Default reminder for new events",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            options.forEach { (mins, label) ->
+                AssistChip(
+                    onClick = { onSelect(mins) },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                    colors = if (selected == mins) {
+                        AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    } else {
+                        AssistChipDefaults.assistChipColors()
+                    },
+                )
+            }
+        }
+    }
 }
