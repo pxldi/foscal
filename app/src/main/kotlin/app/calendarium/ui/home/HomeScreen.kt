@@ -6,7 +6,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material.icons.outlined.ViewDay
+import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -23,12 +26,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.ui.agenda.AgendaRoute
+import app.calendarium.ui.day.DayRoute
 import app.calendarium.ui.event.EventDetailSheet
 import app.calendarium.ui.month.MonthRoute
 import app.calendarium.ui.settings.SettingsSheet
+import app.calendarium.ui.week.WeekRoute
 
 private enum class HomeTab(val label: String, val icon: ImageVector) {
     Month("Month", Icons.Outlined.CalendarMonth),
+    Week("Week", Icons.Outlined.ViewWeek),
+    Day("Day", Icons.Outlined.ViewDay),
     Agenda("Agenda", Icons.Outlined.ViewAgenda),
 }
 
@@ -72,6 +79,14 @@ fun HomeRoute(
                 HomeTab.Month -> MonthRoute(
                     onEventClick = { id -> detailEventId = id },
                     onNewEvent = { start, end -> onOpenEditor(null, start, end) },
+                    onOpenSettings = { showSettings = true },
+                )
+                HomeTab.Week -> WeekRoute(
+                    onEventClick = { id -> detailEventId = id },
+                    onOpenSettings = { showSettings = true },
+                )
+                HomeTab.Day -> DayRoute(
+                    onEventClick = { id -> detailEventId = id },
                     onOpenSettings = { showSettings = true },
                 )
                 HomeTab.Agenda -> AgendaRoute(

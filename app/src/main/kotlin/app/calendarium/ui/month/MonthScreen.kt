@@ -1,5 +1,6 @@
 package app.calendarium.ui.month
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,10 +31,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,10 +49,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.ui.util.Dates
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MonthRoute(
     onEventClick: (Long) -> Unit,
@@ -56,6 +63,19 @@ fun MonthRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sheetDay by remember { mutableStateOf<LocalDate?>(null) }
+
+    val baseMonth = remember { YearMonth.now() }
+    val pageCount = 240 // ±10 years
+    val initialPage = pageCount / 2
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            val month = baseMonth.plusMonths((page - initialPage).toLong())
+            viewModel.goToMonth(month)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -67,18 +87,23 @@ fun MonthRoute(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.size(4.dp))
-                        TextButton(onClick = { viewModel.goToMonth(YearMonth.now()) }) {
-                            Text("Today")
-                        }
+                        TextButton(onClick = {
+                            viewModel.goToMonth(YearMonth.now())
+                            scope.launch { pagerState.animateScrollToPage(initialPage) }
+                        }) { Text("Today") }
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.previousMonth() }) {
+                    IconButton(onClick = {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous month")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.nextMonth() }) {
+                    IconButton(onClick = {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month")
                     }
                     IconButton(onClick = onOpenSettings) {
@@ -94,22 +119,27 @@ fun MonthRoute(
                 .padding(padding),
         ) {
             WeekHeader()
-            val cells = remember(state.visibleMonth) {
-                Dates.monthCells(state.visibleMonth)
-            }
-            MonthGrid(
-                cells = cells,
-                eventsByDay = state.eventsByDay,
-                today = state.today,
-                selected = state.selectedDate,
-                onSelect = { date ->
-                    viewModel.selectDate(date)
-                    if (date != null) sheetDay = date
-                },
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f)
                     .padding(horizontal = 6.dp),
-            )
+                pageSpacing = 2.dp,
+            ) { page ->
+                val month = baseMonth.plusMonths((page - initialPage).toLong())
+                val cells = remember(month) { Dates.monthCells(month) }
+                MonthGrid(
+                    cells = cells,
+                    eventsByDay = state.eventsByDay,
+                    today = state.today,
+                    selected = state.selectedDate,
+                    onSelect = { date ->
+                        viewModel.selectDate(date)
+                        if (date != null) sheetDay = date
+                    },
+                )
+            }
             if (!state.hasVisibleCalendars) {
                 EmptyStateHint()
             }
@@ -166,7 +196,10 @@ private fun MonthGrid(
     modifier: Modifier = Modifier,
 ) {
     val rows = cells.chunked(7)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         rows.forEach { week ->
             Row(
                 modifier = Modifier.fillMaxWidth(),

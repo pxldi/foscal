@@ -97,8 +97,10 @@ private fun kotlinx.coroutines.flow.Flow<YearMonth>.mapMonthToRange(
     zone: ZoneId,
 ): kotlinx.coroutines.flow.Flow<Pair<Instant, Instant>> =
     map { month ->
-        val start = month.atDay(1).minusDays(7).atStartOfDay(zone).toInstant()
-        val end = month.atEndOfMonth().plusDays(7)
+        // Cover a wider window than the visible month so that adjacent pages in the
+        // HorizontalPager are populated as the user swipes (and to absorb grid spillover).
+        val start = month.minusMonths(2).atDay(1).atStartOfDay(zone).toInstant()
+        val end = month.plusMonths(2).atEndOfMonth()
             .atTime(23, 59, 59).atZone(zone).toInstant()
         start to end
     }
