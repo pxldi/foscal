@@ -79,25 +79,25 @@ class CalendarContractRepository @Inject constructor(
         selectionArgs: Array<String>?,
         sortOrder: String?,
     ): android.database.Cursor? = try {
-        safeQuery(uri, projection, selection, selectionArgs, sortOrder)
+        resolver.query(uri, projection, selection, selectionArgs, sortOrder)
     } catch (_: SecurityException) {
         null
     }
 
     private fun safeInsert(uri: Uri, values: ContentValues): Uri? = try {
-        safeInsert(uri, values)
+        resolver.insert(uri, values)
     } catch (_: SecurityException) {
         null
     }
 
     private fun safeUpdate(uri: Uri, values: ContentValues?, where: String?, args: Array<String>?): Int = try {
-        safeUpdate(uri, values, where, args)
+        resolver.update(uri, values, where, args)
     } catch (_: SecurityException) {
         0
     }
 
     private fun safeDelete(uri: Uri, where: String?, args: Array<String>?): Int = try {
-        safeDelete(uri, where, args)
+        resolver.delete(uri, where, args)
     } catch (_: SecurityException) {
         0
     }
