@@ -13,14 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,7 +29,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
-import app.calendarium.ui.contrastColor
 import app.calendarium.ui.util.Dates
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -52,9 +50,12 @@ import java.time.YearMonth
 @Composable
 fun MonthRoute(
     onEventClick: (Long) -> Unit,
+    onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: MonthViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var sheetDay by remember { mutableStateOf<LocalDate?>(null) }
 
     Scaffold(
         topBar = {
@@ -66,17 +67,22 @@ fun MonthRoute(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.size(4.dp))
-                        TextButton(onClick = {
-                            viewModel.goToMonth(YearMonth.now())
-                        }) { Text("Today") }
+                        TextButton(onClick = { viewModel.goToMonth(YearMonth.now()) }) {
+                            Text("Today")
+                        }
                     }
                 },
-                actions = {
+                navigationIcon = {
                     IconButton(onClick = { viewModel.previousMonth() }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous month")
                     }
+                },
+                actions = {
                     IconButton(onClick = { viewModel.nextMonth() }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Outlined.Settings, "Settings")
                     }
                 },
             )
@@ -96,8 +102,10 @@ fun MonthRoute(
                 eventsByDay = state.eventsByDay,
                 today = state.today,
                 selected = state.selectedDate,
-                onSelect = viewModel::selectDate,
-                onEventClick = onEventClick,
+                onSelect = { date ->
+                    viewModel.selectDate(date)
+                    if (date != null) sheetDay = date
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 6.dp),
@@ -107,14 +115,36 @@ fun MonthRoute(
             }
         }
     }
+
+    val dayForSheet = sheetDay
+    if (dayForSheet != null) {
+        DayEventsSheet(
+            date = dayForSheet,
+            events = state.eventsByDay[dayForSheet].orEmpty(),
+            onEventClick = { id ->
+                sheetDay = null
+                onEventClick(id)
+            },
+            onNewEvent = {
+                val zone = java.time.ZoneId.systemDefault()
+                val start = dayForSheet.atStartOfDay(zone).plusHours(9)
+                val end = start.plusHours(1)
+                sheetDay = null
+                onNewEvent(start.toInstant().toEpochMilli(), end.toInstant().toEpochMilli())
+            },
+            onDismiss = { sheetDay = null },
+        )
+    }
 }
 
 @Composable
 private fun WeekHeader() {
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 10.dp, vertical = 6.dp)) {
-        Dates.weekStartLabels(DayOfWeek.MONDAY).forEach { label ->
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Dates.weekStartLabels().forEach { label ->
             Text(
                 label,
                 modifier = Modifier.weight(1f),
@@ -133,7 +163,6 @@ private fun MonthGrid(
     today: LocalDate,
     selected: LocalDate?,
     onSelect: (LocalDate?) -> Unit,
-    onEventClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rows = cells.chunked(7)
@@ -144,17 +173,18 @@ private fun MonthGrid(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 week.forEach { date ->
-                    Box(modifier = Modifier
-                        .weight(1f)
-                        .aspectRatio(1f)) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f),
+                    ) {
                         if (date != null) {
                             DayCell(
                                 date = date,
                                 events = eventsByDay[date].orEmpty(),
                                 isToday = date == today,
                                 isSelected = date == selected,
-                                onClick = { onSelect(if (selected == date) null else date) },
-                                onEventClick = onEventClick,
+                                onClick = { onSelect(date) },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -172,11 +202,9 @@ private fun DayCell(
     isToday: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onEventClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(14.dp)
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
     val primary = MaterialTheme.colorScheme.primary
     Box(
         modifier = modifier
@@ -208,18 +236,17 @@ private fun DayCell(
                     text = date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                    color = when {
-                        isToday -> MaterialTheme.colorScheme.onPrimary
-                        else -> MaterialTheme.colorScheme.onSurface
-                    },
+                    color = if (isToday) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurface,
                 )
             }
-            EventBars(events.take(3), onEventClick = onEventClick)
+            EventBars(events.take(3))
             if (events.size > 3) {
                 Text(
                     "+${events.size - 3}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }
@@ -227,36 +254,42 @@ private fun DayCell(
 }
 
 @Composable
-private fun EventBars(events: List<Event>, onEventClick: (Long) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(1.dp), modifier = Modifier.fillMaxWidth()) {
+private fun EventBars(events: List<Event>) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         events.forEach { event ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(event.calendarColorArgb()))
-                    .clickable { onEventClick(event.id) },
+                    .background(Color(event.calendarColorArgb())),
             )
         }
     }
 }
 
-private fun Event.calendarColorArgb(): Int = (this.id.toInt() xor this.calendarId.toInt()).let {
+private fun Event.calendarColorArgb(): Int {
     val palette = intArrayOf(
         0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
         0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(),
     )
-    palette[((it % palette.size) + palette.size) % palette.size]
+    val key = (id + calendarId).toInt()
+    return palette[((key % palette.size) + palette.size) % palette.size]
 }
 
 @Composable
 private fun EmptyStateHint() {
-    Box(modifier = Modifier
-        .fillMaxWidth()
-        .padding(20.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(
-            "No visible calendars. Open Settings to enable one.",
+            "No visible calendars. Tap the gear to enable one.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

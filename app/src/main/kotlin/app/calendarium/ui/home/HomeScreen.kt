@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -24,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.ui.agenda.AgendaRoute
 import app.calendarium.ui.month.MonthRoute
+import app.calendarium.ui.settings.SettingsSheet
 
 private enum class HomeTab(val label: String, val icon: ImageVector) {
     Month("Month", Icons.Outlined.CalendarMonth),
@@ -33,11 +33,12 @@ private enum class HomeTab(val label: String, val icon: ImageVector) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeRoute(
-    onOpenCalendars: () -> Unit,
     onOpenEvent: (Long) -> Unit,
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
+    var showSettings by remember { mutableStateOf(false) }
+
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -49,12 +50,6 @@ fun HomeRoute(
                         label = { Text(entry.label) },
                     )
                 }
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onOpenCalendars,
-                    icon = { Icon(Icons.Outlined.Settings, contentDescription = "Calendars") },
-                    label = { Text("Calendars") },
-                )
             }
         },
         floatingActionButton = {
@@ -71,9 +66,20 @@ fun HomeRoute(
                 .padding(padding),
         ) {
             when (tab) {
-                HomeTab.Month -> MonthRoute(onEventClick = onOpenEvent)
-                HomeTab.Agenda -> AgendaRoute(onEventClick = onOpenEvent)
+                HomeTab.Month -> MonthRoute(
+                    onEventClick = onOpenEvent,
+                    onNewEvent = { start, end -> onOpenEditor(null, start, end) },
+                    onOpenSettings = { showSettings = true },
+                )
+                HomeTab.Agenda -> AgendaRoute(
+                    onEventClick = onOpenEvent,
+                    onOpenSettings = { showSettings = true },
+                )
             }
         }
+    }
+
+    if (showSettings) {
+        SettingsSheet(onDismiss = { showSettings = false })
     }
 }
