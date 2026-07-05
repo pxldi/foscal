@@ -92,6 +92,8 @@ fun WeekRoute(
                 days = state.days,
                 onEventClick = onEventClick,
                 modifier = Modifier.fillMaxSize(),
+                hourHeight = 60.dp,
+                compact = true,
             )
         }
     }

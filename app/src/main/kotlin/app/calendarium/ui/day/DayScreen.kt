@@ -76,6 +76,8 @@ fun DayRoute(
                 days = listOf(state.day),
                 onEventClick = onEventClick,
                 modifier = Modifier.fillMaxSize(),
+                hourHeight = 68.dp,
+                compact = false,
             )
         }
     }

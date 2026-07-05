@@ -47,14 +47,24 @@ data class TimelineDay(
     val events: List<Event>,
 )
 
+/**
+ * Hour-grid timeline with positioned event blocks.
+ *
+ * @param compact When true (week view), event blocks use only the title and tight
+ *   padding. When false (day view), blocks show title + time + optional location with
+ *   relaxed padding and an accent stripe.
+ */
 @Composable
 fun TimelineLayout(
     days: List<TimelineDay>,
     onEventClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    hourHeight: Dp = 56.dp,
+    hourHeight: Dp = 60.dp,
+    compact: Boolean = false,
     now: Instant = Instant.now(),
     zone: ZoneId = ZoneId.systemDefault(),
+    blockCornerRadius: Dp = if (compact) 5.dp else 7.dp,
+    accentStripe: Boolean = !compact,
 ) {
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
@@ -77,10 +87,9 @@ fun TimelineLayout(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // All-day strip
         if (allDayEvents.isNotEmpty()) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                Spacer(Modifier.width(52.dp))
+                Spacer(Modifier.width(54.dp))
                 days.forEach { day ->
                     val dayAllDay = day.events.filter { it.allDay }.sortedBy { it.start }
                     Column(
@@ -106,18 +115,16 @@ fun TimelineLayout(
                 }
             }
             HorizontalDivider(
-                modifier = Modifier.padding(start = 52.dp),
+                modifier = Modifier.padding(start = 54.dp),
                 color = gridColor,
                 thickness = 0.5.dp,
             )
             Spacer(Modifier.height(4.dp))
         }
 
-        // Timeline
         Column(modifier = Modifier.verticalScroll(scrollState)) {
             Row(modifier = Modifier.height(totalHeight)) {
-                // Hour gutter
-                Column(Modifier.width(52.dp)) {
+                Column(Modifier.width(54.dp)) {
                     for (h in 0..23) {
                         Box(
                             Modifier
@@ -127,15 +134,13 @@ fun TimelineLayout(
                         ) {
                             Text(
                                 "${"%02d".format(h)}",
-                                modifier = Modifier.padding(end = 6.dp, top = 0.dp),
-                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(end = 8.dp),
+                                fontSize = 10.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp,
                             )
                         }
                     }
                 }
-                // Day columns
                 timedDays.forEach { day ->
                     BoxWithConstraints(
                         modifier = Modifier
@@ -143,7 +148,6 @@ fun TimelineLayout(
                             .fillMaxHeight(),
                     ) {
                         val colWidth = maxWidth
-                        // Grid lines
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val hourPx = hourHeight.toPx()
                             for (h in 1..23) {
@@ -155,7 +159,6 @@ fun TimelineLayout(
                                 )
                             }
                         }
-                        // Now line on today
                         if (day.date == today) {
                             val nowY = nowFractionalHour * with(density) { hourHeight.toPx() }
                             Canvas(Modifier.fillMaxSize()) {
@@ -172,7 +175,6 @@ fun TimelineLayout(
                                 )
                             }
                         }
-                        // Events
                         val positioned = remember(day.events, hourHeight, zone) {
                             layoutTimed(day.events, hourHeight, zone)
                         }
@@ -181,6 +183,10 @@ fun TimelineLayout(
                             EventBlock(
                                 event = pe.event,
                                 zone = zone,
+                                heightDp = pe.heightDp,
+                                compact = compact,
+                                accentStripe = accentStripe,
+                                cornerRadius = blockCornerRadius,
                                 modifier = Modifier
                                     .offset(x = eachWidth * pe.column + 1.dp, y = pe.topDp)
                                     .width(eachWidth)
@@ -203,23 +209,15 @@ private fun AllDayChip(event: Event, onClick: () -> Unit) {
             .fillMaxWidth()
             .height(22.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(baseColor.copy(alpha = 0.15f))
+            .background(baseColor.copy(alpha = 0.85f))
             .clickable(onClick = onClick)
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .width(3.dp)
-                .height(14.dp)
-                .clip(RoundedCornerShape(1.5.dp))
-                .background(baseColor),
-        )
-        Spacer(Modifier.width(6.dp))
         Text(
             event.title,
             style = MaterialTheme.typography.labelSmall,
-            color = baseColor,
+            color = Color.White,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -231,48 +229,71 @@ private fun AllDayChip(event: Event, onClick: () -> Unit) {
 private fun EventBlock(
     event: Event,
     zone: ZoneId,
+    heightDp: Dp,
+    compact: Boolean,
+    accentStripe: Boolean,
+    cornerRadius: Dp,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val baseColor = paletteColor(event)
-    val shape = RoundedCornerShape(8.dp)
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+    val showTime = heightDp >= 34.dp
+    val showLocation = !compact && heightDp >= 56.dp && !event.location.isNullOrBlank()
+    val textPadding = if (compact) {
+        Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 1.dp)
+    } else {
+        Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 4.dp)
+    }
+    val titleScale = if (compact) 10.sp else 13.sp
+    val detailScale = if (compact) 9.sp else 11.sp
+
     Row(
         modifier = modifier
-            .clip(shape)
-            .background(baseColor.copy(alpha = 0.12f))
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(baseColor.copy(alpha = 0.85f))
             .clickable(onClick = onClick),
     ) {
-        Box(
-            Modifier
-                .width(4.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(2.dp))
-                .background(baseColor),
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 6.dp, end = 4.dp, top = 3.dp),
-        ) {
+        if (accentStripe) {
+            Box(
+                Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(baseColor),
+            )
+        }
+        Column(textPadding) {
             Text(
                 event.title,
-                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
+                color = Color.White,
+                fontSize = titleScale,
+                maxLines = if (compact) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
-                fontSize = 12.sp,
             )
-            Text(
-                "${start.toLocalTime().format(timeFmt)} – ${end.toLocalTime().format(timeFmt)}",
-                style = MaterialTheme.typography.labelSmall,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 1,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-            )
+            if (showTime) {
+                Text(
+                    "${start.toLocalTime().format(timeFmt)} – ${end.toLocalTime().format(timeFmt)}",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = detailScale,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (showLocation) {
+                val loc = event.location
+                if (!loc.isNullOrBlank()) {
+                    Text(
+                        loc,
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                }
+            }
         }
     }
 }
@@ -280,7 +301,7 @@ private fun EventBlock(
 private val eventPalette = intArrayOf(
     0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
     0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(), 0xFF00897B.toInt(),
-    0xFFE53935.toInt(), 0xFF5C6BC0.toInt(),
+    0xFFE53935.toInt(), 0xFF5C6BC0.toInt(), 0xFF43A047.toInt(),
 )
 
 private fun paletteColor(event: Event): Color {
@@ -342,7 +363,7 @@ private fun layoutTimed(
             val endFrac = (endZ.hour + endZ.minute / 60f + endZ.second / 3600f)
                 .coerceIn(startFrac + 0.25f, 24f)
             val top = hourHeight * startFrac
-            val height = (hourHeight * (endFrac - startFrac)).coerceAtLeast(28.dp)
+            val height = (hourHeight * (endFrac - startFrac)).coerceAtLeast(32.dp)
             out.add(PositionedEvent(e, col, totalCols, top, height))
         }
     }
