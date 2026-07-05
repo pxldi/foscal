@@ -2,6 +2,7 @@ package app.calendarium.notifications
 
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -56,7 +57,12 @@ class AlarmReminderScheduler @Inject constructor(
         location: String? = null,
         createIfMissing: Boolean,
     ): PendingIntent? {
-        val intent = Intent(context, receiverClass).setAction(ACTION_FIRE).apply {
+        val intent = Intent().apply {
+            action = ACTION_FIRE
+            component = ComponentName(
+                context.applicationContext.packageName,
+                receiverClass.name,
+            )
             putExtra(EXTRA_EVENT_ID, eventId)
             putExtra(EXTRA_MINUTES, minutesBefore)
             if (title != null) {
@@ -65,13 +71,14 @@ class AlarmReminderScheduler @Inject constructor(
                 putExtra(EXTRA_LOCATION, location ?: "")
             }
         }
-        val baseFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        val flags = if (createIfMissing) baseFlags else baseFlags or PendingIntent.FLAG_NO_CREATE
+        val flags =
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val finalFlags = if (createIfMissing) flags else flags or PendingIntent.FLAG_NO_CREATE
         return PendingIntent.getBroadcast(
             context.applicationContext,
             requestCode(eventId, minutesBefore),
             intent,
-            flags,
+            finalFlags,
         )
     }
 

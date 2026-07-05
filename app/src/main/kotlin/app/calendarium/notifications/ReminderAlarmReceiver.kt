@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.calendarium.MainActivity
+import app.calendarium.R
 import app.calendarium.notifications.AlarmReminderScheduler
 import java.time.Instant
 import java.time.ZoneId
@@ -54,7 +55,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notification_calendar)
             .setContentTitle(title)
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))

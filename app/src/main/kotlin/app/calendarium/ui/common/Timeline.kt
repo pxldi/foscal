@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +40,7 @@ import app.calendarium.core.model.Event
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 data class TimelineDay(
     val date: LocalDate,
@@ -61,8 +64,10 @@ fun TimelineLayout(
     val nowFractionalHour = nowZ.hour + nowZ.minute / 60f
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val nowColor = MaterialTheme.colorScheme.error
-    val initialScrolled = remember { mutableStateOf(false) }
+    val allDayEvents = days.flatMap { day -> day.events.filter { it.allDay } }
+    val timedDays = days.map { day -> day.copy(events = day.events.filter { !it.allDay }) }
 
+    var initialScrolled = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!initialScrolled.value) {
             initialScrolled.value = true
@@ -71,92 +76,154 @@ fun TimelineLayout(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .verticalScroll(scrollState)
-            .padding(top = 4.dp),
-    ) {
-        Row(modifier = Modifier.height(totalHeight)) {
-            // Hour gutter
-            Column(Modifier.width(52.dp)) {
-                for (h in 0..23) {
-                    Box(
-                        Modifier
-                            .height(hourHeight)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.TopEnd,
+    Column(modifier = modifier.fillMaxWidth()) {
+        // All-day strip
+        if (allDayEvents.isNotEmpty()) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Spacer(Modifier.width(52.dp))
+                days.forEach { day ->
+                    val dayAllDay = day.events.filter { it.allDay }.sortedBy { it.start }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 2.dp, vertical = 4.dp),
                     ) {
-                        Text(
-                            "%02d:00".format(h),
-                            modifier = Modifier.padding(end = 6.dp, top = 2.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        dayAllDay.take(2).forEach { event ->
+                            AllDayChip(
+                                event = event,
+                                onClick = { onEventClick(event.id) },
+                            )
+                        }
+                        if (dayAllDay.size > 2) {
+                            Text(
+                                "+${dayAllDay.size - 2}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, top = 1.dp),
+                            )
+                        }
                     }
                 }
             }
-            // Day columns
-            days.forEach { day ->
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                ) {
-                    val colWidth = maxWidth
-                    // grid lines
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val hourPx = hourHeight.toPx()
-                        for (h in 1..23) {
-                            drawLine(
-                                color = gridColor,
-                                start = Offset(0f, h * hourPx),
-                                end = Offset(size.width, h * hourPx),
-                                strokeWidth = 0.5f,
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 52.dp),
+                color = gridColor,
+                thickness = 0.5.dp,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
+        // Timeline
+        Column(modifier = Modifier.verticalScroll(scrollState)) {
+            Row(modifier = Modifier.height(totalHeight)) {
+                // Hour gutter
+                Column(Modifier.width(52.dp)) {
+                    for (h in 0..23) {
+                        Box(
+                            Modifier
+                                .height(hourHeight)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.TopEnd,
+                        ) {
+                            Text(
+                                "${"%02d".format(h)}",
+                                modifier = Modifier.padding(end = 6.dp, top = 0.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
                             )
                         }
                     }
-                    // now line on today
-                    if (day.date == today) {
-                        val nowY = nowFractionalHour * with(density) { hourHeight.toPx() }
-                        Canvas(Modifier.fillMaxSize()) {
-                            drawLine(
-                                color = nowColor,
-                                start = Offset(0f, nowY),
-                                end = Offset(size.width, nowY),
-                                strokeWidth = 1.5f,
-                            )
-                            drawCircle(
-                                color = nowColor,
-                                radius = 4f,
-                                center = Offset(0f, nowY),
-                            )
-                        }
-                    }
-                    // events
-                    val positioned = remember(day.events, hourHeight, zone) {
-                        layoutEvents(day.events, hourHeight, zone)
-                    }
-                    positioned.forEach { pe ->
-                        val eachWidth = (colWidth / pe.columnCount) - 2.dp
-                        EventBlock(
-                            event = pe.event,
-                            zone = zone,
-                            modifier = Modifier
-                                .offset(
-                                    x = eachWidth * pe.column + 1.dp,
-                                    y = pe.topDp,
+                }
+                // Day columns
+                timedDays.forEach { day ->
+                    BoxWithConstraints(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    ) {
+                        val colWidth = maxWidth
+                        // Grid lines
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val hourPx = hourHeight.toPx()
+                            for (h in 1..23) {
+                                drawLine(
+                                    color = gridColor,
+                                    start = Offset(0f, h * hourPx),
+                                    end = Offset(size.width, h * hourPx),
+                                    strokeWidth = 0.5f,
                                 )
-                                .width(eachWidth)
-                                .height(pe.heightDp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { onEventClick(pe.event.id) },
-                        )
+                            }
+                        }
+                        // Now line on today
+                        if (day.date == today) {
+                            val nowY = nowFractionalHour * with(density) { hourHeight.toPx() }
+                            Canvas(Modifier.fillMaxSize()) {
+                                drawLine(
+                                    color = nowColor,
+                                    start = Offset(0f, nowY),
+                                    end = Offset(size.width, nowY),
+                                    strokeWidth = 1.5f,
+                                )
+                                drawCircle(
+                                    color = nowColor,
+                                    radius = 4.5f,
+                                    center = Offset(0f, nowY),
+                                )
+                            }
+                        }
+                        // Events
+                        val positioned = remember(day.events, hourHeight, zone) {
+                            layoutTimed(day.events, hourHeight, zone)
+                        }
+                        positioned.forEach { pe ->
+                            val eachWidth = (colWidth / pe.columnCount) - 2.dp
+                            EventBlock(
+                                event = pe.event,
+                                zone = zone,
+                                modifier = Modifier
+                                    .offset(x = eachWidth * pe.column + 1.dp, y = pe.topDp)
+                                    .width(eachWidth)
+                                    .height(pe.heightDp),
+                                onClick = { onEventClick(pe.event.id) },
+                            )
+                        }
                     }
                 }
             }
         }
-        Spacer(8.dp)
+    }
+}
+
+@Composable
+private fun AllDayChip(event: Event, onClick: () -> Unit) {
+    val baseColor = paletteColor(event)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(22.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(baseColor.copy(alpha = 0.15f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .height(14.dp)
+                .clip(RoundedCornerShape(1.5.dp))
+                .background(baseColor),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            event.title,
+            style = MaterialTheme.typography.labelSmall,
+            color = baseColor,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -165,38 +232,60 @@ private fun EventBlock(
     event: Event,
     zone: ZoneId,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
-    val palette = listOf(
-        0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
-        0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(), 0xFF00897B.toInt(),
-    )
-    val key = (event.id + event.calendarId).toInt()
-    val baseColor = Color(palette[((key % palette.size) + palette.size) % palette.size])
-    val containerColor = baseColor.copy(alpha = 0.18f)
+    val baseColor = paletteColor(event)
+    val shape = RoundedCornerShape(8.dp)
+    val start = event.start.atZone(zone)
+    val end = event.end.atZone(zone)
+    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
     Row(
-        modifier = modifier.background(containerColor),
+        modifier = modifier
+            .clip(shape)
+            .background(baseColor.copy(alpha = 0.12f))
+            .clickable(onClick = onClick),
     ) {
         Box(
             Modifier
-                .width(3.dp)
+                .width(4.dp)
                 .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
                 .background(baseColor),
         )
-        Text(
-            text = event.title,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-            color = baseColor,
-            fontWeight = FontWeight.Medium,
-            fontSize = 11.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 6.dp, end = 4.dp, top = 3.dp),
+        ) {
+            Text(
+                event.title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 12.sp,
+            )
+            Text(
+                "${start.toLocalTime().format(timeFmt)} – ${end.toLocalTime().format(timeFmt)}",
+                style = MaterialTheme.typography.labelSmall,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+        }
     }
 }
 
-@Composable
-private fun Spacer(height: Dp) {
-    Box(Modifier.height(height))
+private val eventPalette = intArrayOf(
+    0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
+    0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(), 0xFF00897B.toInt(),
+    0xFFE53935.toInt(), 0xFF5C6BC0.toInt(),
+)
+
+private fun paletteColor(event: Event): Color {
+    val key = (event.id + event.calendarId).toInt()
+    return Color(eventPalette[((key % eventPalette.size) + eventPalette.size) % eventPalette.size])
 }
 
 private data class PositionedEvent(
@@ -207,14 +296,13 @@ private data class PositionedEvent(
     val heightDp: Dp,
 )
 
-private fun layoutEvents(
+private fun layoutTimed(
     events: List<Event>,
     hourHeight: Dp,
     zone: ZoneId,
 ): List<PositionedEvent> {
-    val timed = events.filter { !it.allDay }
-    if (timed.isEmpty()) return emptyList()
-    val sorted = timed.sortedBy { it.start }
+    if (events.isEmpty()) return emptyList()
+    val sorted = events.sortedBy { it.start }
     val clusters = mutableListOf<MutableList<Event>>()
     var clusterEnd = Long.MIN_VALUE
     for (e in sorted) {
@@ -252,9 +340,9 @@ private fun layoutEvents(
             val startFrac = (startZ.hour + startZ.minute / 60f + startZ.second / 3600f)
                 .coerceIn(0f, 24f)
             val endFrac = (endZ.hour + endZ.minute / 60f + endZ.second / 3600f)
-                .coerceIn(startFrac + 0.15f, 24f)
+                .coerceIn(startFrac + 0.25f, 24f)
             val top = hourHeight * startFrac
-            val height = (hourHeight * (endFrac - startFrac)).coerceAtLeast(20.dp)
+            val height = (hourHeight * (endFrac - startFrac)).coerceAtLeast(28.dp)
             out.add(PositionedEvent(e, col, totalCols, top, height))
         }
     }
