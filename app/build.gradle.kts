@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,6 +22,32 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    val keystoreProps = Properties()
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { stream ->
+        keystoreProps.load(stream)
+    }
+
+    fun cfg(envKey: String, propKey: String): String? {
+        val fromEnv = System.getenv(envKey)
+        if (!fromEnv.isNullOrBlank()) return fromEnv
+        val fromProps = keystoreProps.getProperty(propKey)
+        if (!fromProps.isNullOrBlank()) return fromProps
+        return null
+    }
+
+    val releaseStoreFile = cfg("CALENDARIUM_STORE_FILE", "storeFile")
+
+    signingConfigs {
+        create("release") {
+            if (releaseStoreFile != null) {
+                storeFile = file(releaseStoreFile)
+                storePassword = cfg("CALENDARIUM_STORE_PASSWORD", "storePassword")
+                keyAlias = cfg("CALENDARIUM_KEY_ALIAS", "keyAlias")
+                keyPassword = cfg("CALENDARIUM_KEY_PASSWORD", "keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -31,7 +59,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
+            val releaseSigning = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigning.storeFile?.exists() == true) {
+                releaseSigning
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

@@ -26,6 +26,7 @@ captures/
 *.keystore
 *.jks
 !debug.keystore
+keystore.properties
 
 # Misc
 *.swp

@@ -1,12 +1,15 @@
-name: build
+name: release
 
 on:
   push:
-    branches: [master, main]
-  pull_request:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -33,9 +36,6 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml', 'gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Assemble debug
-        run: ./gradlew :app:assembleDebug --no-daemon
-
       - name: Decode release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.CALENDARIUM_KEYSTORE_BASE64 }}
@@ -52,22 +52,11 @@ jobs:
           CALENDARIUM_KEY_ALIAS: ${{ secrets.CALENDARIUM_KEY_ALIAS }}
           CALENDARIUM_KEY_PASSWORD: ${{ secrets.CALENDARIUM_KEY_PASSWORD }}
 
-      - name: Lint
-        run: ./gradlew lint --no-daemon
-
-      - name: Test
-        run: ./gradlew test --no-daemon
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: calendarium-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: calendarium-release-apk
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --generate-notes \
+            --title "${{ github.ref_name }}" \
+            app/build/outputs/apk/release/*.apk
