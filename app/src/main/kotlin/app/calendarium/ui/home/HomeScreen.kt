@@ -1,5 +1,11 @@
 package app.calendarium.ui.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.agenda.AgendaRoute
 import app.calendarium.ui.day.DayRoute
 import app.calendarium.ui.event.EventDetailSheet
@@ -94,24 +101,40 @@ fun HomeRoute(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            when (tab) {
-                HomeTab.Month -> MonthRoute(
-                    onEventClick = onEventClick,
-                    onNewEvent = { start, end -> onOpenEditor(null, start, end) },
-                    onOpenSettings = { showSettings = true },
-                )
-                HomeTab.Week -> WeekRoute(
-                    onEventClick = onEventClick,
-                    onOpenSettings = { showSettings = true },
-                )
-                HomeTab.Day -> DayRoute(
-                    onEventClick = onEventClick,
-                    onOpenSettings = { showSettings = true },
-                )
-                HomeTab.Agenda -> AgendaRoute(
-                    onEventClick = onEventClick,
-                    onOpenSettings = { showSettings = true },
-                )
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    val direction = if (targetState.ordinal > initialState.ordinal) {
+                        AnimatedContentTransitionScope.SlideDirection.Start
+                    } else {
+                        AnimatedContentTransitionScope.SlideDirection.End
+                    }
+                    (slideIntoContainer(direction, tween(Motion.DurationMedium)) +
+                        fadeIn(tween(Motion.DurationMedium))) togetherWith
+                        (slideOutOfContainer(direction, tween(Motion.DurationMedium)) +
+                            fadeOut(tween(Motion.DurationMedium)))
+                },
+                label = "homeTab",
+            ) { currentTab ->
+                when (currentTab) {
+                    HomeTab.Month -> MonthRoute(
+                        onEventClick = onEventClick,
+                        onNewEvent = { start, end -> onOpenEditor(null, start, end) },
+                        onOpenSettings = { showSettings = true },
+                    )
+                    HomeTab.Week -> WeekRoute(
+                        onEventClick = onEventClick,
+                        onOpenSettings = { showSettings = true },
+                    )
+                    HomeTab.Day -> DayRoute(
+                        onEventClick = onEventClick,
+                        onOpenSettings = { showSettings = true },
+                    )
+                    HomeTab.Agenda -> AgendaRoute(
+                        onEventClick = onEventClick,
+                        onOpenSettings = { showSettings = true },
+                    )
+                }
             }
         }
     }

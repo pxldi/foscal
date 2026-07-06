@@ -1,5 +1,7 @@
 package app.calendarium.ui.month
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
+import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.contrastColor
 import app.calendarium.ui.util.Dates
 import kotlinx.coroutines.launch
@@ -246,16 +249,24 @@ private fun DayCell(
     val primary = MaterialTheme.colorScheme.primary
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val bg by animateColorAsState(
+        targetValue = when {
+            isSelected -> primary.copy(alpha = 0.12f)
+            isToday -> primary.copy(alpha = 0.08f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(Motion.DurationMedium),
+        label = "dayCellBg",
+    )
+    val todayCircle by animateColorAsState(
+        targetValue = if (isToday) primary else Color.Transparent,
+        animationSpec = tween(Motion.DurationMedium),
+        label = "todayCircle",
+    )
     Box(
         modifier = modifier
             .clip(shape)
-            .background(
-                when {
-                    isSelected -> primary.copy(alpha = 0.12f)
-                    isToday -> primary.copy(alpha = 0.08f)
-                    else -> Color.Transparent
-                },
-            )
+            .background(bg)
             .clickable(onClick = onClick),
     ) {
         Column(
@@ -269,7 +280,7 @@ private fun DayCell(
                     .padding(start = 2.dp, top = 2.dp)
                     .size(22.dp)
                     .clip(CircleShape)
-                    .background(if (isToday) primary else Color.Transparent),
+                    .background(todayCircle),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

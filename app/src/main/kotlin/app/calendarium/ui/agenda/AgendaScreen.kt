@@ -90,7 +90,12 @@ fun AgendaRoute(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(state.days, key = { it.date }) { day ->
-                AgendaDayRow(day = day, today = state.today, onEventClick = onEventClick)
+                AgendaDayRow(
+                    day = day,
+                    today = state.today,
+                    onEventClick = onEventClick,
+                    modifier = Modifier.animateItem(),
+                )
             }
         }
     }
@@ -101,9 +106,10 @@ private fun AgendaDayRow(
     day: AgendaDay,
     today: LocalDate,
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(

@@ -1,5 +1,12 @@
 package app.calendarium.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Frequency
+import app.calendarium.core.ui.theme.Motion
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -98,24 +106,29 @@ fun EventEditorRoute(
             )
         },
     ) { padding ->
-        if (state.loading) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-            return@Scaffold
-        }
-        EditorForm(
-            state = state,
-            viewModel = viewModel,
+        Crossfade(
+            targetState = state.loading,
+            animationSpec = tween(Motion.DurationMedium),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-        )
+            label = "editorCrossfade",
+        ) { loading ->
+            if (loading) {
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                EditorForm(
+                    state = state,
+                    viewModel = viewModel,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
     }
 }
 
@@ -263,21 +276,27 @@ private fun EditorForm(
             )
         }
 
-        if (state.isEditing) {
-            Spacer(Modifier.height(8.dp))
-            Section {
-                TextButton(
-                    onClick = viewModel::delete,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = null)
-                    Spacer(Modifier.size(8.dp))
-                    Text("Delete event")
+        AnimatedVisibility(
+            visible = state.isEditing,
+            enter = fadeIn(tween(Motion.DurationMedium)),
+            exit = fadeOut(tween(Motion.DurationMedium)),
+        ) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                Section {
+                    TextButton(
+                        onClick = viewModel::delete,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Icon(Icons.Outlined.Delete, contentDescription = null)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Delete event")
+                    }
                 }
             }
         }
@@ -363,17 +382,29 @@ private fun DateTimeRow(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
-        if (showTime) {
-            Spacer(Modifier.size(8.dp))
-            Text(
-                time.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showTimePicker = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+        AnimatedVisibility(
+            visible = showTime,
+            enter = expandHorizontally(
+                animationSpec = tween(Motion.DurationMedium),
+                expandFrom = Alignment.Start,
+            ) + fadeIn(tween(Motion.DurationMedium)),
+            exit = shrinkHorizontally(
+                animationSpec = tween(Motion.DurationMedium),
+                shrinkTowards = Alignment.Start,
+            ) + fadeOut(tween(Motion.DurationMedium)),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    time.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showTimePicker = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
     if (showDatePicker) {

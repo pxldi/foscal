@@ -1,5 +1,7 @@
 package app.calendarium.ui.event
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
+import app.calendarium.core.ui.theme.Motion
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -63,34 +66,45 @@ fun EventDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
-        when {
-            state.loading -> Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
+        val phase = when {
+            state.loading -> "loading"
+            state.event == null -> "missing"
+            else -> "content"
+        }
+        Crossfade(
+            targetState = phase,
+            animationSpec = tween(Motion.DurationMedium),
+            label = "detailCrossfade",
+        ) { p ->
+            when (p) {
+                "loading" -> Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
 
-            state.event == null -> Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "Event not found.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "missing" -> Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "Event not found.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                else -> DetailContent(
+                    event = state.event!!,
+                    calendarName = state.calendar?.displayName ?: "Calendar",
+                    calendarColor = state.event!!.color,
+                    onEdit = { onEdit(eventId, state.event!!.start.toEpochMilli()) },
                 )
             }
-
-            else -> DetailContent(
-                event = state.event!!,
-                calendarName = state.calendar?.displayName ?: "Calendar",
-                calendarColor = state.event!!.color,
-                onEdit = { onEdit(eventId, state.event!!.start.toEpochMilli()) },
-            )
         }
     }
 }

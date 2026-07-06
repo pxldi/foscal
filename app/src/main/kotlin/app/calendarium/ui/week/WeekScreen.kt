@@ -1,5 +1,7 @@
 package app.calendarium.ui.week
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.common.TimelineLayout
 import app.calendarium.ui.util.Dates
 import java.time.LocalDate
@@ -83,18 +86,27 @@ fun WeekRoute(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            WeekDayHeader(weekStart = state.weekStart, today = state.today)
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 0.5.dp,
-            )
-            TimelineLayout(
-                days = state.days,
-                onEventClick = onEventClick,
+            Crossfade(
+                targetState = state.weekStart,
+                animationSpec = tween(Motion.DurationMedium),
+                label = "weekNav",
                 modifier = Modifier.fillMaxSize(),
-                hourHeight = 60.dp,
-                compact = true,
-            )
+            ) { weekStart ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    WeekDayHeader(weekStart = weekStart, today = state.today)
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        thickness = 0.5.dp,
+                    )
+                    TimelineLayout(
+                        days = state.days,
+                        onEventClick = onEventClick,
+                        modifier = Modifier.fillMaxSize(),
+                        hourHeight = 60.dp,
+                        compact = true,
+                    )
+                }
+            }
         }
     }
 }

@@ -1,11 +1,16 @@
 package app.calendarium.ui.nav
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.editor.EventEditorRoute
 import app.calendarium.ui.home.HomeRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
@@ -49,6 +54,10 @@ fun CalendariumNavHost(
     NavHost(
         navController = navController,
         startDestination = startDestination,
+        enterTransition = { fadeIn(tween(Motion.DurationMedium)) },
+        exitTransition = { fadeOut(tween(Motion.DurationMedium)) },
+        popEnterTransition = { fadeIn(tween(Motion.DurationMedium)) },
+        popExitTransition = { fadeOut(tween(Motion.DurationMedium)) },
     ) {
         composable(Routes.ONBOARDING) {
             OnboardingRoute(
@@ -97,6 +106,18 @@ fun CalendariumNavHost(
                     nullable = true
                 },
             ),
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Up,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Down,
+                    tween(Motion.DurationMedium),
+                )
+            },
         ) {
             EventEditorRoute(onBack = { navController.popBackStack() })
         }
