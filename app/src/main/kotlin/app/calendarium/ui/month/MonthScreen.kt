@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -118,14 +117,20 @@ fun MonthRoute(
 
     // When scrolling settles, snap the focused month's first week to the top so a month always
     // rests as a whole page (no landing mid-month) while free-scrolling still fades between them.
+    // The snap runs in `scope`, not the collect coroutine: a user gesture interrupting it cancels
+    // only that job. If it ran inline, the first interruption would throw CancellationException out
+    // of collect, killing the collector for good (keyed on stable listState it never restarts) —
+    // which is why the arrows snapped fine but manual scrolling didn't.
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
             if (!scrolling) {
-                val target = indexForMonth(focusedMonth)
-                if (listState.firstVisibleItemIndex != target ||
-                    listState.firstVisibleItemScrollOffset != 0
-                ) {
-                    listState.animateScrollToItem(target)
+                scope.launch {
+                    val target = indexForMonth(focusedMonth)
+                    if (listState.firstVisibleItemIndex != target ||
+                        listState.firstVisibleItemScrollOffset != 0
+                    ) {
+                        listState.animateScrollToItem(target)
+                    }
                 }
             }
         }
@@ -181,7 +186,6 @@ fun MonthRoute(
                 val rowHeight = maxHeight / 6
                 LazyColumn(
                     state = listState,
-                    flingBehavior = rememberSnapFlingBehavior(listState),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 6.dp),
