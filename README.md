@@ -24,7 +24,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Working today**
 
-- Four calendar views: **Month** (titled event chips), **Week** and **Day**
+- Four calendar views: **Month** (titled event chips; a continuous vertical
+  week scroll that snaps to whole months and fades adjacent months to grey),
+  **Week** and **Day**
   (positioned time-grid blocks with overlap handling), and **Agenda**.
 - **Event editor** — create, edit, and delete events with title, calendar,
   all-day toggle, start/end date-time pickers, location, notes, and reminder.
@@ -55,7 +57,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 **Later / future goals**
 
 - Home-screen widgets and a quick-add entry point.
-- Month-view day sheet polish and swipe-between-months animations.
 - Week/day view: drag-to-create and drag-to-move events.
 - Time-zone-aware editing UI and a world-clock style secondary zone.
 - Import/export of `.ics` files.

@@ -84,6 +84,10 @@ colors, offline local calendars, permission-first onboarding. See the README
   owns them) — do not touch those.
 - **All-day events are stored at UTC midnight.** Read them back in UTC
   (`Event.startLocalDate`), not the device zone, or they shift a day west of UTC.
+- **Month view is a continuous week `LazyColumn`, not a month pager.** Each week
+  is rendered once (paging months duplicated shared boundary weeks). The focused
+  month is derived from the centre week and drives the title + the black/grey
+  fade; scroll settling snaps that month's first week to the top.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.

@@ -1,23 +1,25 @@
 package app.calendarium.ui.month
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,8 +60,11 @@ import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.contrastColor
 import app.calendarium.ui.util.Dates
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -70,16 +77,56 @@ fun MonthRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sheetDay by remember { mutableStateOf<LocalDate?>(null) }
 
-    val baseMonth = remember { YearMonth.now() }
-    val pageCount = 240 // ±10 years
-    val initialPage = pageCount / 2
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
+    // Continuous vertical scroll of weeks (not paged months): every calendar week is rendered
+    // exactly once, so adjacent months never draw the same boundary days twice. The "focused"
+    // month — which drives the title and the crisp/greyed fade — is derived from scroll position.
+    val firstDayOfWeek = DayOfWeek.MONDAY
+    val baseWeekStart = remember {
+        LocalDate.now().with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
+    }
+    val weekCount = 52 * 20 // ±10 years of weeks
+    val initialIndex = weekCount / 2
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect { page ->
-            val month = baseMonth.plusMonths((page - initialPage).toLong())
-            viewModel.goToMonth(month)
+    fun weekStartAt(index: Int): LocalDate =
+        baseWeekStart.plusWeeks((index - initialIndex).toLong())
+
+    // Row index whose week contains the 1st of [month] — used to align a month to the top.
+    fun indexForMonth(month: YearMonth): Int {
+        val firstWeek = month.atDay(1).with(TemporalAdjusters.previousOrSame(firstDayOfWeek))
+        return initialIndex + ChronoUnit.WEEKS.between(baseWeekStart, firstWeek).toInt()
+    }
+
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = indexForMonth(YearMonth.now()),
+    )
+
+    // A week belongs to the month of its Thursday (ISO): the month holding the majority of its days.
+    val focusedMonth by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
+            val item = info.visibleItemsInfo.firstOrNull { it.offset + it.size > center }
+                ?: info.visibleItemsInfo.firstOrNull()
+            val index = item?.index ?: initialIndex
+            YearMonth.from(weekStartAt(index).plusDays(3))
+        }
+    }
+
+    LaunchedEffect(focusedMonth) { viewModel.goToMonth(focusedMonth) }
+
+    // When scrolling settles, snap the focused month's first week to the top so a month always
+    // rests as a whole page (no landing mid-month) while free-scrolling still fades between them.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) {
+                val target = indexForMonth(focusedMonth)
+                if (listState.firstVisibleItemIndex != target ||
+                    listState.firstVisibleItemScrollOffset != 0
+                ) {
+                    listState.animateScrollToItem(target)
+                }
+            }
         }
     }
 
@@ -94,21 +141,20 @@ fun MonthRoute(
                         )
                         Spacer(Modifier.size(4.dp))
                         TextButton(onClick = {
-                            viewModel.goToMonth(YearMonth.now())
-                            scope.launch { pagerState.animateScrollToPage(initialPage) }
+                            scope.launch { listState.animateScrollToItem(indexForMonth(YearMonth.now())) }
                         }) { Text("Today") }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                        scope.launch { listState.animateScrollToItem(indexForMonth(focusedMonth.minusMonths(1))) }
                     }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous month")
                     }
                 },
                 actions = {
                     IconButton(onClick = {
-                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                        scope.launch { listState.animateScrollToItem(indexForMonth(focusedMonth.plusMonths(1))) }
                     }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month")
                     }
@@ -125,27 +171,48 @@ fun MonthRoute(
                 .padding(padding),
         ) {
             WeekHeader()
-            VerticalPager(
-                state = pagerState,
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 6.dp),
-                pageSpacing = 2.dp,
-            ) { page ->
-                val month = baseMonth.plusMonths((page - initialPage).toLong())
-                val cells = remember(month) { Dates.monthCells(month) }
-                MonthGrid(
-                    cells = cells,
-                    currentMonth = month,
-                    eventsByDay = state.eventsByDay,
-                    today = state.today,
-                    selected = state.selectedDate,
-                    onSelect = { date ->
-                        viewModel.selectDate(date)
-                        if (date != null) sheetDay = date
-                    },
-                )
+                    .weight(1f),
+            ) {
+                // Six weeks fill the viewport, so the focused month reads as a familiar page.
+                val rowHeight = maxHeight / 6
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    items(weekCount, key = { it }) { index ->
+                        val weekStart = weekStartAt(index)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(rowHeight),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            for (d in 0 until 7) {
+                                val date = weekStart.plusDays(d.toLong())
+                                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    DayCell(
+                                        date = date,
+                                        isInFocusedMonth = YearMonth.from(date) == focusedMonth,
+                                        events = state.eventsByDay[date].orEmpty(),
+                                        isToday = date == state.today,
+                                        isSelected = date == state.selectedDate,
+                                        onClick = {
+                                            viewModel.selectDate(date)
+                                            sheetDay = date
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
             if (!state.hasVisibleCalendars) {
                 EmptyStateHint()
@@ -194,51 +261,9 @@ private fun WeekHeader() {
 }
 
 @Composable
-private fun MonthGrid(
-    cells: List<LocalDate>,
-    currentMonth: YearMonth,
-    eventsByDay: Map<LocalDate, List<Event>>,
-    today: LocalDate,
-    selected: LocalDate?,
-    onSelect: (LocalDate?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val rows = cells.chunked(7)
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        rows.forEach { week ->
-            Row(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                week.forEach { date ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
-                    ) {
-                        DayCell(
-                            date = date,
-                            isInMonth = date.year == currentMonth.year && date.month == currentMonth.month,
-                            events = eventsByDay[date].orEmpty(),
-                            isToday = date == today,
-                            isSelected = date == selected,
-                            onClick = { onSelect(date) },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun DayCell(
     date: LocalDate,
-    isInMonth: Boolean,
+    isInFocusedMonth: Boolean,
     events: List<Event>,
     isToday: Boolean,
     isSelected: Boolean,
@@ -249,6 +274,14 @@ private fun DayCell(
     val primary = MaterialTheme.colorScheme.primary
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    // 1f = the focused month (crisp/black), 0f = an adjacent month (greyed). Animating it means
+    // days entering the focused month fade to black and departing days fade to grey.
+    val fraction by animateFloatAsState(
+        targetValue = if (isInFocusedMonth) 1f else 0f,
+        animationSpec = tween(Motion.DurationMedium),
+        label = "inMonthFraction",
+    )
+    val dayNumberColor = lerp(muted, onSurface, fraction)
     val bg by animateColorAsState(
         targetValue = when {
             isSelected -> primary.copy(alpha = 0.12f)
@@ -287,19 +320,15 @@ private fun DayCell(
                     text = date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                    color = when {
-                        isToday -> MaterialTheme.colorScheme.onPrimary
-                        !isInMonth -> muted
-                        else -> onSurface
-                    },
+                    color = if (isToday) MaterialTheme.colorScheme.onPrimary else dayNumberColor,
                 )
             }
-            EventChips(events.take(3), isInMonth = isInMonth)
+            EventChips(events.take(3), inMonthFraction = fraction)
             if (events.size > 3) {
                 Text(
                     "+${events.size - 3} more",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isInMonth) MaterialTheme.colorScheme.onSurfaceVariant else muted,
+                    color = lerp(muted, MaterialTheme.colorScheme.onSurfaceVariant, fraction),
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 2.dp, top = 1.dp),
                 )
@@ -309,7 +338,8 @@ private fun DayCell(
 }
 
 @Composable
-private fun EventChips(events: List<Event>, isInMonth: Boolean = true) {
+private fun EventChips(events: List<Event>, inMonthFraction: Float = 1f) {
+    val f = inMonthFraction
     Column(
         verticalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier
@@ -324,7 +354,7 @@ private fun EventChips(events: List<Event>, isInMonth: Boolean = true) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(4.dp))
-                        .background(base.copy(alpha = if (isInMonth) 0.9f else 0.35f))
+                        .background(base.copy(alpha = lerpFloat(0.35f, 0.9f, f)))
                         .padding(horizontal = 4.dp, vertical = 1.dp),
                 ) {
                     Text(
@@ -332,7 +362,7 @@ private fun EventChips(events: List<Event>, isInMonth: Boolean = true) {
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         lineHeight = 11.sp,
-                        color = contrastColor(event.color).copy(alpha = if (isInMonth) 1f else 0.6f),
+                        color = contrastColor(event.color).copy(alpha = lerpFloat(0.6f, 1f, f)),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -348,18 +378,18 @@ private fun EventChips(events: List<Event>, isInMonth: Boolean = true) {
                         modifier = Modifier
                             .size(5.dp)
                             .clip(CircleShape)
-                            .background(base.copy(alpha = if (isInMonth) 1f else 0.4f)),
+                            .background(base.copy(alpha = lerpFloat(0.4f, 1f, f))),
                     )
                     Text(
                         event.title,
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         lineHeight = 11.sp,
-                        color = if (isInMonth) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        },
+                        color = lerp(
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            MaterialTheme.colorScheme.onSurface,
+                            f,
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -368,6 +398,9 @@ private fun EventChips(events: List<Event>, isInMonth: Boolean = true) {
         }
     }
 }
+
+private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float =
+    start + (stop - start) * fraction
 
 @Composable
 private fun EmptyStateHint() {
