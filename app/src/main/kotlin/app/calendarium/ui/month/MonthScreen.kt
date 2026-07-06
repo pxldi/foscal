@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -180,6 +181,7 @@ fun MonthRoute(
                 val rowHeight = maxHeight / 6
                 LazyColumn(
                     state = listState,
+                    flingBehavior = rememberSnapFlingBehavior(listState),
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 6.dp),
