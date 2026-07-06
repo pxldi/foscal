@@ -20,13 +20,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ButtonDefaults
@@ -35,6 +38,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,14 +60,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Frequency
 import app.calendarium.core.ui.theme.Motion
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 
 private val rowPadding = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
@@ -233,11 +240,27 @@ private fun EditorForm(
 
         // Recurrence
         Section {
-            ChipRow(
-                title = "Repeats",
-                selected = state.frequency,
+            Column(
                 modifier = rowPadding.fillMaxWidth(),
-            ) { freq -> viewModel.updateFrequency(freq) }
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ChipRow(
+                    title = "Repeats",
+                    selected = state.frequency,
+                ) { freq -> viewModel.updateFrequency(freq) }
+                if (state.frequency != Frequency.NONE) {
+                    TextButton(onClick = viewModel::toggleCustomRecurrence) {
+                        Text(if (state.showCustomRecurrence) "Hide options" else "Customize…")
+                    }
+                    if (state.showCustomRecurrence) {
+                        CustomRecurrenceControls(
+                            state = state,
+                            viewModel = viewModel,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
+            }
         }
 
         // Reminder
@@ -481,6 +504,196 @@ private fun ReminderRow(
                         )
                     } else {
                         AssistChipDefaults.assistChipColors()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomRecurrenceControls(
+    state: EditorUiState,
+    viewModel: EventEditorViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        IntervalRow(
+            interval = state.interval,
+            unit = unitLabel(state.frequency, state.interval),
+            onDecrement = { viewModel.updateInterval(state.interval - 1) },
+            onIncrement = { viewModel.updateInterval(state.interval + 1) },
+        )
+        EndRow(state = state, viewModel = viewModel)
+        if (state.frequency == Frequency.WEEKLY) {
+            ByWeekdayRow(byWeekday = state.byWeekday, onToggle = viewModel::toggleByWeekday)
+        }
+    }
+}
+
+private fun unitLabel(frequency: Frequency, interval: Int): String {
+    val singular = when (frequency) {
+        Frequency.DAILY -> "day"
+        Frequency.WEEKLY -> "week"
+        Frequency.MONTHLY -> "month"
+        Frequency.YEARLY -> "year"
+        Frequency.NONE -> ""
+    }
+    return if (interval == 1) singular else singular + "s"
+}
+
+@Composable
+private fun IntervalRow(
+    interval: Int,
+    unit: String,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Repeat every", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Stepper(
+            value = interval,
+            onDecrement = onDecrement,
+            onIncrement = onIncrement,
+            decrementEnabled = interval > 1,
+        )
+        Text(
+            unit,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun Stepper(
+    value: Int,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit,
+    decrementEnabled: Boolean = true,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        IconButton(onClick = onDecrement, enabled = decrementEnabled) {
+            Icon(Icons.Outlined.Remove, contentDescription = "Less")
+        }
+        Text(
+            value.toString(),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.widthIn(min = 24.dp),
+            textAlign = TextAlign.Center,
+        )
+        IconButton(onClick = onIncrement) {
+            Icon(Icons.Outlined.Add, contentDescription = "More")
+        }
+    }
+}
+
+private enum class EndMode { FOREVER, UNTIL, COUNT }
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun EndRow(state: EditorUiState, viewModel: EventEditorViewModel) {
+    val mode = when {
+        state.recurrenceCount != null -> EndMode.COUNT
+        state.recurrenceEndDate != null -> EndMode.UNTIL
+        else -> EndMode.FOREVER
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Ends", style = MaterialTheme.typography.bodyLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(
+                selected = mode == EndMode.FOREVER,
+                onClick = {
+                    viewModel.updateRecurrenceCount(null)
+                    viewModel.updateRecurrenceEndDate(null)
+                },
+                label = { Text("Forever") },
+            )
+            FilterChip(
+                selected = mode == EndMode.UNTIL,
+                onClick = {
+                    viewModel.updateRecurrenceEndDate(
+                        state.recurrenceEndDate ?: state.startDate.plusMonths(1),
+                    )
+                },
+                label = { Text("On date") },
+            )
+            FilterChip(
+                selected = mode == EndMode.COUNT,
+                onClick = { viewModel.updateRecurrenceCount(state.recurrenceCount ?: 10) },
+                label = { Text("After") },
+            )
+        }
+        when (mode) {
+            EndMode.UNTIL -> EndDateRow(
+                date = state.recurrenceEndDate,
+                onPick = viewModel::updateRecurrenceEndDate,
+            )
+            EndMode.COUNT -> {
+                val count = state.recurrenceCount ?: 1
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Occurrences",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Stepper(
+                        value = count,
+                        onDecrement = { viewModel.updateRecurrenceCount(count - 1) },
+                        onIncrement = { viewModel.updateRecurrenceCount(count + 1) },
+                        decrementEnabled = count > 1,
+                    )
+                }
+            }
+            EndMode.FOREVER -> {}
+        }
+    }
+}
+
+@Composable
+private fun EndDateRow(date: LocalDate?, onPick: (LocalDate) -> Unit) {
+    var showPicker by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Date", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Text(
+            date?.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.getDefault()))
+                ?: "Pick date",
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { showPicker = true }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    if (showPicker) {
+        DatePickerModal(
+            initial = date ?: LocalDate.now(),
+            onDismiss = { showPicker = false },
+            onSelect = {
+                onPick(it)
+                showPicker = false
+            },
+        )
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ByWeekdayRow(byWeekday: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("On", style = MaterialTheme.typography.bodyLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(
+                DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+                DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY,
+            ).forEach { day ->
+                FilterChip(
+                    selected = day in byWeekday,
+                    onClick = { onToggle(day) },
+                    label = {
+                        Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
                     },
                 )
             }

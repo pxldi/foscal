@@ -8,12 +8,15 @@ import app.calendarium.core.data.UserPreferencesRepository
 import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.EventInput
 import app.calendarium.core.model.Frequency
+import app.calendarium.core.model.RecurrenceRules
+import app.calendarium.core.model.RecurrenceSpec
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -42,6 +45,14 @@ data class EditorUiState(
     val location: String = "",
     val description: String = "",
     val frequency: Frequency = Frequency.NONE,
+    val interval: Int = 1,
+    val recurrenceEndDate: LocalDate? = null,
+    val recurrenceCount: Int? = null,
+    val byWeekday: Set<DayOfWeek> = emptySet(),
+    // False until the user touches a recurrence control (frequency or a custom field). While false,
+    // the original CalDAV RRULE is preserved verbatim on save; once true we rebuild from the controls.
+    val recurrenceDirty: Boolean = false,
+    val showCustomRecurrence: Boolean = false,
     val reminderMinutesBefore: Int? = 15,
     val saving: Boolean = false,
     val finished: Boolean = false,
@@ -90,6 +101,7 @@ class EventEditorViewModel @Inject constructor(
                     val cal = event.calendarId
                     val startZ = event.start.atZone(zone)
                     val endZ = event.end.atZone(zone)
+                    val spec = RecurrenceRules.parse(event.rrule)
                     _state.value = EditorUiState(
                         loading = false,
                         eventId = eventId,
@@ -107,7 +119,14 @@ class EventEditorViewModel @Inject constructor(
                         endTime = if (event.allDay) LocalTime.MIDNIGHT else endZ.toLocalTime(),
                         location = event.location.orEmpty(),
                         description = event.description.orEmpty(),
-                        frequency = parseFrequency(event.rrule),
+                        frequency = spec.frequency,
+                        interval = spec.interval,
+                        recurrenceEndDate = spec.until,
+                        recurrenceCount = spec.count,
+                        byWeekday = spec.byWeekday,
+                        // Expand the custom panel when the loaded rule actually uses the extra knobs
+                        // so the user sees the real interval/end/by-weekday rather than a bare chip.
+                        showCustomRecurrence = spec.isCustom,
                         reminderMinutesBefore = reminders.minOrNull(),
                     )
                     return@launch
@@ -150,7 +169,32 @@ class EventEditorViewModel @Inject constructor(
     fun updateStartTime(time: LocalTime) = mutate { it.copy(startTime = time) }
     fun updateEndDate(date: LocalDate) = mutate { it.copy(endDate = date) }
     fun updateEndTime(time: LocalTime) = mutate { it.copy(endTime = time) }
-    fun updateFrequency(freq: Frequency) = mutate { it.copy(frequency = freq) }
+    fun updateFrequency(freq: Frequency) = mutate {
+        it.copy(frequency = freq, recurrenceDirty = true)
+    }
+    fun updateInterval(value: Int) = mutate {
+        it.copy(interval = value.coerceAtLeast(1), recurrenceDirty = true)
+    }
+    fun updateRecurrenceCount(value: Int?) = mutate {
+        // COUNT and UNTIL are mutually exclusive.
+        it.copy(
+            recurrenceCount = value,
+            recurrenceEndDate = if (value != null) null else it.recurrenceEndDate,
+            recurrenceDirty = true,
+        )
+    }
+    fun updateRecurrenceEndDate(date: LocalDate?) = mutate {
+        it.copy(
+            recurrenceEndDate = date,
+            recurrenceCount = if (date != null) null else it.recurrenceCount,
+            recurrenceDirty = true,
+        )
+    }
+    fun toggleByWeekday(day: DayOfWeek) = mutate {
+        val next = if (day in it.byWeekday) it.byWeekday - day else it.byWeekday + day
+        it.copy(byWeekday = next, recurrenceDirty = true)
+    }
+    fun toggleCustomRecurrence() = mutate { it.copy(showCustomRecurrence = !it.showCustomRecurrence) }
     fun updateReminder(minutes: Int?) = mutate { it.copy(reminderMinutesBefore = minutes) }
     fun selectCalendar(id: Long) = mutate { it.copy(selectedCalendarId = id) }
 
@@ -198,10 +242,24 @@ class EventEditorViewModel @Inject constructor(
                 if (current.allDay) LocalTime.MIDNIGHT else current.endTime,
                 current.allDay,
             )
-            // Keep the original rule verbatim if the user left the frequency untouched, so
-            // externally-synced recurrences don't lose BYDAY/INTERVAL/UNTIL on an unrelated edit.
-            val preservedRrule = current.originalRrule
-                ?.takeIf { current.frequency != Frequency.NONE && current.frequency == parseFrequency(it) }
+            // Preserve the original rule verbatim unless the user actually edited recurrence,
+            // so externally-synced CalDAV rules (BYMONTHDAY, BYSETPOS, …) survive unrelated edits.
+            // Once they touch a recurrence control, rebuild from the current custom controls.
+            val rrule = when {
+                current.frequency == Frequency.NONE -> null
+                current.recurrenceDirty -> RecurrenceRules.build(
+                    RecurrenceSpec(
+                        frequency = current.frequency,
+                        interval = current.interval,
+                        count = current.recurrenceCount,
+                        until = current.recurrenceEndDate,
+                        byWeekday = current.byWeekday,
+                    ),
+                    current.allDay,
+                    zone,
+                )
+                else -> current.originalRrule
+            }
             val input = EventInput(
                 calendarId = current.selectedCalendarId!!,
                 title = current.title,
@@ -212,7 +270,7 @@ class EventEditorViewModel @Inject constructor(
                 allDay = current.allDay,
                 timezone = if (current.allDay) ZoneOffset.UTC.id else zone.id,
                 frequency = current.frequency,
-                rrule = preservedRrule,
+                rrule = rrule,
                 reminderMinutesBefore = current.reminderMinutesBefore,
             )
             when {
@@ -235,21 +293,6 @@ class EventEditorViewModel @Inject constructor(
                 repository.deleteEvent(current.eventId)
             }
             mutate { it.copy(saving = false, finished = true) }
-        }
-    }
-
-    private fun parseFrequency(rrule: String?): Frequency {
-        if (rrule.isNullOrBlank()) return Frequency.NONE
-        val freq = rrule.split(';')
-            .firstOrNull { it.startsWith("FREQ=") }
-            ?.substringAfter('=')
-            ?.uppercase()
-        return when (freq) {
-            "DAILY" -> Frequency.DAILY
-            "WEEKLY" -> Frequency.WEEKLY
-            "MONTHLY" -> Frequency.MONTHLY
-            "YEARLY" -> Frequency.YEARLY
-            else -> Frequency.NONE
         }
     }
 

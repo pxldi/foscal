@@ -30,10 +30,12 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   Multi-day and spanning all-day events render on every day they cover.
 - **Event editor** — create, edit, and delete events with title, calendar,
   all-day toggle, start/end date-time pickers, location, notes, and reminder.
-- **Recurring events** — daily / weekly / monthly / yearly. Editing or deleting
-  a repeating event prompts for **this occurrence** vs. **the whole series**;
-  single-occurrence changes are stored as proper exceptions. Recurrence rules
-  synced from CalDAV (BYDAY/INTERVAL/UNTIL) are preserved on unrelated edits.
+- **Recurring events** — daily / weekly / monthly / yearly, with a custom
+  editor for interval, end date / occurrence count, and by-weekday
+  selection. Editing or deleting a repeating event prompts for **this
+  occurrence** vs. **the whole series**; single-occurrence changes are
+  stored as proper exceptions. Recurrence rules synced from CalDAV
+  (BYDAY/INTERVAL/UNTIL) are preserved on unrelated edits.
 - **Reminders / notifications** — exact-alarm reminders via `AlarmManager`,
   re-scheduled on boot and whenever the calendar changes, delivered on a
   dedicated notification channel that deep-links back to the event.
@@ -49,8 +51,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Richer recurrence editing: custom interval, end date / occurrence count,
-  and by-weekday selection (currently frequency-only in the editor).
 - "This and following events" scope option for recurring edits/deletes.
 
 **Later / future goals**
