@@ -42,7 +42,7 @@ import java.time.LocalDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AgendaRoute(
-    onEventClick: (Long) -> Unit,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
@@ -100,7 +100,7 @@ fun AgendaRoute(
 private fun AgendaDayRow(
     day: AgendaDay,
     today: LocalDate,
-    onEventClick: (Long) -> Unit,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -129,7 +129,10 @@ private fun AgendaDayRow(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             day.events.forEach { event ->
-                AgendaEventCard(event = event, onClick = { onEventClick(event.id) })
+                AgendaEventCard(
+                    event = event,
+                    onClick = { onEventClick(event.id, event.start.toEpochMilli()) },
+                )
             }
         }
     }
@@ -151,7 +154,7 @@ private fun AgendaEventCard(event: Event, onClick: () -> Unit) {
             modifier = Modifier
                 .size(width = 4.dp, height = 32.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(Color(event.calendarColorArgb())),
+                .background(Color(event.color)),
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
@@ -186,11 +189,3 @@ private fun buildEventSubtitle(event: Event): String {
     return parts.joinToString(" • ")
 }
 
-private fun Event.calendarColorArgb(): Int {
-    val palette = intArrayOf(
-        0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
-        0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(),
-    )
-    val key = (id + calendarId).toInt()
-    return palette[((key % palette.size) + palette.size) % palette.size]
-}

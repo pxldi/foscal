@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.calendarium.core.model.Event
+import app.calendarium.ui.contrastColor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -57,7 +58,7 @@ data class TimelineDay(
 @Composable
 fun TimelineLayout(
     days: List<TimelineDay>,
-    onEventClick: (Long) -> Unit,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     modifier: Modifier = Modifier,
     hourHeight: Dp = 60.dp,
     compact: Boolean = false,
@@ -100,7 +101,7 @@ fun TimelineLayout(
                         dayAllDay.take(2).forEach { event ->
                             AllDayChip(
                                 event = event,
-                                onClick = { onEventClick(event.id) },
+                                onClick = { onEventClick(event.id, event.start.toEpochMilli()) },
                             )
                         }
                         if (dayAllDay.size > 2) {
@@ -191,7 +192,7 @@ fun TimelineLayout(
                                     .offset(x = eachWidth * pe.column + 1.dp, y = pe.topDp)
                                     .width(eachWidth)
                                     .height(pe.heightDp),
-                                onClick = { onEventClick(pe.event.id) },
+                                onClick = { onEventClick(pe.event.id, pe.event.start.toEpochMilli()) },
                             )
                         }
                     }
@@ -209,7 +210,7 @@ private fun AllDayChip(event: Event, onClick: () -> Unit) {
             .fillMaxWidth()
             .height(22.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(baseColor.copy(alpha = 0.85f))
+            .background(baseColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -217,7 +218,7 @@ private fun AllDayChip(event: Event, onClick: () -> Unit) {
         Text(
             event.title,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
+            color = contrastColor(event.color),
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -237,6 +238,7 @@ private fun EventBlock(
     onClick: () -> Unit,
 ) {
     val baseColor = paletteColor(event)
+    val textColor = contrastColor(event.color)
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
@@ -252,7 +254,7 @@ private fun EventBlock(
 
     Row(
         modifier = modifier
-            .background(baseColor.copy(alpha = 0.85f), RoundedCornerShape(cornerRadius))
+            .background(baseColor.copy(alpha = 0.90f), RoundedCornerShape(cornerRadius))
             .clickable(onClick = onClick),
     ) {
         if (accentStripe) {
@@ -267,7 +269,7 @@ private fun EventBlock(
             Text(
                 event.title,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = textColor,
                 fontSize = titleScale,
                 maxLines = maxTitleLines,
                 overflow = TextOverflow.Ellipsis,
@@ -275,7 +277,7 @@ private fun EventBlock(
             if (showTime) {
                 Text(
                     "${start.toLocalTime().format(timeFmt)} – ${end.toLocalTime().format(timeFmt)}",
-                    color = Color.White.copy(alpha = 0.75f),
+                    color = textColor.copy(alpha = 0.75f),
                     fontSize = detailScale,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -285,16 +287,7 @@ private fun EventBlock(
     }
 }
 
-private val eventPalette = intArrayOf(
-    0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
-    0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(), 0xFF00897B.toInt(),
-    0xFFE53935.toInt(), 0xFF5C6BC0.toInt(), 0xFF43A047.toInt(),
-)
-
-private fun paletteColor(event: Event): Color {
-    val key = (event.id + event.calendarId).toInt()
-    return Color(eventPalette[((key % eventPalette.size) + eventPalette.size) % eventPalette.size])
-}
+private fun paletteColor(event: Event): Color = Color(event.color)
 
 private data class PositionedEvent(
     val event: Event,

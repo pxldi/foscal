@@ -32,11 +32,16 @@ object Routes {
         return "editor?eventId=&calendarId=$cal&start=$start&end=$end"
     }
 
-    fun editorEdit(eventId: Long): String = "editor?eventId=$eventId&calendarId=&start=&end="
+    fun editorEdit(eventId: Long, instanceStartMillis: Long): String =
+        "editor?eventId=$eventId&calendarId=&start=$instanceStartMillis&end="
 }
 
 @Composable
-fun CalendariumNavHost(startOnboarding: Boolean, openEventId: Long = -1L) {
+fun CalendariumNavHost(
+    startOnboarding: Boolean,
+    openEventId: Long = -1L,
+    onEventConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
 
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
@@ -60,8 +65,11 @@ fun CalendariumNavHost(startOnboarding: Boolean, openEventId: Long = -1L) {
                     onOpenEditor = { calId, start, end ->
                         navController.navigate(Routes.editorNew(calId, start, end))
                     },
-                    onOpenEditEvent = { id -> navController.navigate(Routes.editorEdit(id)) },
-                    initialDetailEventId = openEventId,
+                    onOpenEditEvent = { id, instanceStart ->
+                        navController.navigate(Routes.editorEdit(id, instanceStart))
+                    },
+                    openDetailEventId = openEventId,
+                    onEventConsumed = onEventConsumed,
                 )
             }
         }

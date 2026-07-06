@@ -34,7 +34,7 @@
 
         <receiver
             android:name=".notifications.ReminderAlarmReceiver"
-            android:exported="true" />
+            android:exported="false" />
 
         <receiver
             android:name=".notifications.BootReceiver"

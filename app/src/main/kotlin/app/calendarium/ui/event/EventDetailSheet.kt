@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,12 +50,13 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun EventDetailSheet(
     eventId: Long,
+    instanceStartMillis: Long = 0L,
     onDismiss: () -> Unit,
-    onEdit: (Long) -> Unit,
+    onEdit: (eventId: Long, instanceStartMillis: Long) -> Unit,
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(eventId) { viewModel.load(eventId) }
+    LaunchedEffect(eventId, instanceStartMillis) { viewModel.load(eventId, instanceStartMillis) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -86,8 +88,8 @@ fun EventDetailSheet(
             else -> DetailContent(
                 event = state.event!!,
                 calendarName = state.calendar?.displayName ?: "Calendar",
-                calendarColor = state.calendar?.color ?: 0xFF1976D2.toInt(),
-                onEdit = { onEdit(eventId) },
+                calendarColor = state.event!!.color,
+                onEdit = { onEdit(eventId, state.event!!.start.toEpochMilli()) },
             )
         }
     }
@@ -149,6 +151,9 @@ private fun DetailContent(
         }
 
         InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event))
+        event.rrule?.takeIf { it.isNotBlank() }?.let {
+            InfoCard(Icons.Outlined.Repeat, "Repeats", describeRecurrence(it))
+        }
         event.location?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.LocationOn, "Location", it)
         }
@@ -197,6 +202,20 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
                 Text(value, style = MaterialTheme.typography.bodyLarge)
             }
         }
+    }
+}
+
+private fun describeRecurrence(rrule: String): String {
+    val freq = rrule.split(';')
+        .firstOrNull { it.startsWith("FREQ=") }
+        ?.substringAfter('=')
+        ?.uppercase()
+    return when (freq) {
+        "DAILY" -> "Every day"
+        "WEEKLY" -> "Every week"
+        "MONTHLY" -> "Every month"
+        "YEARLY" -> "Every year"
+        else -> "Repeats"
     }
 }
 

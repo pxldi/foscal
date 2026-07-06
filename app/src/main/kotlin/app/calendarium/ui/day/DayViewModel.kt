@@ -47,8 +47,10 @@ class DayViewModel @Inject constructor(
     }
 
     private val dayBounds = _date.map { d ->
-        val from = d.atStartOfDay(zone).toInstant()
-        val to = d.plusDays(1).atStartOfDay(zone).toInstant()
+        // Pad a day on each side so all-day events (stored at UTC midnight) are returned even
+        // when UTC midnight falls in the neighbouring local day; we filter to [d] below.
+        val from = d.minusDays(1).atStartOfDay(zone).toInstant()
+        val to = d.plusDays(2).atStartOfDay(zone).toInstant()
         from to to
     }
 
@@ -58,9 +60,10 @@ class DayViewModel @Inject constructor(
         }
 
     val state: StateFlow<DayUiState> = combine(_date, events, calendarIds) { date, evts, ids ->
+        val forDay = evts.filter { it.startLocalDate(zone) == date }.sortedBy { it.start }
         DayUiState(
             date = date,
-            day = TimelineDay(date, evts.sortedBy { it.start }),
+            day = TimelineDay(date, forDay),
             hasVisibleCalendars = ids.isNotEmpty(),
             today = LocalDate.now(),
         )

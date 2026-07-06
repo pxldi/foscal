@@ -43,7 +43,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeekRoute(
-    onEventClick: (Long) -> Unit,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: WeekViewModel = hiltViewModel(),
 ) {

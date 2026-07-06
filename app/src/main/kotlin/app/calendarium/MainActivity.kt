@@ -1,6 +1,7 @@
 package app.calendarium
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -9,7 +10,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.calendarium.core.data.CalendarPermissionState
 import app.calendarium.core.data.UserPreferencesRepository
 import app.calendarium.core.ui.theme.CalendariumTheme
 import app.calendarium.ui.nav.CalendariumNavHost
@@ -22,6 +26,11 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var prefs: UserPreferencesRepository
 
+    @Inject
+    lateinit var permissionState: CalendarPermissionState
+
+    private var pendingEventId by mutableLongStateOf(-1L)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { /* granted or denied — the app still functions */ }
@@ -30,19 +39,36 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermission()
+        pendingEventId = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
         setContent {
             val onboardingDone by prefs.onboardingCompleted
                 .collectAsStateWithLifecycle(initialValue = null)
+            val openEventId = pendingEventId
             CalendariumTheme {
                 when (val done = onboardingDone) {
                     null -> { /* splash while DataStore loads */ }
                     else -> CalendariumNavHost(
                         startOnboarding = done.not(),
-                        openEventId = intent.getLongExtra("open_event_id", -1L),
+                        openEventId = openEventId,
+                        onEventConsumed = { pendingEventId = -1L },
                     )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val id = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
+        if (id > 0L) pendingEventId = id
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The user may have granted access from the system settings screen; pick it up so
+        // provider-backed flows and reminders resume without needing a restart.
+        permissionState.refresh()
     }
 
     private fun requestNotificationPermission() {
@@ -53,5 +79,9 @@ class MainActivity : ComponentActivity() {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_EVENT_ID = "open_event_id"
     }
 }

@@ -44,10 +44,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
+import app.calendarium.ui.contrastColor
 import app.calendarium.ui.util.Dates
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -56,7 +59,7 @@ import java.time.YearMonth
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MonthRoute(
-    onEventClick: (Long) -> Unit,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: MonthViewModel = hiltViewModel(),
@@ -152,9 +155,9 @@ fun MonthRoute(
         DayEventsSheet(
             date = dayForSheet,
             events = state.eventsByDay[dayForSheet].orEmpty(),
-            onEventClick = { id ->
+            onEventClick = { id, instanceStart ->
                 sheetDay = null
-                onEventClick(id)
+                onEventClick(id, instanceStart)
             },
             onNewEvent = {
                 val zone = java.time.ZoneId.systemDefault()
@@ -280,14 +283,14 @@ private fun DayCell(
                     },
                 )
             }
-            EventBars(events.take(3), isInMonth = isInMonth)
+            EventChips(events.take(3), isInMonth = isInMonth)
             if (events.size > 3) {
                 Text(
-                    "+${events.size - 3}",
+                    "+${events.size - 3} more",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isInMonth) MaterialTheme.colorScheme.primary else muted,
+                    color = if (isInMonth) MaterialTheme.colorScheme.onSurfaceVariant else muted,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 2.dp),
+                    modifier = Modifier.padding(start = 2.dp, top = 1.dp),
                 )
             }
         }
@@ -295,35 +298,64 @@ private fun DayCell(
 }
 
 @Composable
-private fun EventBars(events: List<Event>, isInMonth: Boolean = true) {
+private fun EventChips(events: List<Event>, isInMonth: Boolean = true) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(1.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp, start = 2.dp),
+            .padding(top = 3.dp),
     ) {
         events.forEach { event ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        Color(event.calendarColorArgb())
-                            .copy(alpha = if (isInMonth) 1f else 0.4f),
-                    ),
-            )
+            val base = Color(event.color)
+            if (event.allDay) {
+                // All-day: solid chip with contrast text — reads as a filled band, like other apps.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(base.copy(alpha = if (isInMonth) 0.9f else 0.35f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                ) {
+                    Text(
+                        event.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        color = contrastColor(event.color).copy(alpha = if (isInMonth) 1f else 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                // Timed: a leading colour dot + title, so the day stays airy but scannable.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(base.copy(alpha = if (isInMonth) 1f else 0.4f)),
+                    )
+                    Text(
+                        event.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        color = if (isInMonth) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
-}
-
-private fun Event.calendarColorArgb(): Int {
-    val palette = intArrayOf(
-        0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
-        0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(),
-    )
-    val key = (id + calendarId).toInt()
-    return palette[((key % palette.size) + palette.size) % palette.size]
 }
 
 @Composable

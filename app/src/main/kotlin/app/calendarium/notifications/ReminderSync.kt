@@ -1,13 +1,11 @@
 package app.calendarium.notifications
 
 import app.calendarium.core.data.CalendarRepository
-import app.calendarium.core.data.UserPreferencesRepository
-import app.calendarium.notifications.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -30,24 +28,23 @@ class ReminderSync @Inject constructor(
 ) {
 
     private var job: Job? = null
-    private var started = false
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun start() {
-        if (started) return
-        started = true
+        if (job != null) return
         job = scope.launch {
-            val zone = ZoneId.systemDefault()
-            combine(
-                repository.observeCalendars(),
-                repository.observeEvents(allCalendarIdsSuspended(), horizonStart(), horizonEnd()),
-            ) { _, _ -> Unit }
+            // Observing calendars re-emits whenever the set of calendars changes *and* the
+            // instant calendar permission is granted, so reminders self-schedule on first grant
+            // and whenever a sync adapter adds a calendar — no app restart required.
+            repository.observeCalendars()
+                .flatMapLatest { calendars ->
+                    val ids = calendars.map { it.id }.toSet()
+                    repository.observeEvents(ids, horizonStart(), horizonEnd())
+                }
                 .debounce(2_000L)
                 .collect { sync() }
         }
     }
-
-    private suspend fun allCalendarIdsSuspended(): Set<Long> =
-        repository.getCalendars().map { it.id }.toSet()
 
     private suspend fun sync() {
         val now = Instant.now()

@@ -6,14 +6,17 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.calendarium.core.data.CalendarPermissionState
 import app.calendarium.core.data.CalendarRepository
 import app.calendarium.core.data.UserPreferencesRepository
 import app.calendarium.ui.CalendarColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,6 +25,7 @@ enum class DAVxStatus { INSTALLED, NOT_INSTALLED }
 data class OnboardingUiState(
     val completing: Boolean = false,
     val davxStatus: DAVxStatus = DAVxStatus.NOT_INSTALLED,
+    val calendarPermissionGranted: Boolean = false,
     val error: String? = null,
 )
 
@@ -30,13 +34,23 @@ class OnboardingViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repository: CalendarRepository,
     private val prefs: UserPreferencesRepository,
+    private val permissionState: CalendarPermissionState,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(OnboardingUiState())
-    val state: StateFlow<OnboardingUiState> = _state.asStateFlow()
+    private val _internal = MutableStateFlow(OnboardingUiState(davxStatus = davxStatus()))
 
-    init {
-        _state.value = _state.value.copy(davxStatus = davxStatus())
+    val state: StateFlow<OnboardingUiState> =
+        combine(_internal, permissionState.granted) { internal, granted ->
+            internal.copy(calendarPermissionGranted = granted)
+        }.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            _internal.value,
+        )
+
+    /** Called after the system permission dialog returns, so the UI reflects the new grant. */
+    fun onPermissionResult() {
+        permissionState.refresh()
     }
 
     private fun davxStatus(): DAVxStatus {
@@ -59,22 +73,29 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun useLocalOnly() {
-        if (_state.value.completing) return
-        _state.value = _state.value.copy(completing = true, error = null)
+        if (_internal.value.completing) return
+        _internal.value = _internal.value.copy(completing = true, error = null)
         viewModelScope.launch {
             try {
                 val color = CalendarColors.pick(0)
-                repository.createLocalCalendar(name = "My calendar", color = color)
+                val id = repository.createLocalCalendar(name = "My calendar", color = color)
+                if (id == null) {
+                    _internal.value = _internal.value.copy(
+                        completing = false,
+                        error = "Couldn't create a calendar. Please grant calendar access and try again.",
+                    )
+                    return@launch
+                }
                 finishOnboarding()
             } catch (t: Throwable) {
-                _state.value = _state.value.copy(completing = false, error = t.message)
+                _internal.value = _internal.value.copy(completing = false, error = t.message)
             }
         }
     }
 
     fun useExisting() {
-        if (_state.value.completing) return
-        _state.value = _state.value.copy(completing = true, error = null)
+        if (_internal.value.completing) return
+        _internal.value = _internal.value.copy(completing = true, error = null)
         viewModelScope.launch { finishOnboarding() }
     }
 
@@ -84,7 +105,7 @@ class OnboardingViewModel @Inject constructor(
 
     private suspend fun finishOnboarding() {
         prefs.setOnboardingCompleted()
-        _state.value = _state.value.copy(completing = false)
+        _internal.value = _internal.value.copy(completing = false)
     }
 
     companion object {

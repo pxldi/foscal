@@ -28,7 +28,7 @@ class EventDetailViewModel @Inject constructor(
     private val _state = MutableStateFlow(EventDetailUiState())
     val state: StateFlow<EventDetailUiState> = _state.asStateFlow()
 
-    fun load(eventId: Long) {
+    fun load(eventId: Long, instanceStartMillis: Long = 0L) {
         _state.value = EventDetailUiState(loading = true)
         viewModelScope.launch {
             val zone = ZoneId.systemDefault()
@@ -36,7 +36,11 @@ class EventDetailViewModel @Inject constructor(
             val to = LocalDate.now().plusYears(2).atStartOfDay(zone).toInstant()
             val calendars = repository.getCalendars()
             val allIds = calendars.map { it.id }.toSet()
-            val event = repository.getEvents(allIds, from, to).firstOrNull { it.id == eventId }
+            val matches = repository.getEvents(allIds, from, to).filter { it.id == eventId }
+            // Prefer the exact occurrence the user tapped; fall back to the first (e.g. when
+            // opened from a notification, which only carries the event id).
+            val event = matches.firstOrNull { it.start.toEpochMilli() == instanceStartMillis }
+                ?: matches.firstOrNull()
             val cal = calendars.firstOrNull { it.id == event?.calendarId }
             _state.value = EventDetailUiState(loading = false, event = event, calendar = cal)
         }

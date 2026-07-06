@@ -18,6 +18,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,12 +44,29 @@ private enum class HomeTab(val label: String, val icon: ImageVector) {
 @Composable
 fun HomeRoute(
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
-    onOpenEditEvent: (Long) -> Unit,
-    initialDetailEventId: Long = -1L,
+    onOpenEditEvent: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    openDetailEventId: Long = -1L,
+    onEventConsumed: () -> Unit = {},
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
     var showSettings by remember { mutableStateOf(false) }
-    var detailEventId by remember { mutableLongStateOf(initialDetailEventId) }
+    var detailEventId by remember { mutableLongStateOf(-1L) }
+    var detailInstanceStart by remember { mutableLongStateOf(0L) }
+
+    // Open the event a notification tap requested, including when the app was already running
+    // (onNewIntent updates openDetailEventId, which re-triggers this effect).
+    LaunchedEffect(openDetailEventId) {
+        if (openDetailEventId > 0L) {
+            detailEventId = openDetailEventId
+            detailInstanceStart = 0L
+            onEventConsumed()
+        }
+    }
+
+    val onEventClick: (Long, Long) -> Unit = { id, instanceStart ->
+        detailEventId = id
+        detailInstanceStart = instanceStart
+    }
 
     Scaffold(
         bottomBar = {
@@ -78,20 +96,20 @@ fun HomeRoute(
         ) {
             when (tab) {
                 HomeTab.Month -> MonthRoute(
-                    onEventClick = { id -> detailEventId = id },
+                    onEventClick = onEventClick,
                     onNewEvent = { start, end -> onOpenEditor(null, start, end) },
                     onOpenSettings = { showSettings = true },
                 )
                 HomeTab.Week -> WeekRoute(
-                    onEventClick = { id -> detailEventId = id },
+                    onEventClick = onEventClick,
                     onOpenSettings = { showSettings = true },
                 )
                 HomeTab.Day -> DayRoute(
-                    onEventClick = { id -> detailEventId = id },
+                    onEventClick = onEventClick,
                     onOpenSettings = { showSettings = true },
                 )
                 HomeTab.Agenda -> AgendaRoute(
-                    onEventClick = { id -> detailEventId = id },
+                    onEventClick = onEventClick,
                     onOpenSettings = { showSettings = true },
                 )
             }
@@ -104,10 +122,11 @@ fun HomeRoute(
     if (detailEventId > 0L) {
         EventDetailSheet(
             eventId = detailEventId,
+            instanceStartMillis = detailInstanceStart,
             onDismiss = { detailEventId = -1L },
-            onEdit = { id ->
+            onEdit = { id, instanceStart ->
                 detailEventId = -1L
-                onOpenEditEvent(id)
+                onOpenEditEvent(id, instanceStart)
             },
         )
     }

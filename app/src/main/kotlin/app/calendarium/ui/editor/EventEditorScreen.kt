@@ -72,6 +72,15 @@ fun EventEditorRoute(
         if (state.finished) onBack()
     }
 
+    state.scopePrompt?.let { prompt ->
+        RecurrenceScopeDialog(
+            prompt = prompt,
+            onWholeSeries = { viewModel.resolveScope(wholeSeries = true) },
+            onThisEvent = { viewModel.resolveScope(wholeSeries = false) },
+            onDismiss = viewModel::dismissScopePrompt,
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -274,6 +283,27 @@ private fun EditorForm(
         }
         Spacer(Modifier.height(48.dp))
     }
+}
+
+@Composable
+private fun RecurrenceScopeDialog(
+    prompt: RecurrenceScopePrompt,
+    onWholeSeries: () -> Unit,
+    onThisEvent: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val verb = if (prompt == RecurrenceScopePrompt.DELETE) "Delete" else "Change"
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$verb recurring event") },
+        text = { Text("This event repeats. Apply your change to just this occurrence or the whole series?") },
+        confirmButton = {
+            TextButton(onClick = onThisEvent) { Text("$verb this event") }
+        },
+        dismissButton = {
+            TextButton(onClick = onWholeSeries) { Text("$verb all events") }
+        },
+    )
 }
 
 @Composable

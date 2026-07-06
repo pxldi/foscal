@@ -40,9 +40,12 @@ class AgendaViewModel @Inject constructor(
 
     private val zone: ZoneId = ZoneId.systemDefault()
 
+    private val today = LocalDate.now()
+
     private val window: Pair<Instant, Instant> = run {
-        val today = LocalDate.now()
-        today.atStartOfDay(zone).toInstant() to
+        // Start a day early so a same-day all-day event (UTC midnight → previous local evening)
+        // is still returned; days before today are dropped when building the list.
+        today.minusDays(1).atStartOfDay(zone).toInstant() to
             today.plusDays(AGENDA_HORIZON_DAYS).atStartOfDay(zone).toInstant()
     }
 
@@ -62,11 +65,12 @@ class AgendaViewModel @Inject constructor(
 
     val state: StateFlow<AgendaUiState> = combine(calendarIds, events) { ids, evts ->
         AgendaUiState(
-            days = evts.groupBy { it.start.atZone(zone).toLocalDate() }
+            days = evts.groupBy { it.startLocalDate(zone) }
+                .filterKeys { !it.isBefore(today) }
                 .toSortedMap()
                 .map { (date, list) -> AgendaDay(date, list.sortedBy { it.start }) },
             hasVisibleCalendars = ids.isNotEmpty(),
-            today = LocalDate.now(),
+            today = today,
         )
     }.stateIn(
         viewModelScope,

@@ -21,10 +21,16 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import javax.inject.Inject
 
+/** Which action is awaiting a "this event vs. all events" choice for a recurring series. */
+enum class RecurrenceScopePrompt { SAVE, DELETE }
+
 data class EditorUiState(
     val loading: Boolean = true,
     val eventId: Long = 0L,
     val isEditing: Boolean = false,
+    val isRecurring: Boolean = false,
+    val originalInstanceTime: Long = 0L,
+    val originalRrule: String? = null,
     val title: String = "",
     val availableCalendars: List<Calendar> = emptyList(),
     val selectedCalendarId: Long? = null,
@@ -39,6 +45,7 @@ data class EditorUiState(
     val reminderMinutesBefore: Int? = 15,
     val saving: Boolean = false,
     val finished: Boolean = false,
+    val scopePrompt: RecurrenceScopePrompt? = null,
 ) {
     val canSave: Boolean get() = title.isNotBlank() && selectedCalendarId != null && !saving
 }
@@ -73,7 +80,11 @@ class EventEditorViewModel @Inject constructor(
                 val allIds = repository.getCalendars().map { it.id }.toSet()
                 val from = LocalDate.now().minusYears(2).atStartOfDay(zone).toInstant()
                 val to = LocalDate.now().plusYears(2).atStartOfDay(zone).toInstant()
-                val event = repository.getEvents(allIds, from, to).firstOrNull { it.id == eventId }
+                val matches = repository.getEvents(allIds, from, to).filter { it.id == eventId }
+                // For a recurring event, many instances share the same id; startArg carries the
+                // begin time of the specific occurrence the user tapped so we edit the right one.
+                val event = startArg?.let { s -> matches.firstOrNull { it.start.toEpochMilli() == s } }
+                    ?: matches.firstOrNull()
                 val reminders = repository.getReminderMinutes(eventId)
                 if (event != null) {
                     val cal = event.calendarId
@@ -83,6 +94,9 @@ class EventEditorViewModel @Inject constructor(
                         loading = false,
                         eventId = eventId,
                         isEditing = true,
+                        isRecurring = event.isRecurring,
+                        originalInstanceTime = event.start.toEpochMilli(),
+                        originalRrule = event.rrule,
                         title = event.title,
                         availableCalendars = visible,
                         selectedCalendarId = cal,
@@ -93,7 +107,7 @@ class EventEditorViewModel @Inject constructor(
                         endTime = if (event.allDay) LocalTime.MIDNIGHT else endZ.toLocalTime(),
                         location = event.location.orEmpty(),
                         description = event.description.orEmpty(),
-                        frequency = Frequency.NONE, // existing RRULE parsing deferred
+                        frequency = parseFrequency(event.rrule),
                         reminderMinutesBefore = reminders.minOrNull(),
                     )
                     return@launch
@@ -143,6 +157,39 @@ class EventEditorViewModel @Inject constructor(
     fun save() {
         val current = _state.value
         if (!current.canSave) return
+        // Editing one occurrence of a series: ask whether to change just it or the whole series.
+        if (current.isEditing && current.isRecurring) {
+            mutate { it.copy(scopePrompt = RecurrenceScopePrompt.SAVE) }
+            return
+        }
+        performSave(applyToWholeSeries = true)
+    }
+
+    fun delete() {
+        val current = _state.value
+        if (!current.isEditing || current.eventId == 0L) return
+        if (current.isRecurring) {
+            mutate { it.copy(scopePrompt = RecurrenceScopePrompt.DELETE) }
+            return
+        }
+        performDelete(applyToWholeSeries = true)
+    }
+
+    fun dismissScopePrompt() = mutate { it.copy(scopePrompt = null) }
+
+    /** Resolves a recurrence scope prompt. [wholeSeries] false edits/deletes only this occurrence. */
+    fun resolveScope(wholeSeries: Boolean) {
+        val prompt = _state.value.scopePrompt ?: return
+        mutate { it.copy(scopePrompt = null) }
+        when (prompt) {
+            RecurrenceScopePrompt.SAVE -> performSave(applyToWholeSeries = wholeSeries)
+            RecurrenceScopePrompt.DELETE -> performDelete(applyToWholeSeries = wholeSeries)
+        }
+    }
+
+    private fun performSave(applyToWholeSeries: Boolean) {
+        val current = _state.value
+        if (!current.canSave) return
         mutate { it.copy(saving = true) }
         viewModelScope.launch {
             val startInstant = combineInstant(current.startDate, current.startTime, current.allDay)
@@ -151,6 +198,10 @@ class EventEditorViewModel @Inject constructor(
                 if (current.allDay) LocalTime.MIDNIGHT else current.endTime,
                 current.allDay,
             )
+            // Keep the original rule verbatim if the user left the frequency untouched, so
+            // externally-synced recurrences don't lose BYDAY/INTERVAL/UNTIL on an unrelated edit.
+            val preservedRrule = current.originalRrule
+                ?.takeIf { current.frequency != Frequency.NONE && current.frequency == parseFrequency(it) }
             val input = EventInput(
                 calendarId = current.selectedCalendarId!!,
                 title = current.title,
@@ -161,24 +212,44 @@ class EventEditorViewModel @Inject constructor(
                 allDay = current.allDay,
                 timezone = if (current.allDay) ZoneOffset.UTC.id else zone.id,
                 frequency = current.frequency,
+                rrule = preservedRrule,
                 reminderMinutesBefore = current.reminderMinutesBefore,
             )
-            if (current.isEditing) {
-                repository.updateEvent(current.eventId, input)
-            } else {
-                repository.createEvent(input)
+            when {
+                !current.isEditing -> repository.createEvent(input)
+                current.isRecurring && !applyToWholeSeries ->
+                    repository.updateEventInstance(current.eventId, current.originalInstanceTime, input)
+                else -> repository.updateEvent(current.eventId, input)
             }
             mutate { it.copy(saving = false, finished = true) }
         }
     }
 
-    fun delete() {
+    private fun performDelete(applyToWholeSeries: Boolean) {
         val current = _state.value
-        if (!current.isEditing || current.eventId == 0L) return
         mutate { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.deleteEvent(current.eventId)
+            if (current.isRecurring && !applyToWholeSeries) {
+                repository.deleteEventInstance(current.eventId, current.originalInstanceTime)
+            } else {
+                repository.deleteEvent(current.eventId)
+            }
             mutate { it.copy(saving = false, finished = true) }
+        }
+    }
+
+    private fun parseFrequency(rrule: String?): Frequency {
+        if (rrule.isNullOrBlank()) return Frequency.NONE
+        val freq = rrule.split(';')
+            .firstOrNull { it.startsWith("FREQ=") }
+            ?.substringAfter('=')
+            ?.uppercase()
+        return when (freq) {
+            "DAILY" -> Frequency.DAILY
+            "WEEKLY" -> Frequency.WEEKLY
+            "MONTHLY" -> Frequency.MONTHLY
+            "YEARLY" -> Frequency.YEARLY
+            else -> Frequency.NONE
         }
     }
 

@@ -67,7 +67,7 @@ class MonthViewModel @Inject constructor(
         MonthUiState(
             visibleMonth = month,
             selectedDate = selected,
-            eventsByDay = evts.groupBy { it.start.atZone(zone).toLocalDate() },
+            eventsByDay = evts.groupBy { it.startLocalDate(zone) },
             hasVisibleCalendars = ids.isNotEmpty(),
         )
     }.stateIn(

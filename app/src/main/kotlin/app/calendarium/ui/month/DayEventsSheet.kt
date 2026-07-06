@@ -41,7 +41,7 @@ import java.util.Locale
 fun DayEventsSheet(
     date: LocalDate,
     events: List<Event>,
-    onEventClick: (Long) -> Unit,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onNewEvent: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -71,7 +71,10 @@ fun DayEventsSheet(
                 }
             }
             items(events.sortedBy { it.start }, key = { it.id }) { event ->
-                EventListRow(event = event, onClick = { onEventClick(event.id) })
+                EventListRow(
+                    event = event,
+                    onClick = { onEventClick(event.id, event.start.toEpochMilli()) },
+                )
             }
             item {
                 Button(
@@ -108,7 +111,7 @@ private fun EventListRow(event: Event, onClick: () -> Unit) {
             modifier = Modifier
                 .size(width = 4.dp, height = 36.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(Color(event.paletteColor())),
+                .background(Color(event.color)),
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
@@ -134,12 +137,3 @@ private fun EventListRow(event: Event, onClick: () -> Unit) {
     }
 }
 
-private val eventPalette = intArrayOf(
-    0xFF1976D2.toInt(), 0xFFD81B60.toInt(), 0xFF43A047.toInt(),
-    0xFFFB8C00.toInt(), 0xFF8E24AA.toInt(), 0xFF00897B.toInt(),
-)
-
-private fun Event.paletteColor(): Int {
-    val key = (id + calendarId).toInt()
-    return eventPalette[((key % eventPalette.size) + eventPalette.size) % eventPalette.size]
-}

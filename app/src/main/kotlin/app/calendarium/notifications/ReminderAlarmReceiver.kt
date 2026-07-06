@@ -27,13 +27,18 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         if (eventId <= 0L) return
 
         val resolver = context.contentResolver
-        val exists = resolver.query(
-            android.provider.CalendarContract.Events.CONTENT_URI,
-            arrayOf(android.provider.CalendarContract.Events._ID),
-            "${android.provider.CalendarContract.Events._ID} = ?",
-            arrayOf(eventId.toString()),
-            null,
-        )?.use { it.moveToFirst() } == true
+        val exists = try {
+            resolver.query(
+                android.provider.CalendarContract.Events.CONTENT_URI,
+                arrayOf(android.provider.CalendarContract.Events._ID),
+                "${android.provider.CalendarContract.Events._ID} = ?",
+                arrayOf(eventId.toString()),
+                null,
+            )?.use { it.moveToFirst() } == true
+        } catch (_: SecurityException) {
+            // Calendar permission revoked; skip the existence check and still notify.
+            true
+        }
         if (!exists) return
 
         val contentText = buildString {
@@ -46,7 +51,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
 
         val tapIntent = Intent(context, MainActivity::class.java).apply {
-            putExtra("open_event_id", eventId)
+            putExtra(MainActivity.EXTRA_OPEN_EVENT_ID, eventId)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val tapPi = PendingIntent.getActivity(

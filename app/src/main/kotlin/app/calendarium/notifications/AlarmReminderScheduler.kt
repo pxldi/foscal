@@ -25,7 +25,7 @@ class AlarmReminderScheduler @Inject constructor(
 
     override fun reschedule(reminders: List<ScheduledReminder>) {
         val am = alarmManager ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) return
+        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
 
         val eventIds = reminders.map { it.eventId }.toSet()
         for (eventId in eventIds) {
@@ -45,7 +45,14 @@ class AlarmReminderScheduler @Inject constructor(
                 location = reminder.location,
                 createIfMissing = true,
             ) ?: continue
-            am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, pi), pi)
+            if (canExact) {
+                am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, pi), pi)
+            } else {
+                // Exact-alarm permission is not held (rare for a calendar app, but the user can
+                // revoke it): still deliver, just without exact-to-the-minute guarantees, rather
+                // than silently dropping the reminder.
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
         }
     }
 

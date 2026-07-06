@@ -6,7 +6,9 @@ that works both **fully offline** (local calendars) and **online** with any
 CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 [DAVx⁵](https://www.davx5.com).
 
-> Status: **early development**. Not usable yet.
+> Status: **beta**. The core calendar is functional and stable — month/week/day/agenda
+> views, event create/edit/delete, recurring events, reminders, and offline local
+> calendars all work. Rough edges remain (see [Roadmap](#roadmap)).
 
 ## Design goals
 
@@ -17,6 +19,48 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   sync adapter (DAVx⁵ being the recommended one for CalDAV) keeps everything
   in sync automatically.
 - **Free & open source** under the GNU General Public License v3.
+
+## Current status
+
+**Working today**
+
+- Four calendar views: **Month** (titled event chips), **Week** and **Day**
+  (positioned time-grid blocks with overlap handling), and **Agenda**.
+- **Event editor** — create, edit, and delete events with title, calendar,
+  all-day toggle, start/end date-time pickers, location, notes, and reminder.
+- **Recurring events** — daily / weekly / monthly / yearly. Editing or deleting
+  a repeating event prompts for **this occurrence** vs. **the whole series**;
+  single-occurrence changes are stored as proper exceptions. Recurrence rules
+  synced from CalDAV (BYDAY/INTERVAL/UNTIL) are preserved on unrelated edits.
+- **Reminders / notifications** — exact-alarm reminders via `AlarmManager`,
+  re-scheduled on boot and whenever the calendar changes, delivered on a
+  dedicated notification channel that deep-links back to the event.
+- **Real calendar colors** everywhere, with automatic light/dark contrast text.
+- **Offline local calendars** and hand-off to DAVx⁵ for CalDAV sync.
+- **Permission-first onboarding** — calendar access is requested up front and
+  the UI reacts the instant it is granted; no provider access happens before.
+- Material 3 dynamic color (Material You), edge-to-edge, light & dark themes.
+
+## Roadmap
+
+**Next up**
+
+- Richer recurrence editing: custom interval, end date / occurrence count,
+  and by-weekday selection (currently frequency-only in the editor).
+- "This and following events" scope option for recurring edits/deletes.
+- Search across events (title / location / notes).
+- Multi-day and spanning all-day events rendered across every day they cover
+  (today they appear on their start day only).
+
+**Later / future goals**
+
+- Home-screen widgets and a quick-add entry point.
+- Month-view day sheet polish and swipe-between-months animations.
+- Week/day view: drag-to-create and drag-to-move events.
+- Time-zone-aware editing UI and a world-clock style secondary zone.
+- Import/export of `.ics` files.
+- Local unit/UI test coverage for the repository and view models.
+- Play Store / F-Droid release: signing config, screenshots, store listing.
 
 ## Tech stack
 

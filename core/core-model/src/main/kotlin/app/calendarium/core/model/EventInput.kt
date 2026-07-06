@@ -21,5 +21,11 @@ data class EventInput(
     val allDay: Boolean,
     val timezone: String,
     val frequency: Frequency = Frequency.NONE,
+    /**
+     * The verbatim RRULE to persist. When non-null it is written as-is, preserving details we
+     * don't model in [frequency] (BYDAY, INTERVAL, UNTIL, …) for events synced from CalDAV.
+     * When null, a simple rule is derived from [frequency].
+     */
+    val rrule: String? = null,
     val reminderMinutesBefore: Int? = 15,
 )

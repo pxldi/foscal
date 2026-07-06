@@ -49,8 +49,10 @@ class WeekViewModel @Inject constructor(
     }
 
     private val weekBounds = _weekStart.map { start ->
-        val from = start.atStartOfDay(zone).toInstant()
-        val to = start.plusDays(7).atStartOfDay(zone).toInstant()
+        // Pad a day on each side so all-day events (stored at UTC midnight) that land just
+        // outside the local-day window are still returned; grouping keys them to the right day.
+        val from = start.minusDays(1).atStartOfDay(zone).toInstant()
+        val to = start.plusDays(8).atStartOfDay(zone).toInstant()
         from to to
     }
 
@@ -64,7 +66,7 @@ class WeekViewModel @Inject constructor(
         events,
         calendarIds,
     ) { start, evts, ids ->
-        val byDate = evts.groupBy { it.start.atZone(zone).toLocalDate() }
+        val byDate = evts.groupBy { it.startLocalDate(zone) }
         val days = (0 until 7).map { offset ->
             val date = start.plusDays(offset.toLong())
             TimelineDay(date, byDate[date].orEmpty().sortedBy { it.start })

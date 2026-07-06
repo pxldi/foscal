@@ -16,9 +16,12 @@ import app.calendarium.core.model.Frequency
 import app.calendarium.core.model.ScheduledReminder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -60,6 +63,19 @@ interface CalendarRepository {
 
     suspend fun deleteEvent(eventId: Long): Boolean
 
+    /**
+     * Overrides a single occurrence of a recurring event (the instance beginning at
+     * [instanceStartMillis]) with [input], leaving the rest of the series untouched.
+     */
+    suspend fun updateEventInstance(
+        eventId: Long,
+        instanceStartMillis: Long,
+        input: EventInput,
+    ): Boolean
+
+    /** Cancels a single occurrence of a recurring event, leaving the rest of the series. */
+    suspend fun deleteEventInstance(eventId: Long, instanceStartMillis: Long): Boolean
+
     suspend fun getReminderMinutes(eventId: Long): List<Int>
 
     suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder>
@@ -68,10 +84,14 @@ interface CalendarRepository {
 @Singleton
 class CalendarContractRepository @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val permission: CalendarPermissionState,
 ) : CalendarRepository {
 
     private val resolver: ContentResolver get() = context.contentResolver
 
+    // The Calendar Provider throws SecurityException before permission is granted and
+    // IllegalArgumentException for values it rejects (e.g. malformed recurrence exceptions).
+    // Neither should ever crash the app — callers treat a null/0 result as "operation failed".
     private fun safeQuery(
         uri: Uri,
         projection: Array<String>?,
@@ -82,11 +102,15 @@ class CalendarContractRepository @Inject constructor(
         resolver.query(uri, projection, selection, selectionArgs, sortOrder)
     } catch (_: SecurityException) {
         null
+    } catch (_: IllegalArgumentException) {
+        null
     }
 
     private fun safeInsert(uri: Uri, values: ContentValues): Uri? = try {
         resolver.insert(uri, values)
     } catch (_: SecurityException) {
+        null
+    } catch (_: IllegalArgumentException) {
         null
     }
 
@@ -94,11 +118,15 @@ class CalendarContractRepository @Inject constructor(
         resolver.update(uri, values, where, args)
     } catch (_: SecurityException) {
         0
+    } catch (_: IllegalArgumentException) {
+        0
     }
 
     private fun safeDelete(uri: Uri, where: String?, args: Array<String>?): Int = try {
         resolver.delete(uri, where, args)
     } catch (_: SecurityException) {
+        0
+    } catch (_: IllegalArgumentException) {
         0
     }
 
@@ -149,21 +177,33 @@ class CalendarContractRepository @Inject constructor(
         queryInstances(calendarIds, from, to)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeCalendars(): Flow<List<Calendar>> =
-        contentChanges(CalendarContract.Calendars.CONTENT_URI)
-            .onStart { emit(Unit) }
-            .map { getCalendars() }
-            .flowOn(Dispatchers.IO)
+        permission.granted.flatMapLatest { granted ->
+            if (!granted) {
+                flowOf(emptyList())
+            } else {
+                contentChanges(CalendarContract.Calendars.CONTENT_URI)
+                    .onStart { emit(Unit) }
+                    .map { getCalendars() }
+            }
+        }.flowOn(Dispatchers.IO)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeEvents(
         calendarIds: Set<Long>,
         from: Instant,
         to: Instant,
     ): Flow<List<Event>> =
-        contentChanges(CalendarContract.Events.CONTENT_URI)
-            .onStart { emit(Unit) }
-            .map { getEvents(calendarIds, from, to) }
-            .flowOn(Dispatchers.IO)
+        permission.granted.flatMapLatest { granted ->
+            if (!granted) {
+                flowOf(emptyList())
+            } else {
+                contentChanges(CalendarContract.Events.CONTENT_URI)
+                    .onStart { emit(Unit) }
+                    .map { getEvents(calendarIds, from, to) }
+            }
+        }.flowOn(Dispatchers.IO)
 
     override suspend fun createLocalCalendar(name: String, color: Int): Long? =
         withContext(Dispatchers.IO) {
@@ -201,7 +241,49 @@ class CalendarContractRepository @Inject constructor(
         val newId = safeInsert(CalendarContract.Events.CONTENT_URI, values)
             ?.let { ContentUris.parseId(it) } ?: return@withContext null
         setReminder(newId, input.reminderMinutesBefore)
+        // AOSP links a recurrence exception to its master through the master's _sync_id. Events on
+        // local calendars have no sync adapter to assign one, so we mint it ourselves — without it,
+        // inserting an exception silently wipes the rest of the series. CalDAV calendars are left
+        // alone; DAVx⁵ owns their sync ids.
+        ensureLocalSyncId(newId, input.calendarId)
         newId
+    }
+
+    private fun ensureLocalSyncId(eventId: Long, calendarId: Long) {
+        val account = localAccountFor(calendarId) ?: return
+        val values = ContentValues().apply {
+            put(CalendarContract.Events._SYNC_ID, "calendarium-${java.util.UUID.randomUUID()}")
+        }
+        val uri = CalendarContract.Events.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(CalendarContract.Events.ACCOUNT_NAME, account.first)
+            .appendQueryParameter(CalendarContract.Events.ACCOUNT_TYPE, account.second)
+            .build()
+        safeUpdate(
+            uri,
+            values,
+            "${CalendarContract.Events._ID} = ?",
+            arrayOf(eventId.toString()),
+        )
+    }
+
+    /** Returns (accountName, accountType) if the calendar is a local (non-synced) one, else null. */
+    private fun localAccountFor(calendarId: Long): Pair<String, String>? {
+        return safeQuery(
+            getCalendarUri(calendarId),
+            arrayOf(
+                CalendarContract.Calendars.ACCOUNT_NAME,
+                CalendarContract.Calendars.ACCOUNT_TYPE,
+            ),
+            null,
+            null,
+            null,
+        )?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            val name = c.getString(0) ?: return@use null
+            val type = c.getString(1) ?: return@use null
+            if (type == CalendarContract.ACCOUNT_TYPE_LOCAL) name to type else null
+        }
     }
 
     override suspend fun updateEvent(eventId: Long, input: EventInput): Boolean =
@@ -225,6 +307,53 @@ class CalendarContractRepository @Inject constructor(
     override suspend fun deleteEvent(eventId: Long): Boolean = withContext(Dispatchers.IO) {
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
         safeDelete(uri, null, null) > 0
+    }
+
+    override suspend fun updateEventInstance(
+        eventId: Long,
+        instanceStartMillis: Long,
+        input: EventInput,
+    ): Boolean = withContext(Dispatchers.IO) {
+        // The exception overrides the single occurrence identified by ORIGINAL_INSTANCE_TIME.
+        // The provider derives the base series from DURATION, so an exception must express its
+        // length as DURATION too — supplying DTEND is rejected ("Exceptions can't overwrite dtend").
+        // CALENDAR_ID is likewise fixed by the series and must not be set here.
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, instanceStartMillis)
+            put(CalendarContract.Events.TITLE, input.title.trim().ifEmpty { "(Untitled)" })
+            put(CalendarContract.Events.EVENT_LOCATION, input.location)
+            put(CalendarContract.Events.DESCRIPTION, input.description)
+            put(CalendarContract.Events.ALL_DAY, if (input.allDay) 1 else 0)
+            put(CalendarContract.Events.EVENT_TIMEZONE, input.timezone)
+            put(CalendarContract.Events.DTSTART, input.start.toEpochMilli())
+            put(
+                CalendarContract.Events.DURATION,
+                formatDuration(input.start, input.end, input.allDay),
+            )
+        }
+        val uri = ContentUris.withAppendedId(
+            CalendarContract.Events.CONTENT_EXCEPTION_URI,
+            eventId,
+        )
+        val result = safeInsert(uri, values) ?: return@withContext false
+        val newId = ContentUris.parseId(result)
+        if (newId > 0) setReminder(newId, input.reminderMinutesBefore)
+        true
+    }
+
+    override suspend fun deleteEventInstance(
+        eventId: Long,
+        instanceStartMillis: Long,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, instanceStartMillis)
+            put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CANCELED)
+        }
+        val uri = ContentUris.withAppendedId(
+            CalendarContract.Events.CONTENT_EXCEPTION_URI,
+            eventId,
+        )
+        safeInsert(uri, values) != null
     }
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> =
@@ -302,7 +431,9 @@ class CalendarContractRepository @Inject constructor(
         } else {
             // Recurring: provider requires DURATION, forbids DTEND.
             put(CalendarContract.Events.DURATION, formatDuration(input.start, input.end, input.allDay))
-            put(CalendarContract.Events.RRULE, "FREQ=${input.frequency.name}")
+            // Preserve the original rule verbatim when supplied (keeps BYDAY/INTERVAL/UNTIL from
+            // CalDAV events intact); otherwise derive a simple rule from the chosen frequency.
+            put(CalendarContract.Events.RRULE, input.rrule ?: "FREQ=${input.frequency.name}")
             putNull(CalendarContract.Events.DTEND)
         }
     }
@@ -346,6 +477,9 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Instances.END,
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.EVENT_TIMEZONE,
+            CalendarContract.Instances.DISPLAY_COLOR,
+            CalendarContract.Instances.CALENDAR_COLOR,
+            CalendarContract.Instances.RRULE,
         )
         val placeholders = calendarIds.joinToString(",") { "?" }
         val selection = "${CalendarContract.Instances.CALENDAR_ID} IN ($placeholders)"
@@ -364,6 +498,8 @@ class CalendarContractRepository @Inject constructor(
             while (c.moveToNext()) {
                 val title = c.getString(2).orEmpty()
                 if (title.isBlank()) continue
+                val displayColor = c.getInt(9)
+                val calendarColor = c.getInt(10)
                 out += Event(
                     id = c.getLong(0),
                     calendarId = c.getLong(1),
@@ -374,6 +510,8 @@ class CalendarContractRepository @Inject constructor(
                     end = Instant.ofEpochMilli(c.getLong(6)),
                     allDay = c.getInt(7) == 1,
                     timezone = c.getString(8),
+                    color = if (displayColor != 0) displayColor else calendarColor,
+                    rrule = c.getString(11),
                 )
             }
         }
@@ -386,8 +524,18 @@ class CalendarContractRepository @Inject constructor(
                 trySend(Unit)
             }
         }
-        resolver.registerContentObserver(uri, /* notifyForDescendants = */ true, observer)
-        awaitClose { resolver.unregisterContentObserver(observer) }
+        try {
+            resolver.registerContentObserver(uri, /* notifyForDescendants = */ true, observer)
+        } catch (_: SecurityException) {
+            // Permission was revoked between the gate check and here; emit nothing and close.
+        }
+        awaitClose {
+            try {
+                resolver.unregisterContentObserver(observer)
+            } catch (_: SecurityException) {
+                // no-op
+            }
+        }
     }.flowOn(Dispatchers.IO)
 
     companion object {
