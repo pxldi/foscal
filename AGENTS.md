@@ -84,10 +84,15 @@ colors, offline local calendars, permission-first onboarding. See the README
   owns them) — do not touch those.
 - **All-day events are stored at UTC midnight.** Read them back in UTC
   (`Event.startLocalDate`), not the device zone, or they shift a day west of UTC.
-- **Month view is a continuous week `LazyColumn`, not a month pager.** Each week
-  is rendered once (paging months duplicated shared boundary weeks). The focused
-  month is derived from the centre week and drives the title + the black/grey
-  fade; scroll settling snaps that month's first week to the top.
+- **Month view is a `VerticalPager` of whole-month grids, not a continuous
+  week scroll.** Each page is a 6-week (42-cell) grid from
+  `Dates.monthCells(month)`; the page's month is
+  `baseMonth.plusMonths(page - initialPage)` and drives the per-page
+  in-month/out-of-month (black/grey) coloring. `snapshotFlow {
+  pagerState.currentPage }` feeds `viewModel.goToMonth`. The ViewModel
+  fetches a ±2-month window (`mapMonthToRange`) so adjacent pages are
+  populated mid-swipe. Prev/next arrows and the Today button call
+  `pagerState.animateScrollToPage`.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.

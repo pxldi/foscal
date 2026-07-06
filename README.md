@@ -24,10 +24,10 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Working today**
 
-- Four calendar views: **Month** (titled event chips; a continuous vertical
-  week scroll that snaps to whole months and fades adjacent months to grey),
-  **Week** and **Day**
+- Four calendar views: **Month** (titled event chips; a vertical pager of
+  whole-month grids that fades out-of-month days to grey), **Week** and **Day**
   (positioned time-grid blocks with overlap handling), and **Agenda**.
+  Multi-day and spanning all-day events render on every day they cover.
 - **Event editor** — create, edit, and delete events with title, calendar,
   all-day toggle, start/end date-time pickers, location, notes, and reminder.
 - **Recurring events** — daily / weekly / monthly / yearly. Editing or deleting
@@ -51,8 +51,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   and by-weekday selection (currently frequency-only in the editor).
 - "This and following events" scope option for recurring edits/deletes.
 - Search across events (title / location / notes).
-- Multi-day and spanning all-day events rendered across every day they cover
-  (today they appear on their start day only).
 
 **Later / future goals**
 

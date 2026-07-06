@@ -33,4 +33,36 @@ data class Event(
     fun startLocalDate(zone: ZoneId): LocalDate =
         if (allDay) start.atZone(ZoneOffset.UTC).toLocalDate()
         else start.atZone(zone).toLocalDate()
+
+    /**
+     * The calendar day this event ends on, in the raw provider sense: for timed events this is the
+     * actual end day (inclusive); for all-day events the provider stores END as exclusive UTC
+     * midnight of the day *after* the last covered day. See [spannedDays] for the inclusive range.
+     */
+    fun endLocalDate(zone: ZoneId): LocalDate =
+        if (allDay) end.atZone(ZoneOffset.UTC).toLocalDate()
+        else end.atZone(zone).toLocalDate()
+
+    /**
+     * Inclusive last day the event appears on. All-day events subtract one day because the
+     * provider's END is exclusive (an all-day event Mon→Tue covers only Monday).
+     */
+    fun lastLocalDate(zone: ZoneId): LocalDate {
+        val raw = endLocalDate(zone)
+        return if (allDay) raw.minusDays(1) else raw
+    }
+
+    /** All calendar days this event covers, inclusive. Multi-day events span every day. */
+    fun spannedDays(zone: ZoneId): List<LocalDate> {
+        val first = startLocalDate(zone)
+        val last = lastLocalDate(zone).coerceAtLeast(first)
+        return generateSequence(first) { it.plusDays(1) }.takeWhile { it <= last }.toList()
+    }
+
+    /** Whether this event covers [date] on any of its spanned days. */
+    fun spansDay(date: LocalDate, zone: ZoneId): Boolean {
+        val first = startLocalDate(zone)
+        val last = lastLocalDate(zone).coerceAtLeast(first)
+        return date in first..last
+    }
 }
