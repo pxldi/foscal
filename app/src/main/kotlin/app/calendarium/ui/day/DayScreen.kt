@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +32,7 @@ import java.util.Locale
 fun DayRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit,
     viewModel: DayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -59,6 +61,9 @@ fun DayRoute(
                 actions = {
                     IconButton(onClick = { viewModel.nextDay() }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next day")
+                    }
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(Icons.Outlined.Search, "Search")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Outlined.Settings, "Settings")

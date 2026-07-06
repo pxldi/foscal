@@ -38,6 +38,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   re-scheduled on boot and whenever the calendar changes, delivered on a
   dedicated notification channel that deep-links back to the event.
 - **Real calendar colors** everywhere, with automatic light/dark contrast text.
+- **Search** across events by title, location, or notes; recurring series
+  collapse to their next occurrence so they don't flood results.
 - **Offline local calendars** and hand-off to DAVx⁵ for CalDAV sync.
 - **Permission-first onboarding** — calendar access is requested up front and
   the UI reacts the instant it is granted; no provider access happens before.
@@ -50,7 +52,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - Richer recurrence editing: custom interval, end date / occurrence count,
   and by-weekday selection (currently frequency-only in the editor).
 - "This and following events" scope option for recurring edits/deletes.
-- Search across events (title / location / notes).
 
 **Later / future goals**
 

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -46,6 +47,13 @@ interface CalendarRepository {
     suspend fun getCalendars(): List<Calendar>
 
     suspend fun getEvents(calendarIds: Set<Long>, from: Instant, to: Instant): List<Event>
+
+    /**
+     * Full-text-ish search over event title/location/description across a wide window.
+     * Recurring events collapse to a single result (the next upcoming occurrence, or the last
+     * past one) so a frequent series doesn't flood the list.
+     */
+    suspend fun searchEvents(calendarIds: Set<Long>, query: String): List<Event>
 
     /** Emits the current list of calendars, then re-emits whenever the provider changes. */
     fun observeCalendars(): Flow<List<Calendar>>
@@ -175,6 +183,30 @@ class CalendarContractRepository @Inject constructor(
     ): List<Event> = withContext(Dispatchers.IO) {
         if (calendarIds.isEmpty()) return@withContext emptyList()
         queryInstances(calendarIds, from, to)
+    }
+
+    override suspend fun searchEvents(
+        calendarIds: Set<Long>,
+        query: String,
+    ): List<Event> = withContext(Dispatchers.IO) {
+        val needle = query.trim().lowercase()
+        if (calendarIds.isEmpty() || needle.isEmpty()) return@withContext emptyList()
+        val now = Instant.now()
+        // ±2 years is enough to find practical matches without expanding decades of recurrences.
+        val from = now.minus(730, ChronoUnit.DAYS)
+        val to = now.plus(730, ChronoUnit.DAYS)
+        val matched = queryInstances(calendarIds, from, to).filter { e ->
+            e.title.lowercase().contains(needle) ||
+                e.location?.lowercase()?.contains(needle) == true ||
+                e.description?.lowercase()?.contains(needle) == true
+        }
+        // Collapse recurring series to one row: the next upcoming occurrence, else the last past one.
+        matched.groupBy { it.id }
+            .mapValues { (_, instances) ->
+                instances.firstOrNull { !it.start.isBefore(now) } ?: instances.last()
+            }
+            .values
+            .sortedBy { it.start }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

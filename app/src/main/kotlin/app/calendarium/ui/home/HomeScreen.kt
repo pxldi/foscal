@@ -52,6 +52,7 @@ private enum class HomeTab(val label: String, val icon: ImageVector) {
 fun HomeRoute(
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
     onOpenEditEvent: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    onOpenSearch: () -> Unit,
     openDetailEventId: Long = -1L,
     onEventConsumed: () -> Unit = {},
 ) {
@@ -121,18 +122,22 @@ fun HomeRoute(
                         onEventClick = onEventClick,
                         onNewEvent = { start, end -> onOpenEditor(null, start, end) },
                         onOpenSettings = { showSettings = true },
+                        onOpenSearch = onOpenSearch,
                     )
                     HomeTab.Week -> WeekRoute(
                         onEventClick = onEventClick,
                         onOpenSettings = { showSettings = true },
+                        onOpenSearch = onOpenSearch,
                     )
                     HomeTab.Day -> DayRoute(
                         onEventClick = onEventClick,
                         onOpenSettings = { showSettings = true },
+                        onOpenSearch = onOpenSearch,
                     )
                     HomeTab.Agenda -> AgendaRoute(
                         onEventClick = onEventClick,
                         onOpenSettings = { showSettings = true },
+                        onOpenSearch = onOpenSearch,
                     )
                 }
             }

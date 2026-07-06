@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -48,6 +49,7 @@ import java.util.Locale
 fun WeekRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit,
     viewModel: WeekViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -73,6 +75,9 @@ fun WeekRoute(
                 actions = {
                     IconButton(onClick = { viewModel.nextWeek() }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next week")
+                    }
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(Icons.Outlined.Search, "Search")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Outlined.Settings, "Settings")

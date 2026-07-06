@@ -15,10 +15,12 @@ import app.calendarium.ui.editor.EventEditorRoute
 import app.calendarium.ui.home.HomeRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
+import app.calendarium.ui.search.SearchRoute
 
 object Routes {
     const val ONBOARDING = "onboarding"
     const val MAIN = "main"
+    const val SEARCH = "search"
 
     /**
      * Editor supports both new and edit. `eventId`, `calendarId`, `start`, `end` are all
@@ -77,6 +79,7 @@ fun CalendariumNavHost(
                     onOpenEditEvent = { id, instanceStart ->
                         navController.navigate(Routes.editorEdit(id, instanceStart))
                     },
+                    onOpenSearch = { navController.navigate(Routes.SEARCH) },
                     openDetailEventId = openEventId,
                     onEventConsumed = onEventConsumed,
                 )
@@ -120,6 +123,14 @@ fun CalendariumNavHost(
             },
         ) {
             EventEditorRoute(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.SEARCH) {
+            SearchRoute(
+                onBack = { navController.popBackStack() },
+                onOpenEditEvent = { id, instanceStart ->
+                    navController.navigate(Routes.editorEdit(id, instanceStart))
+                },
+            )
         }
     }
 }
