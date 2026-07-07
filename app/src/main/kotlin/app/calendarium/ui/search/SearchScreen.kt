@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,10 +51,9 @@ import app.calendarium.ui.util.Dates
 import app.calendarium.ui.util.LocalUse24HourClock
 import app.calendarium.ui.util.timeFormatter
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,11 +66,25 @@ fun SearchRoute(
     val results by viewModel.results.collectAsStateWithLifecycle()
     val zone = viewModel.zone
     val today = remember { LocalDate.now() }
+    val listState = rememberLazyListState()
 
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(query) { listState.scrollToItem(0) }
+    LaunchedEffect(listState, results.size, query) {
+        snapshotFlow {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            val first = visible.firstOrNull()?.index ?: -1
+            val last = visible.lastOrNull()?.index ?: -1
+            first to last
+        }.distinctUntilChanged().collect { (first, last) ->
+            if (query.isBlank() || results.isEmpty()) return@collect
+            if (first in 0..2) viewModel.loadOlder()
+            if (last >= results.lastIndex - 2) viewModel.loadNewer()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -118,6 +133,7 @@ fun SearchRoute(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
+                state = listState,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     horizontal = 12.dp,
                     vertical = 8.dp,

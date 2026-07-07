@@ -57,6 +57,7 @@ object Routes {
 fun CalendariumNavHost(
     startOnboarding: Boolean,
     openEventId: Long = -1L,
+    openInstanceStartMillis: Long = 0L,
     openQuickAdd: Boolean = false,
     onEventConsumed: () -> Unit = {},
     onQuickAddConsumed: () -> Unit = {},
@@ -73,9 +74,11 @@ fun CalendariumNavHost(
     }
 
     // A notification tap carries only the event id; open its detail screen.
-    LaunchedEffect(openEventId, startOnboarding) {
+    LaunchedEffect(openEventId, openInstanceStartMillis, startOnboarding) {
         if (openEventId > 0L && !startOnboarding) {
-            navController.navigate(Routes.detail(openEventId)) { launchSingleTop = true }
+            navController.navigate(Routes.detail(openEventId, openInstanceStartMillis)) {
+                launchSingleTop = true
+            }
             onEventConsumed()
         }
     }

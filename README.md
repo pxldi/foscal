@@ -6,7 +6,7 @@ that works both **fully offline** (local calendars) and **online** with any
 CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 [DAVx⁵](https://www.davx5.com).
 
-> Status: **beta**. The core calendar is functional and stable — month/week/day/agenda
+> Status: **beta**. The core calendar is functional and stable — month/week/agenda
 > views, event create/edit/delete, recurring events, reminders, and offline local
 > calendars all work. Rough edges remain (see [Roadmap](#roadmap)).
 
@@ -27,9 +27,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - Three calendar views in the bottom nav: **Month** (centered date numerals with
   per-calendar color dots; whole-month grids that slide between months and fade
   out-of-month days to grey, with an inline day preview under the grid), **Week**
-  (a tappable weekday strip over a schedule grouped by day), and **Agenda** (an
-  infinite grouped schedule). Multi-day and spanning all-day events render on
-  every day they cover.
+  (a tappable weekday strip over a schedule grouped by day), and **Agenda** (a
+  grouped schedule that loads older and newer events as you scroll). Multi-day
+  and spanning all-day events render on every day they cover.
 - **Custom design system** — the app's own visual voice: the *Bricolage
   Grotesque* display face on dates and titles, *Hanken Grotesque* for UI, a
   Cobalt accent, soft color-stripe event cards, a unified app/onboarding icon,
@@ -53,8 +53,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   re-scheduled on boot and whenever the calendar changes, delivered on a
   dedicated notification channel that deep-links back to the event.
 - **Real calendar colors** everywhere, with automatic light/dark contrast text.
-- **Search** across events by title, location, or notes; recurring series
-  collapse to their next occurrence so they don't flood results.
+- **Search** across events by title, location, or notes; results expand older
+  and newer as you scroll, and recurring series collapse to a single occurrence
+  so they don't flood results.
 - **Home-screen widget** showing your upcoming events with real calendar
   colors, tap-to-open, and a "+" quick-add button.
 - **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
@@ -82,8 +83,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 - Kotlin 2.x, Jetpack Compose, Material 3
 - Single-activity, multi-module Gradle project
-- Hilt for dependency injection, Room for local caching, WorkManager for
-  reminder refresh
+- Hilt for dependency injection and DataStore for preferences
 - Reads/writes `android.provider.CalendarContract`
 - minSdk 26, targetSdk 35
 
@@ -94,7 +94,7 @@ app/                       # :app — MainActivity, navigation, DI glue
 core/
   core-model/              # domain models (Kotlin/JVM)
   core-ui/                 # Material 3 theme + shared composables
-  core-data/               # CalendarContract repository, Room, DataStore
+  core-data/               # CalendarContract repository + DataStore preferences
 ```
 
 ## Build

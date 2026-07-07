@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
@@ -27,7 +28,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,7 @@ import app.calendarium.ui.util.LocalUse24HourClock
 import app.calendarium.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +58,30 @@ fun AgendaRoute(
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    val positionedAtToday = remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.days) {
+        if (!positionedAtToday.value && state.days.isNotEmpty()) {
+            positionedAtToday.value = true
+            val index = state.days.indexOfFirst { !it.date.isBefore(state.today) }
+                .takeIf { it >= 0 } ?: state.days.lastIndex
+            listState.scrollToItem(index.coerceAtLeast(0))
+        }
+    }
+
+    LaunchedEffect(listState, state.days.size) {
+        snapshotFlow {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            val first = visible.firstOrNull()?.index ?: -1
+            val last = visible.lastOrNull()?.index ?: -1
+            first to last
+        }.distinctUntilChanged().collect { (first, last) ->
+            if (state.days.isEmpty()) return@collect
+            if (first in 0..2) viewModel.loadOlder()
+            if (last >= state.days.lastIndex - 2) viewModel.loadNewer()
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -80,7 +110,7 @@ fun AgendaRoute(
             ) {
                 Text(
                     if (state.hasVisibleCalendars)
-                        "No upcoming events in the next 60 days."
+                        "No events in the loaded agenda range."
                     else
                         "No visible calendars. Open Settings to enable one.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -93,6 +123,7 @@ fun AgendaRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
+            state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 horizontal = 12.dp,
                 vertical = 8.dp,

@@ -32,7 +32,7 @@ class AgendaViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun `groups events by day, sorts within a day, and drops past days`() = runTest(dispatcher) {
+    fun `groups events by day, sorts within a day, and includes past days`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(
             calendars = listOf(testCalendar()),
             events = listOf(
@@ -47,9 +47,9 @@ class AgendaViewModelTest {
         advanceUntilIdle()
 
         val state = vm.state.value
-        assertEquals(listOf(today, today.plusDays(1)), state.days.map { it.date })
-        assertEquals(listOf("Morning", "Afternoon"), state.days.first().events.map { it.title })
-        assertTrue(state.days.none { it.date.isBefore(today) })
+        assertEquals(listOf(today.minusDays(2), today, today.plusDays(1)), state.days.map { it.date })
+        assertEquals(listOf("Morning", "Afternoon"), state.days[1].events.map { it.title })
+        assertTrue(state.days.any { it.date.isBefore(today) })
     }
 
     @Test

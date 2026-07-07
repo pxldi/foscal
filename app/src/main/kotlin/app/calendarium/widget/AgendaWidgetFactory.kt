@@ -44,6 +44,7 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now()
         val hidden = prefs.hiddenCalendarIds.first()
+        val use24Hour = prefs.use24HourClock.first()
         val ids = repo.getCalendars()
             .filter { it.visible && it.id.toString() !in hidden }
             .map { it.id }
@@ -57,7 +58,7 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
                 eventId = e.id,
                 instanceStart = e.start.toEpochMilli(),
                 title = e.title,
-                subtitle = subtitleFor(e, today, zone),
+                subtitle = subtitleFor(e, today, zone, use24Hour),
                 color = e.color,
             )
         }
@@ -71,7 +72,9 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
         views.setInt(R.id.widget_item_color, "setColorFilter", row.color)
         views.setOnClickFillInIntent(
             R.id.widget_item_root,
-            Intent().putExtra(MainActivity.EXTRA_OPEN_EVENT_ID, row.eventId),
+            Intent()
+                .putExtra(MainActivity.EXTRA_OPEN_EVENT_ID, row.eventId)
+                .putExtra(MainActivity.EXTRA_OPEN_INSTANCE_START, row.instanceStart),
         )
         return views
     }
@@ -83,7 +86,7 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
     override fun getCount(): Int = rows.size
     override fun onDestroy() = Unit
 
-    private fun subtitleFor(event: Event, today: LocalDate, zone: ZoneId): String {
+    private fun subtitleFor(event: Event, today: LocalDate, zone: ZoneId, use24Hour: Boolean): String {
         val day = if (event.allDay) {
             event.start.atZone(ZoneOffset.UTC).toLocalDate()
         } else {
@@ -99,8 +102,9 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
         val timeLabel = if (event.allDay) {
             "All day"
         } else {
+            val pattern = if (use24Hour) "HH:mm" else "h:mm a"
             event.start.atZone(zone).toLocalTime()
-                .format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
+                .format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
         }
         return listOf(dayLabel, timeLabel).filter { it.isNotBlank() }.joinToString("  •  ")
     }

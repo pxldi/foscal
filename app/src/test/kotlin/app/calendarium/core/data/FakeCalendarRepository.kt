@@ -44,8 +44,17 @@ class FakeCalendarRepository(
         to: Instant,
     ): List<Event> = events.filter { it.calendarId in calendarIds }
 
-    override suspend fun searchEvents(calendarIds: Set<Long>, query: String): List<Event> =
-        events.filter { it.calendarId in calendarIds && it.title.contains(query, ignoreCase = true) }
+    override suspend fun searchEvents(
+        calendarIds: Set<Long>,
+        query: String,
+        from: Instant,
+        to: Instant,
+    ): List<Event> = events.filter {
+        it.calendarId in calendarIds &&
+            it.start >= from &&
+            it.start <= to &&
+            it.title.contains(query, ignoreCase = true)
+    }
 
     override fun observeCalendars(): Flow<List<Calendar>> = MutableStateFlow(calendars)
 

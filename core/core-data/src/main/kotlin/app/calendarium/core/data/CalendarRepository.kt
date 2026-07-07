@@ -29,7 +29,6 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,7 +54,12 @@ interface CalendarRepository {
      * Recurring events collapse to a single result (the next upcoming occurrence, or the last
      * past one) so a frequent series doesn't flood the list.
      */
-    suspend fun searchEvents(calendarIds: Set<Long>, query: String): List<Event>
+    suspend fun searchEvents(
+        calendarIds: Set<Long>,
+        query: String,
+        from: Instant,
+        to: Instant,
+    ): List<Event>
 
     /** Emits the current list of calendars, then re-emits whenever the provider changes. */
     fun observeCalendars(): Flow<List<Calendar>>
@@ -208,13 +212,12 @@ class CalendarContractRepository @Inject constructor(
     override suspend fun searchEvents(
         calendarIds: Set<Long>,
         query: String,
+        from: Instant,
+        to: Instant,
     ): List<Event> = withContext(Dispatchers.IO) {
         val needle = query.trim().lowercase()
         if (calendarIds.isEmpty() || needle.isEmpty()) return@withContext emptyList()
         val now = Instant.now()
-        // ±2 years is enough to find practical matches without expanding decades of recurrences.
-        val from = now.minus(730, ChronoUnit.DAYS)
-        val to = now.plus(730, ChronoUnit.DAYS)
         val matched = queryInstances(calendarIds, from, to).filter { e ->
             e.title.lowercase().contains(needle) ||
                 e.location?.lowercase()?.contains(needle) == true ||

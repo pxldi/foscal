@@ -56,8 +56,7 @@ tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination), event
 create/edit/delete, recurring events
 (this-vs-all-events, exceptions), reminders/notifications, real calendar colors,
 offline local calendars, permission-first onboarding. There is no separate Day
-view — it was dropped as redundant (Week's schedule + Agenda cover it);
-`ui/day/DayScreen.kt` still exists but is not wired into navigation. See the
+view — it was dropped as redundant (Week's schedule + Agenda cover it). See the
 README "Current status" and "Roadmap" sections for the full picture and what's next.
 
 ## Design system

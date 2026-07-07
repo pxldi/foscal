@@ -32,11 +32,6 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
-
-    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)

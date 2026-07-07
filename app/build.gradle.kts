@@ -111,10 +111,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.hilt.work)
-    ksp(libs.androidx.hilt.compiler)
-
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.junit)

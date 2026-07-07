@@ -16,8 +16,13 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
+
+private data class SearchWindow(val pastYears: Long = 2L, val futureYears: Long = 2L)
+
+private const val SEARCH_PAGE_YEARS = 2L
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
@@ -29,6 +34,7 @@ class SearchViewModel @Inject constructor(
     val zone: ZoneId = ZoneId.systemDefault()
 
     val query = MutableStateFlow("")
+    private val window = MutableStateFlow(SearchWindow())
 
     private val calendarIds = combine(
         repository.observeCalendars(),
@@ -40,10 +46,17 @@ class SearchViewModel @Inject constructor(
             .toSet()
     }
 
-    val results: StateFlow<List<Event>> = combine(query, calendarIds) { q, ids -> q to ids }
+    val results: StateFlow<List<Event>> = combine(query, calendarIds, window) { q, ids, range ->
+        Triple(q, ids, range)
+    }
         .debounce(250)
-        .flatMapLatest { (q, ids) ->
-            flow { emit(repository.searchEvents(ids, q)) }
+        .flatMapLatest { (q, ids, range) ->
+            flow {
+                val today = LocalDate.now()
+                val from = today.minusYears(range.pastYears).atStartOfDay(zone).toInstant()
+                val to = today.plusYears(range.futureYears).atStartOfDay(zone).toInstant()
+                emit(repository.searchEvents(ids, q, from, to))
+            }
         }
         .stateIn(
             viewModelScope,
@@ -53,5 +66,14 @@ class SearchViewModel @Inject constructor(
 
     fun onQueryChange(value: String) {
         query.value = value
+        window.value = SearchWindow()
+    }
+
+    fun loadOlder() {
+        window.value = window.value.copy(pastYears = window.value.pastYears + SEARCH_PAGE_YEARS)
+    }
+
+    fun loadNewer() {
+        window.value = window.value.copy(futureYears = window.value.futureYears + SEARCH_PAGE_YEARS)
     }
 }

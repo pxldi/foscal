@@ -32,12 +32,14 @@ class MainActivity : ComponentActivity() {
     lateinit var permissionState: CalendarPermissionState
 
     private var pendingEventId by mutableLongStateOf(-1L)
+    private var pendingInstanceStart by mutableLongStateOf(0L)
     private var pendingQuickAdd by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         pendingEventId = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
+        pendingInstanceStart = intent.getLongExtra(EXTRA_OPEN_INSTANCE_START, 0L)
         pendingQuickAdd = intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)
         setContent {
             val onboardingDone by prefs.onboardingCompleted
@@ -49,6 +51,7 @@ class MainActivity : ComponentActivity() {
             val use24Hour by prefs.use24HourClock
                 .collectAsStateWithLifecycle(initialValue = true)
             val openEventId = pendingEventId
+            val openInstanceStart = pendingInstanceStart
             val openQuickAdd = pendingQuickAdd
             val darkTheme = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -62,6 +65,7 @@ class MainActivity : ComponentActivity() {
                         else -> CalendariumNavHost(
                             startOnboarding = done.not(),
                             openEventId = openEventId,
+                            openInstanceStartMillis = openInstanceStart,
                             openQuickAdd = openQuickAdd,
                             onEventConsumed = { pendingEventId = -1L },
                             onQuickAddConsumed = { pendingQuickAdd = false },
@@ -76,7 +80,10 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         val id = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
-        if (id > 0L) pendingEventId = id
+        if (id > 0L) {
+            pendingEventId = id
+            pendingInstanceStart = intent.getLongExtra(EXTRA_OPEN_INSTANCE_START, 0L)
+        }
         if (intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)) pendingQuickAdd = true
     }
 
@@ -89,6 +96,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_EVENT_ID = "open_event_id"
+        const val EXTRA_OPEN_INSTANCE_START = "open_instance_start"
         const val EXTRA_OPEN_QUICK_ADD = "open_quick_add"
     }
 }

@@ -4,6 +4,7 @@ import app.calendarium.core.data.CalendarRepository
 import app.calendarium.widget.WidgetRefresher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
@@ -31,7 +32,7 @@ class ReminderSync @Inject constructor(
 
     private var job: Job? = null
 
-    @OptIn(ExperimentalCoroutinesApi::class)
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     fun start() {
         if (job != null) return
         job = scope.launch {

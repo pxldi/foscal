@@ -11,9 +11,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -29,7 +29,9 @@ data class AgendaUiState(
     val today: LocalDate = LocalDate.now(),
 )
 
-private const val AGENDA_HORIZON_DAYS = 60L
+private data class AgendaWindow(val pastDays: Long = 60L, val futureDays: Long = 60L)
+
+private const val AGENDA_PAGE_DAYS = 60L
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -41,13 +43,7 @@ class AgendaViewModel @Inject constructor(
     private val zone: ZoneId = ZoneId.systemDefault()
 
     private val today = LocalDate.now()
-
-    private val window: Pair<Instant, Instant> = run {
-        // Start a month back so a multi-day event that started before today but is still running
-        // is still returned; days before today are dropped when building the list.
-        today.minusDays(31).atStartOfDay(zone).toInstant() to
-            today.plusDays(AGENDA_HORIZON_DAYS).atStartOfDay(zone).toInstant()
-    }
+    private val window = MutableStateFlow(AgendaWindow())
 
     private val calendarIds = combine(
         repository.observeCalendars(),
@@ -59,16 +55,27 @@ class AgendaViewModel @Inject constructor(
             .toSet()
     }
 
-    private val events = calendarIds.flatMapLatest { ids ->
-        repository.observeEvents(ids, window.first, window.second)
+    private val bounds = window.map { range ->
+        // Read a little before the visible past window so long multi-day events already in
+        // progress at the first visible day are included.
+        val from = today.minusDays(range.pastDays + 31).atStartOfDay(zone).toInstant()
+        val to = today.plusDays(range.futureDays + 1).atStartOfDay(zone).toInstant()
+        Triple(range, from, to)
     }
 
-    val state: StateFlow<AgendaUiState> = combine(calendarIds, events) { ids, evts ->
+    private val events = combine(calendarIds, bounds) { ids, b -> ids to b }
+        .flatMapLatest { (ids, b) ->
+            repository.observeEvents(ids, b.second, b.third)
+        }
+
+    val state: StateFlow<AgendaUiState> = combine(calendarIds, events, window) { ids, evts, range ->
+        val firstVisible = today.minusDays(range.pastDays)
+        val lastVisible = today.plusDays(range.futureDays)
         AgendaUiState(
             days = evts
                 .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
                 .groupBy({ it.first }, { it.second })
-                .filterKeys { !it.isBefore(today) }
+                .filterKeys { !it.isBefore(firstVisible) && !it.isAfter(lastVisible) }
                 .toSortedMap()
                 .map { (date, list) -> AgendaDay(date, list.sortedBy { it.start }) },
             hasVisibleCalendars = ids.isNotEmpty(),
@@ -79,4 +86,12 @@ class AgendaViewModel @Inject constructor(
         SharingStarted.WhileSubscribed(5_000),
         AgendaUiState(),
     )
+
+    fun loadOlder() {
+        window.value = window.value.copy(pastDays = window.value.pastDays + AGENDA_PAGE_DAYS)
+    }
+
+    fun loadNewer() {
+        window.value = window.value.copy(futureDays = window.value.futureDays + AGENDA_PAGE_DAYS)
+    }
 }

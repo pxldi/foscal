@@ -8,10 +8,17 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.calendarium.MainActivity
 import app.calendarium.R
-import app.calendarium.notifications.AlarmReminderScheduler
+import app.calendarium.core.data.UserPreferencesRepository
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class ReminderAlarmReceiver : BroadcastReceiver() {
 
@@ -45,13 +52,15 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             if (minutes > 0) append("In ${formatMinutes(minutes)} · ")
             if (whenMillis > 0L) {
                 val zdt = Instant.ofEpochMilli(whenMillis).atZone(ZoneId.systemDefault())
-                append(DateTimeFormatter.ofPattern("EEE, MMM d · HH:mm").format(zdt))
+                val pattern = if (use24HourClock(context)) "EEE, MMM d · HH:mm" else "EEE, MMM d · h:mm a"
+                append(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(zdt))
             }
             if (location.isNotBlank()) append(" · $location")
         }
 
         val tapIntent = Intent(context, MainActivity::class.java).apply {
             putExtra(MainActivity.EXTRA_OPEN_EVENT_ID, eventId)
+            putExtra(MainActivity.EXTRA_OPEN_INSTANCE_START, whenMillis)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val tapPi = PendingIntent.getActivity(
@@ -81,6 +90,19 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         minutes < 60 -> "${minutes}m"
         minutes < 1440 -> "${minutes / 60}h"
         else -> "${minutes / 1440}d"
+    }
+
+    private fun use24HourClock(context: Context): Boolean = runBlocking {
+        EntryPointAccessors.fromApplication(context, ReceiverEntryPoint::class.java)
+            .preferences()
+            .use24HourClock
+            .first()
+    }
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface ReceiverEntryPoint {
+        fun preferences(): UserPreferencesRepository
     }
 
     companion object {
