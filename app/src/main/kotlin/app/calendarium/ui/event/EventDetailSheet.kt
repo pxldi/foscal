@@ -98,12 +98,29 @@ fun EventDetailSheet(
                     )
                 }
 
-                else -> DetailContent(
-                    event = state.event!!,
-                    calendarName = state.calendar?.displayName ?: "Calendar",
-                    calendarColor = state.event!!.color,
-                    onEdit = { onEdit(eventId, state.event!!.start.toEpochMilli()) },
-                )
+                else -> {
+                    // Crossfade keeps the old slot alive during a content→missing transition, so
+                    // `phase` may be stale while `state.event` has already cleared. Re-check rather
+                    // than `!!` to avoid an NPE mid-animation.
+                    val event = state.event
+                    if (event != null) {
+                        DetailContent(
+                            event = event,
+                            calendarName = state.calendar?.displayName ?: "Calendar",
+                            calendarColor = event.color,
+                            onEdit = { onEdit(eventId, event.start.toEpochMilli()) },
+                        )
+                    } else {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
             }
         }
     }
