@@ -3,6 +3,7 @@ package app.calendarium.ui.common
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -95,32 +96,7 @@ fun TimelineLayout(
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (allDayEvents.isNotEmpty()) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Spacer(Modifier.width(54.dp))
-                days.forEach { day ->
-                    val dayAllDay = day.events.filter { it.allDay }.sortedBy { it.start }
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 2.dp, vertical = 4.dp),
-                    ) {
-                        dayAllDay.take(2).forEach { event ->
-                            AllDayChip(
-                                event = event,
-                                onClick = { onEventClick(event.id, event.start.toEpochMilli()) },
-                            )
-                        }
-                        if (dayAllDay.size > 2) {
-                            Text(
-                                "+${dayAllDay.size - 2}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp, top = 1.dp),
-                            )
-                        }
-                    }
-                }
-            }
+            AllDayHeader(days = days, onEventClick = onEventClick)
             HorizontalDivider(
                 modifier = Modifier.padding(start = 54.dp),
                 color = gridColor,
@@ -239,15 +215,95 @@ fun TimelineLayout(
     }
 }
 
+/** An all-day event and the inclusive range of visible day columns it covers. */
+internal data class AllDaySpan(val event: Event, val firstCol: Int, val lastCol: Int)
+
+/**
+ * All-day / multi-day header. Each event is drawn as a single bar spanning every visible day
+ * column it covers, instead of a repeated (and truncated) chip per day. Overlapping events are
+ * packed into stacked lanes the way a week grid does.
+ */
 @Composable
-private fun AllDayChip(event: Event, onClick: () -> Unit) {
-    val baseColor = paletteColor(event)
+private fun AllDayHeader(
+    days: List<TimelineDay>,
+    onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
+) {
+    val lanes = remember(days) { assignAllDayLanes(computeAllDaySpans(days)) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(22.dp)
+            .padding(vertical = 4.dp),
+    ) {
+        Spacer(Modifier.width(54.dp))
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val colWidth = maxWidth / days.size.coerceAtLeast(1)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                lanes.forEach { lane ->
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(22.dp),
+                    ) {
+                        lane.forEach { span ->
+                            AllDayBar(
+                                event = span.event,
+                                modifier = Modifier
+                                    .offset(x = colWidth * span.firstCol)
+                                    .width(colWidth * (span.lastCol - span.firstCol + 1))
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 2.dp),
+                                onClick = {
+                                    onEventClick(span.event.id, span.event.start.toEpochMilli())
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Collapse the per-day event lists back into one span per event. Keyed by (id, instance start) so a
+ * genuine multi-day event (same instance repeated across days) becomes one wide bar, while a daily
+ * recurring all-day event (distinct instances sharing an id) stays one bar per day.
+ */
+internal fun computeAllDaySpans(days: List<TimelineDay>): List<AllDaySpan> {
+    val first = LinkedHashMap<Pair<Long, Long>, Int>()
+    val last = HashMap<Pair<Long, Long>, Int>()
+    val event = HashMap<Pair<Long, Long>, Event>()
+    days.forEachIndexed { idx, day ->
+        day.events.filter { it.allDay }.forEach { e ->
+            val key = e.id to e.start.toEpochMilli()
+            first.putIfAbsent(key, idx)
+            last[key] = idx
+            event[key] = e
+        }
+    }
+    return first.keys
+        .map { key -> AllDaySpan(event.getValue(key), first.getValue(key), last.getValue(key)) }
+        .sortedWith(compareBy({ it.firstCol }, { -(it.lastCol - it.firstCol) }))
+}
+
+/** Greedy interval partitioning: place each span in the first lane where it doesn't overlap. */
+internal fun assignAllDayLanes(spans: List<AllDaySpan>): List<List<AllDaySpan>> {
+    val lanes = mutableListOf<MutableList<AllDaySpan>>()
+    for (span in spans) {
+        val lane = lanes.firstOrNull { existing ->
+            existing.none { it.firstCol <= span.lastCol && span.firstCol <= it.lastCol }
+        }
+        if (lane != null) lane.add(span) else lanes.add(mutableListOf(span))
+    }
+    return lanes
+}
+
+@Composable
+private fun AllDayBar(event: Event, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier = modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(baseColor)
+            .background(paletteColor(event))
             .clickable(onClick = onClick)
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
