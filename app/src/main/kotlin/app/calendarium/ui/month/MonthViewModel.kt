@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
 import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
+import app.calendarium.ui.util.Dates
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,7 @@ class MonthViewModel @Inject constructor(
     private val _visibleMonth = MutableStateFlow(YearMonth.now())
     private val _selectedDate = MutableStateFlow<LocalDate?>(null)
     private val zone: ZoneId = ZoneId.systemDefault()
+    private val today = Dates.todayFlow(zone)
 
     private val calendarIds = combine(
         repository.observeCalendars(),
@@ -63,7 +65,8 @@ class MonthViewModel @Inject constructor(
         _selectedDate,
         events,
         calendarIds,
-    ) { month, selected, evts, ids ->
+        today,
+    ) { month, selected, evts, ids, currentDate ->
         MonthUiState(
             visibleMonth = month,
             selectedDate = selected,
@@ -71,11 +74,12 @@ class MonthViewModel @Inject constructor(
                 .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
                 .groupBy({ it.first }, { it.second }),
             hasVisibleCalendars = ids.isNotEmpty(),
+            today = currentDate,
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        MonthUiState(YearMonth.now(), null),
+        MonthUiState(YearMonth.now(), null, today = LocalDate.now(zone)),
     )
 
     fun selectDate(date: LocalDate?) {
@@ -92,7 +96,7 @@ class MonthViewModel @Inject constructor(
         _visibleMonth.value = month
         // Move the selection into the month now on screen so the day preview never lags behind the
         // grid: today when landing on the current month, otherwise its first day.
-        val today = LocalDate.now()
+        val today = LocalDate.now(zone)
         _selectedDate.value = if (month == YearMonth.from(today)) today else month.atDay(1)
     }
 }

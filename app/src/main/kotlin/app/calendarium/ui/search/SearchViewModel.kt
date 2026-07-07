@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
 import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
+import app.calendarium.ui.util.Dates
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -35,6 +36,7 @@ class SearchViewModel @Inject constructor(
 
     val query = MutableStateFlow("")
     private val window = MutableStateFlow(SearchWindow())
+    private val today = Dates.todayFlow(zone)
 
     private val calendarIds = combine(
         repository.observeCalendars(),
@@ -46,16 +48,15 @@ class SearchViewModel @Inject constructor(
             .toSet()
     }
 
-    val results: StateFlow<List<Event>> = combine(query, calendarIds, window) { q, ids, range ->
-        Triple(q, ids, range)
+    val results: StateFlow<List<Event>> = combine(query, calendarIds, window, today) { q, ids, range, currentDate ->
+        SearchRequest(q, ids, range, currentDate)
     }
         .debounce(250)
-        .flatMapLatest { (q, ids, range) ->
+        .flatMapLatest { request ->
             flow {
-                val today = LocalDate.now()
-                val from = today.minusYears(range.pastYears).atStartOfDay(zone).toInstant()
-                val to = today.plusYears(range.futureYears).atStartOfDay(zone).toInstant()
-                emit(repository.searchEvents(ids, q, from, to))
+                val from = request.today.minusYears(request.range.pastYears).atStartOfDay(zone).toInstant()
+                val to = request.today.plusYears(request.range.futureYears).atStartOfDay(zone).toInstant()
+                emit(repository.searchEvents(request.calendarIds, request.query, from, to))
             }
         }
         .stateIn(
@@ -77,3 +78,10 @@ class SearchViewModel @Inject constructor(
         window.value = window.value.copy(futureYears = window.value.futureYears + SEARCH_PAGE_YEARS)
     }
 }
+
+private data class SearchRequest(
+    val query: String,
+    val calendarIds: Set<Long>,
+    val range: SearchWindow,
+    val today: LocalDate,
+)

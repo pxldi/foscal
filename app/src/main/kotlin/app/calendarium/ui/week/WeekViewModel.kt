@@ -6,6 +6,7 @@ import app.calendarium.core.data.CalendarRepository
 import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
 import app.calendarium.ui.common.TimelineDay
+import app.calendarium.ui.util.Dates
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,7 +37,8 @@ class WeekViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
-    private val _weekStart = MutableStateFlow(startOfWeek(LocalDate.now()))
+    private val _weekStart = MutableStateFlow(startOfWeek(LocalDate.now(zone)))
+    private val today = Dates.todayFlow(zone)
 
     private val calendarIds = combine(
         repository.observeCalendars(),
@@ -65,7 +67,8 @@ class WeekViewModel @Inject constructor(
         _weekStart,
         events,
         calendarIds,
-    ) { start, evts, ids ->
+        today,
+    ) { start, evts, ids, currentDate ->
         val byDate = evts
             .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
             .groupBy({ it.first }, { it.second })
@@ -77,12 +80,12 @@ class WeekViewModel @Inject constructor(
             weekStart = start,
             days = days,
             hasVisibleCalendars = ids.isNotEmpty(),
-            today = LocalDate.now(),
+            today = currentDate,
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        WeekUiState(weekStart = startOfWeek(LocalDate.now())),
+        WeekUiState(weekStart = startOfWeek(LocalDate.now(zone)), today = LocalDate.now(zone)),
     )
 
     fun nextWeek() {
@@ -94,7 +97,7 @@ class WeekViewModel @Inject constructor(
     }
 
     fun goToThisWeek() {
-        _weekStart.value = startOfWeek(LocalDate.now())
+        _weekStart.value = startOfWeek(LocalDate.now(zone))
     }
 
     companion object {

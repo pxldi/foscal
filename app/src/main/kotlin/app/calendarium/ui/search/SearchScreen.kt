@@ -67,7 +67,8 @@ fun SearchRoute(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val zone = viewModel.zone
-    val today = remember { LocalDate.now() }
+    val todayFlow = remember(zone) { Dates.todayFlow(zone) }
+    val today by todayFlow.collectAsStateWithLifecycle(initialValue = LocalDate.now(zone))
     val listState = rememberLazyListState()
     var positionedQuery by remember { mutableStateOf("") }
     var olderRequestedAt by remember { mutableStateOf<Long?>(null) }
@@ -172,6 +173,7 @@ fun SearchRoute(
                     SearchResultRow(
                         event = event,
                         isToday = event.startLocalDate(zone) == today,
+                        today = today,
                         zone = zone,
                         onClick = {
                             keyboard?.hide()
@@ -205,6 +207,7 @@ private fun EmptyState(message: String, padding: androidx.compose.foundation.lay
 private fun SearchResultRow(
     event: Event,
     isToday: Boolean,
+    today: LocalDate,
     zone: java.time.ZoneId,
     onClick: () -> Unit,
 ) {
@@ -231,7 +234,7 @@ private fun SearchResultRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = buildSubtitle(event, zone, isToday, LocalUse24HourClock.current)
+            val subtitle = buildSubtitle(event, zone, isToday, today, LocalUse24HourClock.current)
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -245,14 +248,20 @@ private fun SearchResultRow(
     }
 }
 
-private fun buildSubtitle(event: Event, zone: java.time.ZoneId, isToday: Boolean, is24Hour: Boolean): String {
+private fun buildSubtitle(
+    event: Event,
+    zone: java.time.ZoneId,
+    isToday: Boolean,
+    today: LocalDate,
+    is24Hour: Boolean,
+): String {
     val parts = mutableListOf<String>()
     val date = event.startLocalDate(zone)
     val dateText = if (isToday) {
         "Today"
     } else {
         date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())) +
-            if (date.year != LocalDate.now().year) " ${date.year}" else ""
+            if (date.year != today.year) " ${date.year}" else ""
     }
     parts += if (event.allDay) {
         "All day · $dateText"

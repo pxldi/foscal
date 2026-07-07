@@ -1,13 +1,20 @@
 package app.calendarium.ui.util
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import java.time.Duration
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 object Dates {
 
@@ -51,4 +58,35 @@ object Dates {
 
     fun instantToLocal(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): LocalDateTime =
         LocalDateTime.ofInstant(instant, zone)
+
+    fun todayFlow(zone: ZoneId = ZoneId.systemDefault()): Flow<LocalDate> = callbackFlow {
+        var last = LocalDate.now(zone)
+        trySend(last)
+
+        val executor = Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "CalendariumDateTicker").apply { isDaemon = true }
+        }
+
+        lateinit var scheduleNext: () -> Unit
+        scheduleNext = {
+            val now = ZonedDateTime.now(zone)
+            val nextMidnight = now.toLocalDate().plusDays(1).atStartOfDay(zone).plusSeconds(1)
+            val delayMillis = Duration.between(now, nextMidnight).toMillis()
+            executor.schedule(
+                {
+                    val current = LocalDate.now(zone)
+                    if (current != last) {
+                        last = current
+                        trySend(current)
+                    }
+                    scheduleNext()
+                },
+                delayMillis.coerceAtLeast(60_000L),
+                TimeUnit.MILLISECONDS,
+            )
+        }
+        scheduleNext()
+
+        awaitClose { executor.shutdownNow() }
+    }
 }
