@@ -261,7 +261,7 @@ private fun WeekEventCard(event: Event, date: LocalDate, onClick: () -> Unit) {
 
 private fun eventTimeLabel(event: Event): String =
     if (event.allDay) {
-        "ALL-DAY"
+        "All day"
     } else {
         Dates.instantToLocal(event.start).toLocalTime().format(Dates.timeFormatter)
     }
