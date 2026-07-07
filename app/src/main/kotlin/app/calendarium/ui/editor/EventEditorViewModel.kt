@@ -27,6 +27,9 @@ import javax.inject.Inject
 /** Which action is awaiting a "this event vs. all events" choice for a recurring series. */
 enum class RecurrenceScopePrompt { SAVE, DELETE }
 
+/** How widely a recurring edit or delete applies. */
+enum class RecurrenceScope { SINGLE, THIS_AND_FOLLOWING, ALL_EVENTS }
+
 data class EditorUiState(
     val loading: Boolean = true,
     val eventId: Long = 0L,
@@ -206,7 +209,7 @@ class EventEditorViewModel @Inject constructor(
             mutate { it.copy(scopePrompt = RecurrenceScopePrompt.SAVE) }
             return
         }
-        performSave(applyToWholeSeries = true)
+        performSave(RecurrenceScope.ALL_EVENTS)
     }
 
     fun delete() {
@@ -216,22 +219,22 @@ class EventEditorViewModel @Inject constructor(
             mutate { it.copy(scopePrompt = RecurrenceScopePrompt.DELETE) }
             return
         }
-        performDelete(applyToWholeSeries = true)
+        performDelete(RecurrenceScope.ALL_EVENTS)
     }
 
     fun dismissScopePrompt() = mutate { it.copy(scopePrompt = null) }
 
-    /** Resolves a recurrence scope prompt. [wholeSeries] false edits/deletes only this occurrence. */
-    fun resolveScope(wholeSeries: Boolean) {
+    /** Resolves a recurrence scope prompt by applying the edit/delete at the chosen scope. */
+    fun resolveScope(scope: RecurrenceScope) {
         val prompt = _state.value.scopePrompt ?: return
         mutate { it.copy(scopePrompt = null) }
         when (prompt) {
-            RecurrenceScopePrompt.SAVE -> performSave(applyToWholeSeries = wholeSeries)
-            RecurrenceScopePrompt.DELETE -> performDelete(applyToWholeSeries = wholeSeries)
+            RecurrenceScopePrompt.SAVE -> performSave(scope)
+            RecurrenceScopePrompt.DELETE -> performDelete(scope)
         }
     }
 
-    private fun performSave(applyToWholeSeries: Boolean) {
+    private fun performSave(scope: RecurrenceScope) {
         val current = _state.value
         if (!current.canSave) return
         mutate { it.copy(saving = true) }
@@ -275,22 +278,31 @@ class EventEditorViewModel @Inject constructor(
             )
             when {
                 !current.isEditing -> repository.createEvent(input)
-                current.isRecurring && !applyToWholeSeries ->
+                current.isRecurring && scope == RecurrenceScope.SINGLE ->
                     repository.updateEventInstance(current.eventId, current.originalInstanceTime, input)
+                current.isRecurring && scope == RecurrenceScope.THIS_AND_FOLLOWING ->
+                    repository.updateEventFollowing(
+                        current.eventId,
+                        current.originalInstanceTime,
+                        input,
+                        rebaseCount = !current.recurrenceDirty,
+                    )
                 else -> repository.updateEvent(current.eventId, input)
             }
             mutate { it.copy(saving = false, finished = true) }
         }
     }
 
-    private fun performDelete(applyToWholeSeries: Boolean) {
+    private fun performDelete(scope: RecurrenceScope) {
         val current = _state.value
         mutate { it.copy(saving = true) }
         viewModelScope.launch {
-            if (current.isRecurring && !applyToWholeSeries) {
-                repository.deleteEventInstance(current.eventId, current.originalInstanceTime)
-            } else {
-                repository.deleteEvent(current.eventId)
+            when {
+                current.isRecurring && scope == RecurrenceScope.SINGLE ->
+                    repository.deleteEventInstance(current.eventId, current.originalInstanceTime)
+                current.isRecurring && scope == RecurrenceScope.THIS_AND_FOLLOWING ->
+                    repository.deleteEventFollowing(current.eventId, current.originalInstanceTime)
+                else -> repository.deleteEvent(current.eventId)
             }
             mutate { it.copy(saving = false, finished = true) }
         }

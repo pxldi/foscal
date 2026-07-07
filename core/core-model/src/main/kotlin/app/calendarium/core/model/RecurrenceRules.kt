@@ -1,6 +1,7 @@
 package app.calendarium.core.model
 
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -71,6 +72,53 @@ object RecurrenceRules {
             parts += "BYDAY=${ordered.joinToString(",") { it.rruleCode() }}"
         }
         return parts.joinToString(";")
+    }
+
+    /**
+     * Rewrites [rrule] so the series ends strictly before [splitInstant], preserving
+     * FREQ/INTERVAL/BYDAY and replacing any end condition with UNTIL. All-day rules use the
+     * previous UTC day (DATE); timed rules use one second before [splitInstant] in UTC, which
+     * excludes the split occurrence while keeping every earlier one (recurrences are ≥1 day apart).
+     * Returns null if [rrule] is not recurring. Used to truncate a series for "this and following".
+     */
+    fun truncateBefore(rrule: String?, splitInstant: Instant, allDay: Boolean): String? {
+        val spec = parse(rrule)
+        if (spec.frequency == Frequency.NONE) return null
+        val parts = mutableListOf("FREQ=${spec.frequency.name}")
+        if (spec.interval > 1) parts += "INTERVAL=${spec.interval}"
+        if (spec.frequency == Frequency.WEEKLY && spec.byWeekday.isNotEmpty()) {
+            val ordered = DayOfWeek.values().filter { it in spec.byWeekday }
+            parts += "BYDAY=${ordered.joinToString(",") { it.rruleCode() }}"
+        }
+        val until = if (allDay) {
+            splitInstant.atZone(ZoneOffset.UTC).toLocalDate().minusDays(1).format(BASIC_ISO_DATE)
+        } else {
+            splitInstant.minusSeconds(1).atZone(ZoneOffset.UTC).format(untilTimed)
+        }
+        parts += "UNTIL=$until"
+        return parts.joinToString(";")
+    }
+
+    /**
+     * Rewrites [rrule] for a new series starting at the split of a "this and following" edit:
+     * FREQ/INTERVAL/BYDAY/UNTIL are preserved; a COUNT end condition is reduced by
+     * [occurrencesBeforeSplit] so the following series ends on the same final occurrence as the
+     * original. Returns null if [rrule] is not recurring.
+     */
+    fun rebaseFollowing(
+        rrule: String?,
+        occurrencesBeforeSplit: Int,
+        allDay: Boolean,
+        zone: ZoneId,
+    ): String? {
+        val spec = parse(rrule)
+        if (spec.frequency == Frequency.NONE) return null
+        val rebased = if (spec.count != null) {
+            spec.copy(count = (spec.count - occurrencesBeforeSplit).coerceAtLeast(1))
+        } else {
+            spec
+        }
+        return build(rebased, allDay, zone)
     }
 
     private fun formatUntil(date: LocalDate, allDay: Boolean, zone: ZoneId): String =

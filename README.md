@@ -33,9 +33,10 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Recurring events** — daily / weekly / monthly / yearly, with a custom
   editor for interval, end date / occurrence count, and by-weekday
   selection. Editing or deleting a repeating event prompts for **this
-  occurrence** vs. **the whole series**; single-occurrence changes are
-  stored as proper exceptions. Recurrence rules synced from CalDAV
-  (BYDAY/INTERVAL/UNTIL) are preserved on unrelated edits.
+  occurrence**, **this and following events**, or **the whole series**;
+  single-occurrence changes are stored as proper exceptions and "this and
+  following" splits the series at the chosen point. Recurrence rules synced
+  from CalDAV (BYDAY/INTERVAL/UNTIL) are preserved on unrelated edits.
 - **Reminders / notifications** — exact-alarm reminders via `AlarmManager`,
   re-scheduled on boot and whenever the calendar changes, delivered on a
   dedicated notification channel that deep-links back to the event.
@@ -51,11 +52,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- "This and following events" scope option for recurring edits/deletes.
+- Home-screen widgets and a quick-add entry point.
 
 **Later / future goals**
-
-- Home-screen widgets and a quick-add entry point.
 - Week/day view: drag-to-create and drag-to-move events.
 - Time-zone-aware editing UI and a world-clock style secondary zone.
 - Import/export of `.ics` files.

@@ -13,6 +13,7 @@ import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.Event
 import app.calendarium.core.model.EventInput
 import app.calendarium.core.model.Frequency
+import app.calendarium.core.model.RecurrenceRules
 import app.calendarium.core.model.ScheduledReminder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.TimeZone
 import javax.inject.Inject
@@ -83,6 +85,24 @@ interface CalendarRepository {
 
     /** Cancels a single occurrence of a recurring event, leaving the rest of the series. */
     suspend fun deleteEventInstance(eventId: Long, instanceStartMillis: Long): Boolean
+
+    /**
+     * Applies [input] to the occurrence at [instanceStartMillis] and every occurrence after it:
+     * truncates the original series to end just before [instanceStartMillis] and creates a new
+     * recurring event from [input] onward. When [rebaseCount] is true (the user did not change
+     * the recurrence rule) and the original series used COUNT, the following series' count is
+     * reduced by the number of occurrences that already passed, preserving the overall length.
+     */
+    suspend fun updateEventFollowing(
+        eventId: Long,
+        instanceStartMillis: Long,
+        input: EventInput,
+        rebaseCount: Boolean = false,
+    ): Boolean
+
+    /** Cancels the occurrence at [instanceStartMillis] and every one after it by truncating
+     *  the series to end just before [instanceStartMillis]. */
+    suspend fun deleteEventFollowing(eventId: Long, instanceStartMillis: Long): Boolean
 
     suspend fun getReminderMinutes(eventId: Long): List<Int>
 
@@ -386,6 +406,142 @@ class CalendarContractRepository @Inject constructor(
             eventId,
         )
         safeInsert(uri, values) != null
+    }
+
+    override suspend fun updateEventFollowing(
+        eventId: Long,
+        instanceStartMillis: Long,
+        input: EventInput,
+        rebaseCount: Boolean,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val master = loadMaster(eventId) ?: return@withContext false
+        val occurrencesBefore = countInstancesBefore(eventId, master.dtStart, instanceStartMillis)
+        truncateSeries(eventId, master, instanceStartMillis, occurrencesBefore)
+        // The following series takes the user's edited values. When the recurrence rule was left
+        // untouched, preserve the original pattern but rebase a COUNT end so the series length is
+        // preserved; when the user changed recurrence, apply their rule verbatim from [input].
+        val followingRrule: String?
+        val followingFrequency: Frequency
+        if (rebaseCount) {
+            val masterSpec = RecurrenceRules.parse(master.rrule)
+            followingFrequency = masterSpec.frequency
+            followingRrule = RecurrenceRules.rebaseFollowing(
+                master.rrule,
+                occurrencesBefore,
+                master.allDay,
+                master.zone(),
+            )
+        } else {
+            followingFrequency = input.frequency
+            followingRrule = input.rrule
+        }
+        createEvent(input.copy(frequency = followingFrequency, rrule = followingRrule))
+        true
+    }
+
+    override suspend fun deleteEventFollowing(
+        eventId: Long,
+        instanceStartMillis: Long,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val master = loadMaster(eventId) ?: return@withContext false
+        val occurrencesBefore = countInstancesBefore(eventId, master.dtStart, instanceStartMillis)
+        truncateSeries(eventId, master, instanceStartMillis, occurrencesBefore)
+    }
+
+    /** Holds the recurrence-relevant columns of a master event (read from the Events table). */
+    private data class MasterEvent(
+        val dtStart: Long,
+        val allDay: Boolean,
+        val timezone: String?,
+        val rrule: String?,
+    ) {
+        fun zone(): ZoneId = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+            ?: ZoneId.systemDefault()
+    }
+
+    private fun loadMaster(eventId: Long): MasterEvent? {
+        val projection = arrayOf(
+            CalendarContract.Events.DTSTART,
+            CalendarContract.Events.ALL_DAY,
+            CalendarContract.Events.EVENT_TIMEZONE,
+            CalendarContract.Events.RRULE,
+        )
+        return safeQuery(
+            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+            projection,
+            null,
+            null,
+            null,
+        )?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            MasterEvent(
+                dtStart = c.getLong(0),
+                allDay = c.getInt(1) == 1,
+                timezone = c.getString(2),
+                rrule = c.getString(3),
+            )
+        }
+    }
+
+    /** Number of occurrences of [eventId] whose start is in [fromMillis, toExclusiveMillis). */
+    private fun countInstancesBefore(
+        eventId: Long,
+        fromMillis: Long,
+        toExclusiveMillis: Long,
+    ): Int {
+        if (toExclusiveMillis <= fromMillis) return 0
+        // Query the Instances window ending one ms before the split so the box itself excludes it;
+        // guard the BEGIN bound too in case the box is inclusive at either edge.
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, fromMillis)
+        ContentUris.appendId(builder, toExclusiveMillis - 1)
+        return safeQuery(
+            builder.build(),
+            arrayOf(CalendarContract.Instances.BEGIN),
+            "${CalendarContract.Instances.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+            null,
+        )?.use { c ->
+            var n = 0
+            while (c.moveToNext()) {
+                if (c.getLong(0) < toExclusiveMillis) n++
+            }
+            n
+        } ?: 0
+    }
+
+    /**
+     * Shrinks the master series so it ends just before [instanceStartMillis]. If the split is the
+     * first occurrence (nothing precedes it), the master is deleted outright instead of being left
+     * with an impossible UNTIL. Returns whether the original series was modified or removed.
+     */
+    private fun truncateSeries(
+        eventId: Long,
+        master: MasterEvent,
+        instanceStartMillis: Long,
+        occurrencesBefore: Int,
+    ): Boolean {
+        if (occurrencesBefore <= 0) {
+            return safeDelete(
+                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+                null,
+                null,
+            ) > 0
+        }
+        val truncated = RecurrenceRules.truncateBefore(
+            master.rrule,
+            Instant.ofEpochMilli(instanceStartMillis),
+            master.allDay,
+        ) ?: master.rrule
+        val values = ContentValues().apply {
+            put(CalendarContract.Events.RRULE, truncated)
+        }
+        return safeUpdate(
+            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+            values,
+            null,
+            null,
+        ) > 0
     }
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> =

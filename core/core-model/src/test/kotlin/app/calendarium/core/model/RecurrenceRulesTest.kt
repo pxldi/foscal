@@ -1,6 +1,7 @@
 package app.calendarium.core.model
 
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -154,5 +155,77 @@ class RecurrenceRulesTest {
         assert(RecurrenceSpec(Frequency.WEEKLY, count = 5).isCustom)
         assert(RecurrenceSpec(Frequency.WEEKLY, byWeekday = setOf(DayOfWeek.MONDAY)).isCustom)
         assert(!RecurrenceSpec(Frequency.MONTHLY).isCustom)
+    }
+
+    @Test
+    fun `truncateBefore returns null for non-recurring`() {
+        assertNull(RecurrenceRules.truncateBefore(null, Instant.parse("2026-01-05T00:00:00Z"), allDay = false))
+        assertNull(RecurrenceRules.truncateBefore("FREQ=NONE", Instant.parse("2026-01-05T00:00:00Z"), allDay = false))
+    }
+
+    @Test
+    fun `truncateBefore for timed rule sets UNTIL one second before split`() {
+        val split = Instant.parse("2026-01-05T09:00:00Z")
+        val out = RecurrenceRules.truncateBefore("FREQ=DAILY", split, allDay = false)
+        assertEquals("FREQ=DAILY;UNTIL=20260105T085959Z", out)
+    }
+
+    @Test
+    fun `truncateBefore for all-day rule sets UNTIL to previous UTC day`() {
+        val split = Instant.parse("2026-01-05T00:00:00Z")
+        val out = RecurrenceRules.truncateBefore("FREQ=DAILY", split, allDay = true)
+        assertEquals("FREQ=DAILY;UNTIL=20260104", out)
+    }
+
+    @Test
+    fun `truncateBefore preserves INTERVAL and BYDAY and drops COUNT`() {
+        val split = Instant.parse("2026-01-05T09:00:00Z")
+        val out = RecurrenceRules.truncateBefore(
+            "FREQ=WEEKLY;INTERVAL=2;COUNT=10;BYDAY=MO,WE,FR",
+            split,
+            allDay = false,
+        )
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;UNTIL=20260105T085959Z", out)
+    }
+
+    @Test
+    fun `rebaseFollowing returns null for non-recurring`() {
+        assertNull(RecurrenceRules.rebaseFollowing(null, 3, allDay = false, zone = berlin))
+        assertNull(RecurrenceRules.rebaseFollowing("FREQ=NONE", 3, allDay = false, zone = berlin))
+    }
+
+    @Test
+    fun `rebaseFollowing leaves an open-ended rule unchanged`() {
+        assertEquals(
+            "FREQ=DAILY",
+            RecurrenceRules.rebaseFollowing("FREQ=DAILY", 4, allDay = false, zone = berlin),
+        )
+    }
+
+    @Test
+    fun `rebaseFollowing subtracts occurrencesBeforeSplit from COUNT`() {
+        assertEquals(
+            "FREQ=DAILY;COUNT=6",
+            RecurrenceRules.rebaseFollowing("FREQ=DAILY;COUNT=10", 4, allDay = false, zone = berlin),
+        )
+    }
+
+    @Test
+    fun `rebaseFollowing clamps a COUNT that would go below one`() {
+        assertEquals(
+            "FREQ=DAILY;COUNT=1",
+            RecurrenceRules.rebaseFollowing("FREQ=DAILY;COUNT=2", 10, allDay = false, zone = berlin),
+        )
+    }
+
+    @Test
+    fun `rebaseFollowing preserves INTERVAL, BYDAY, and UNTIL`() {
+        val out = RecurrenceRules.rebaseFollowing(
+            "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR",
+            3,
+            allDay = false,
+            zone = berlin,
+        )
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR", out)
     }
 }

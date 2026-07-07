@@ -90,8 +90,7 @@ fun EventEditorRoute(
     state.scopePrompt?.let { prompt ->
         RecurrenceScopeDialog(
             prompt = prompt,
-            onWholeSeries = { viewModel.resolveScope(wholeSeries = true) },
-            onThisEvent = { viewModel.resolveScope(wholeSeries = false) },
+            onScope = viewModel::resolveScope,
             onDismiss = viewModel::dismissScopePrompt,
         )
     }
@@ -330,21 +329,38 @@ private fun EditorForm(
 @Composable
 private fun RecurrenceScopeDialog(
     prompt: RecurrenceScopePrompt,
-    onWholeSeries: () -> Unit,
-    onThisEvent: () -> Unit,
+    onScope: (RecurrenceScope) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val verb = if (prompt == RecurrenceScopePrompt.DELETE) "Delete" else "Change"
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("$verb recurring event") },
-        text = { Text("This event repeats. Apply your change to just this occurrence or the whole series?") },
+        text = {
+            Column {
+                Text("This event repeats. Apply your change to:")
+                Spacer(Modifier.height(16.dp))
+                ScopeChoice("$verb this event") { onScope(RecurrenceScope.SINGLE) }
+                ScopeChoice("$verb this and following events") { onScope(RecurrenceScope.THIS_AND_FOLLOWING) }
+                ScopeChoice("$verb all events") { onScope(RecurrenceScope.ALL_EVENTS) }
+            }
+        },
         confirmButton = {
-            TextButton(onClick = onThisEvent) { Text("$verb this event") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         },
-        dismissButton = {
-            TextButton(onClick = onWholeSeries) { Text("$verb all events") }
-        },
+    )
+}
+
+@Composable
+private fun ScopeChoice(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.primary,
     )
 }
 
