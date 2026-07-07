@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.data.CalendarPermissionState
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
     lateinit var permissionState: CalendarPermissionState
 
     private var pendingEventId by mutableLongStateOf(-1L)
+    private var pendingQuickAdd by mutableStateOf(false)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -40,17 +42,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestNotificationPermission()
         pendingEventId = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
+        pendingQuickAdd = intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)
         setContent {
             val onboardingDone by prefs.onboardingCompleted
                 .collectAsStateWithLifecycle(initialValue = null)
             val openEventId = pendingEventId
+            val openQuickAdd = pendingQuickAdd
             CalendariumTheme {
                 when (val done = onboardingDone) {
                     null -> { /* splash while DataStore loads */ }
                     else -> CalendariumNavHost(
                         startOnboarding = done.not(),
                         openEventId = openEventId,
+                        openQuickAdd = openQuickAdd,
                         onEventConsumed = { pendingEventId = -1L },
+                        onQuickAddConsumed = { pendingQuickAdd = false },
                     )
                 }
             }
@@ -62,6 +68,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         val id = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
         if (id > 0L) pendingEventId = id
+        if (intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)) pendingQuickAdd = true
     }
 
     override fun onResume() {
@@ -83,5 +90,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_EVENT_ID = "open_event_id"
+        const val EXTRA_OPEN_QUICK_ADD = "open_quick_add"
     }
 }

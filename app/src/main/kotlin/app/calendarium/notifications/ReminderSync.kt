@@ -1,6 +1,7 @@
 package app.calendarium.notifications
 
 import app.calendarium.core.data.CalendarRepository
+import app.calendarium.widget.WidgetRefresher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -25,6 +26,7 @@ class ReminderSync @Inject constructor(
     private val repository: CalendarRepository,
     private val scheduler: ReminderScheduler,
     private val scope: CoroutineScope,
+    private val widgetRefresher: WidgetRefresher,
 ) {
 
     private var job: Job? = null
@@ -42,7 +44,10 @@ class ReminderSync @Inject constructor(
                     repository.observeEvents(ids, horizonStart(), horizonEnd())
                 }
                 .debounce(2_000L)
-                .collect { sync() }
+                .collect {
+                    sync()
+                    widgetRefresher.refresh()
+                }
         }
     }
 

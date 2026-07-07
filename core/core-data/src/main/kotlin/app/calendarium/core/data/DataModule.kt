@@ -1,7 +1,7 @@
 package app.calendarium.core.data
 
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -10,7 +10,16 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DataModule {
 
-    @Provides
+    @dagger.Provides
     @Singleton
     fun provideCalendarRepository(impl: CalendarContractRepository): CalendarRepository = impl
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class PreferencesModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindPreferences(impl: UserPreferencesRepository): Preferences
 }

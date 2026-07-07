@@ -43,6 +43,10 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Real calendar colors** everywhere, with automatic light/dark contrast text.
 - **Search** across events by title, location, or notes; recurring series
   collapse to their next occurrence so they don't flood results.
+- **Home-screen widget** showing your upcoming events with real calendar
+  colors, tap-to-open, and a "+" quick-add button.
+- **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
+  tomorrow noon", "PTO all-day") and it parses the title, date, and time.
 - **Offline local calendars** and hand-off to DAVx⁵ for CalDAV sync.
 - **Permission-first onboarding** — calendar access is requested up front and
   the UI reacts the instant it is granted; no provider access happens before.
@@ -52,13 +56,13 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Home-screen widgets and a quick-add entry point.
+- Week/day view: drag-to-create and drag-to-move events.
 
 **Later / future goals**
-- Week/day view: drag-to-create and drag-to-move events.
+
 - Time-zone-aware editing UI and a world-clock style secondary zone.
 - Import/export of `.ics` files.
-- Local unit/UI test coverage for the repository and view models.
+- More unit/UI test coverage (repository, more view models, widget factory).
 - Play Store / F-Droid release: signing config, screenshots, store listing.
 
 ## Tech stack

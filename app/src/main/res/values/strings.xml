@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Calendarium</string>
+    <string name="widget_description">Upcoming events at a glance, with quick-add.</string>
+    <string name="widget_empty">No upcoming events</string>
+    <string name="quick_add_hint">e.g. "Dentist friday 9:30am"</string>
+    <string name="quick_add_save">Add event</string>
+    <string name="quick_add_title">Quick add</string>
 </resources>

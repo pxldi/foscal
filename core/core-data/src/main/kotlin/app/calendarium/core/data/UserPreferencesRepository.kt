@@ -17,25 +17,26 @@ private val Context.dataStore by preferencesDataStore(name = "calendarium_prefs"
 @Singleton
 class UserPreferencesRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
-    val onboardingCompleted: Flow<Boolean> =
+) : Preferences {
+
+    override val onboardingCompleted: Flow<Boolean> =
         context.dataStore.data.map { it[ONBOARDING_DONE] ?: false }
 
-    val hiddenCalendarIds: Flow<Set<String>> =
+    override val hiddenCalendarIds: Flow<Set<String>> =
         context.dataStore.data.map { it[HIDDEN_CALENDARS] ?: emptySet() }
 
-    val defaultReminderMinutes: Flow<Int?> =
+    override val defaultReminderMinutes: Flow<Int?> =
         context.dataStore.data.map { it[DEFAULT_REMINDER]?.takeIf { m -> m != -1 } }
 
-    suspend fun setOnboardingCompleted() {
+    override suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
     }
 
-    suspend fun setHiddenCalendars(ids: Set<String>) {
+    override suspend fun setHiddenCalendars(ids: Set<String>) {
         context.dataStore.edit { prefs -> prefs[HIDDEN_CALENDARS] = ids }
     }
 
-    suspend fun setDefaultReminder(minutes: Int?) {
+    override suspend fun setDefaultReminder(minutes: Int?) {
         context.dataStore.edit { prefs -> prefs[DEFAULT_REMINDER] = minutes ?: -1 }
     }
 

@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
-import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.EventInput
 import app.calendarium.core.model.Frequency
@@ -68,7 +68,7 @@ data class EditorUiState(
 class EventEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: CalendarRepository,
-    private val prefs: UserPreferencesRepository,
+    private val prefs: Preferences,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()

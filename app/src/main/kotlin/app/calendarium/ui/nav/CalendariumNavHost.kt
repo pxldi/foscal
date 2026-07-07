@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,12 +16,14 @@ import app.calendarium.ui.editor.EventEditorRoute
 import app.calendarium.ui.home.HomeRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
+import app.calendarium.ui.quickadd.QuickAddRoute
 import app.calendarium.ui.search.SearchRoute
 
 object Routes {
     const val ONBOARDING = "onboarding"
     const val MAIN = "main"
     const val SEARCH = "search"
+    const val QUICK_ADD = "quick_add"
 
     /**
      * Editor supports both new and edit. `eventId`, `calendarId`, `start`, `end` are all
@@ -47,11 +50,20 @@ object Routes {
 fun CalendariumNavHost(
     startOnboarding: Boolean,
     openEventId: Long = -1L,
+    openQuickAdd: Boolean = false,
     onEventConsumed: () -> Unit = {},
+    onQuickAddConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
 
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
+
+    LaunchedEffect(openQuickAdd, startOnboarding) {
+        if (openQuickAdd && !startOnboarding) {
+            navController.navigate(Routes.QUICK_ADD) { launchSingleTop = true }
+            onQuickAddConsumed()
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -131,6 +143,23 @@ fun CalendariumNavHost(
                     navController.navigate(Routes.editorEdit(id, instanceStart))
                 },
             )
+        }
+        composable(
+            route = Routes.QUICK_ADD,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Up,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Down,
+                    tween(Motion.DurationMedium),
+                )
+            },
+        ) {
+            QuickAddRoute(onBack = { navController.popBackStack() })
         }
     }
 }
