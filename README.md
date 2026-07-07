@@ -63,11 +63,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- **Event detail as a full screen.** Promote the current bottom-sheet event
-  detail to a full-screen destination matching the design mockup: a color-tinted
-  header (calendar color), title in the display face, and roomier rows —
-  with space for future fields (map preview, guests/attendees, join-video-call).
-  Used from both Month and Search, so route it through the nav host.
 - Configurable accent theme — the design specifies **Cobalt / Violet / Forest**
   presets with a picker in Settings (persist in preferences; the whole UI already
   reads `colorScheme.primary`, so it's mostly plumbing).
@@ -76,6 +71,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 **Later / future goals**
 
 - Time-zone-aware editing UI and a world-clock style secondary zone.
+- Richer event detail: map preview, guests/attendees, join-video-call.
 - Import/export of `.ics` files.
 - More unit/UI test coverage (repository, more view models, widget factory).
 - Play Store / F-Droid release: signing config, screenshots, store listing.

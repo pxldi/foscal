@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
@@ -25,14 +27,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,44 +44,72 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
+import app.calendarium.core.ui.theme.BricolageFamily
 import app.calendarium.core.ui.theme.Motion
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EventDetailSheet(
+fun EventDetailScreen(
     eventId: Long,
     instanceStartMillis: Long = 0L,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
     onEdit: (eventId: Long, instanceStartMillis: Long) -> Unit,
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(eventId, instanceStartMillis) { viewModel.load(eventId, instanceStartMillis) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Reload on every resume so returning from the editor reflects edits; show the spinner
+    // only for the first fetch, refresh silently afterwards.
+    LifecycleResumeEffect(eventId, instanceStartMillis) {
+        viewModel.load(eventId, instanceStartMillis, showLoading = state.event == null)
+        onPauseOrDispose {}
+    }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
+    val event = state.event
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                title = {},
+                actions = {
+                    if (event != null) {
+                        IconButton(onClick = { onEdit(eventId, event.start.toEpochMilli()) }) {
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit")
+                        }
+                    }
+                },
+            )
+        },
+    ) { padding ->
         val phase = when {
             state.loading -> "loading"
-            state.event == null -> "missing"
+            event == null -> "missing"
             else -> "content"
         }
         Crossfade(
             targetState = phase,
             animationSpec = tween(Motion.DurationMedium),
             label = "detailCrossfade",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
         ) { p ->
             when (p) {
                 "loading" -> Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
+                    Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
@@ -87,7 +117,7 @@ fun EventDetailSheet(
 
                 "missing" -> Box(
                     Modifier
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .padding(32.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -101,19 +131,16 @@ fun EventDetailSheet(
                     // Crossfade keeps the old slot alive during a content→missing transition, so
                     // `phase` may be stale while `state.event` has already cleared. Re-check rather
                     // than `!!` to avoid an NPE mid-animation.
-                    val event = state.event
-                    if (event != null) {
+                    val current = state.event
+                    if (current != null) {
                         DetailContent(
-                            event = event,
+                            event = current,
                             calendarName = state.calendar?.displayName ?: "Calendar",
-                            calendarColor = event.color,
-                            onEdit = { onEdit(eventId, event.start.toEpochMilli()) },
+                            calendarColor = current.color,
                         )
                     } else {
                         Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
+                            Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center,
                         ) {
                             CircularProgressIndicator()
@@ -130,35 +157,29 @@ private fun DetailContent(
     event: Event,
     calendarName: String,
     calendarColor: Int,
-    onEdit: () -> Unit,
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(28.dp))
                 .background(Color(calendarColor).copy(alpha = 0.14f))
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LabelPill(calendarName, calendarColor)
-                Spacer(Modifier.weight(1f))
-                FilledTonalIconButton(onClick = onEdit) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "Edit")
-                }
-            }
+            LabelPill(calendarName, calendarColor)
             Text(
                 event.title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.headlineLarge.copy(fontFamily = BricolageFamily),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
 
@@ -181,7 +202,7 @@ private fun LabelPill(calendarName: String, calendarColor: Int) {
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -204,7 +225,7 @@ private fun LabelPill(calendarName: String, calendarColor: Int) {
 private fun InfoCard(icon: ImageVector, label: String, value: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -212,13 +233,13 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center,
@@ -236,6 +257,7 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.size(2.dp))
                 Text(value, style = MaterialTheme.typography.bodyLarge)
             }
         }

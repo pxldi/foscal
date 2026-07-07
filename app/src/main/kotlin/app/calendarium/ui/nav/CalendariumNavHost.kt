@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.editor.EventEditorRoute
+import app.calendarium.ui.event.EventDetailScreen
 import app.calendarium.ui.home.HomeRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
@@ -26,6 +27,12 @@ object Routes {
     const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val QUICK_ADD = "quick_add"
+
+    /** Full-screen event detail. `start` selects the tapped occurrence of a recurring event. */
+    const val EVENT_DETAIL = "detail?eventId={eventId}&start={start}"
+
+    fun detail(eventId: Long, instanceStartMillis: Long = 0L): String =
+        "detail?eventId=$eventId&start=$instanceStartMillis"
 
     /**
      * Editor supports both new and edit. `eventId`, `calendarId`, `start`, `end` are all
@@ -67,6 +74,14 @@ fun CalendariumNavHost(
         }
     }
 
+    // A notification tap carries only the event id; open its detail screen.
+    LaunchedEffect(openEventId, startOnboarding) {
+        if (openEventId > 0L && !startOnboarding) {
+            navController.navigate(Routes.detail(openEventId)) { launchSingleTop = true }
+            onEventConsumed()
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -90,13 +105,11 @@ fun CalendariumNavHost(
                     onOpenEditor = { calId, start, end ->
                         navController.navigate(Routes.editorNew(calId, start, end))
                     },
-                    onOpenEditEvent = { id, instanceStart ->
-                        navController.navigate(Routes.editorEdit(id, instanceStart))
-                    },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    openDetailEventId = openEventId,
-                    onEventConsumed = onEventConsumed,
+                    onOpenEventDetail = { id, instanceStart ->
+                        navController.navigate(Routes.detail(id, instanceStart))
+                    },
                 )
             }
         }
@@ -159,7 +172,43 @@ fun CalendariumNavHost(
         composable(Routes.SEARCH) {
             SearchRoute(
                 onBack = { navController.popBackStack() },
-                onOpenEditEvent = { id, instanceStart ->
+                onOpenEventDetail = { id, instanceStart ->
+                    navController.navigate(Routes.detail(id, instanceStart))
+                },
+            )
+        }
+        composable(
+            route = Routes.EVENT_DETAIL,
+            arguments = listOf(
+                navArgument("eventId") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                },
+                navArgument("start") {
+                    type = NavType.LongType
+                    defaultValue = 0L
+                },
+            ),
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(Motion.DurationMedium),
+                )
+            },
+        ) { backStackEntry ->
+            val eventId = backStackEntry.arguments?.getLong("eventId") ?: -1L
+            val start = backStackEntry.arguments?.getLong("start") ?: 0L
+            EventDetailScreen(
+                eventId = eventId,
+                instanceStartMillis = start,
+                onBack = { navController.popBackStack() },
+                onEdit = { id, instanceStart ->
                     navController.navigate(Routes.editorEdit(id, instanceStart))
                 },
             )

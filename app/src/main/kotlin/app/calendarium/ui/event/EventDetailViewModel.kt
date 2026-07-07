@@ -28,8 +28,8 @@ class EventDetailViewModel @Inject constructor(
     private val _state = MutableStateFlow(EventDetailUiState())
     val state: StateFlow<EventDetailUiState> = _state.asStateFlow()
 
-    fun load(eventId: Long, instanceStartMillis: Long = 0L) {
-        _state.value = EventDetailUiState(loading = true)
+    fun load(eventId: Long, instanceStartMillis: Long = 0L, showLoading: Boolean = true) {
+        if (showLoading) _state.value = EventDetailUiState(loading = true)
         viewModelScope.launch {
             val zone = ZoneId.systemDefault()
             val from = LocalDate.now().minusYears(2).atStartOfDay(zone).toInstant()

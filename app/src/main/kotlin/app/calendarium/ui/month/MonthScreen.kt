@@ -3,15 +3,19 @@ package app.calendarium.ui.month
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,14 +34,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -46,18 +47,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -99,15 +99,7 @@ fun MonthRoute(
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
                 title = {
-                    MonthTitle(
-                        month = state.visibleMonth,
-                        onNextMonth = { viewModel.nextMonth() },
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.previousMonth() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous month")
-                    }
+                    MonthTitle(month = state.visibleMonth)
                 },
                 actions = {
                     TodayPill(onClick = { viewModel.goToMonth(YearMonth.now()) })
@@ -137,7 +129,19 @@ fun MonthRoute(
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        val threshold = 56.dp.toPx()
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = {
+                                if (total <= -threshold) viewModel.nextMonth()
+                                else if (total >= threshold) viewModel.previousMonth()
+                            },
+                            onHorizontalDrag = { _, delta -> total += delta },
+                        )
+                    },
             ) {
                 AnimatedContent(
                     targetState = state.visibleMonth,
@@ -199,40 +203,57 @@ fun MonthRoute(
 }
 
 @Composable
-private fun MonthTitle(month: YearMonth, onNextMonth: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = buildAnnotatedString {
-                append(
-                    month.month.getDisplayName(
-                        TextStyle.FULL,
-                        Locale.getDefault(),
-                    ),
-                )
-                append(" ")
-                withStyle(
-                    SpanStyle(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Normal,
-                    ),
-                ) {
-                    append(month.year.toString())
-                }
-            },
-            fontFamily = app.calendarium.core.ui.theme.BricolageFamily,
-            fontSize = 24.sp,
-            lineHeight = 28.sp,
+private fun MonthTitle(month: YearMonth) {
+    val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AnimatedLetters(
+            text = monthName,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.01).em,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onNextMonth) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month")
+        Spacer(Modifier.size(8.dp))
+        AnimatedLetters(
+            text = month.year.toString(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Normal,
+        )
+    }
+}
+
+/**
+ * Renders [text] as individually animated glyphs: when the string changes, characters that stay
+ * the same at a given position hold still while the ones that differ roll over, staggered left to
+ * right. The row animates its own width so a shorter or longer month name glides the year across.
+ */
+@Composable
+private fun AnimatedLetters(text: String, color: Color, fontWeight: FontWeight) {
+    Row(modifier = Modifier.animateContentSize(tween(Motion.DurationMedium))) {
+        text.forEachIndexed { index, ch ->
+            key(index) {
+                AnimatedContent(
+                    targetState = ch,
+                    transitionSpec = {
+                        val delay = index * 28
+                        (slideInVertically(tween(Motion.DurationMedium, delayMillis = delay)) { it / 2 } +
+                            fadeIn(tween(Motion.DurationMedium, delayMillis = delay))) togetherWith
+                            (slideOutVertically(tween(Motion.DurationMedium)) { -it / 2 } +
+                                fadeOut(tween(Motion.DurationMedium)))
+                    },
+                    label = "letter",
+                ) { c ->
+                    Text(
+                        c.toString(),
+                        fontFamily = BricolageFamily,
+                        fontSize = 24.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = fontWeight,
+                        letterSpacing = (-0.01).em,
+                        color = color,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
         }
     }
 }
@@ -422,10 +443,8 @@ private fun WeekHeader() {
         Dates.weekStartLabels().forEachIndexed { index, label ->
             Text(
                 label,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 7.dp),
-                textAlign = TextAlign.Start,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = if (index >= 5) {
@@ -499,19 +518,22 @@ private fun DayCell(
     )
     val dayNumberColor = lerp(muted, onSurface, fraction)
     // Today reads as a filled accent disc; a tapped (but not-today) day gets a soft tonal disc so
-    // both states are legible without competing with the accent.
-    val discColor by animateColorAsState(
-        targetValue = when {
-            isToday -> primary
-            isSelected -> MaterialTheme.colorScheme.surfaceContainerHigh
-            else -> Color.Transparent
-        },
+    // both states are legible without competing with the accent. Today keeps an animated fill so it
+    // eases in/out as months slide past; selection is a direct tap, so it snaps instantly — animating
+    // it would leave the previously selected day glowing through the crossfade.
+    val todayDisc by animateColorAsState(
+        targetValue = if (isToday) primary else Color.Transparent,
         animationSpec = tween(Motion.DurationMedium),
-        label = "dayDisc",
+        label = "todayDisc",
     )
+    val discColor = when {
+        isToday -> todayDisc
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
+    }
     val numberColor = when {
         isToday -> MaterialTheme.colorScheme.onPrimary
-        isSelected -> onSurface
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> dayNumberColor
     }
     Box(

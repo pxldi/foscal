@@ -82,16 +82,18 @@ class MonthViewModel @Inject constructor(
         _selectedDate.value = date
     }
 
-    fun nextMonth() {
-        _visibleMonth.value = _visibleMonth.value.plusMonths(1)
-    }
+    fun nextMonth() = showMonth(_visibleMonth.value.plusMonths(1))
 
-    fun previousMonth() {
-        _visibleMonth.value = _visibleMonth.value.minusMonths(1)
-    }
+    fun previousMonth() = showMonth(_visibleMonth.value.minusMonths(1))
 
-    fun goToMonth(month: YearMonth) {
+    fun goToMonth(month: YearMonth) = showMonth(month)
+
+    private fun showMonth(month: YearMonth) {
         _visibleMonth.value = month
+        // Move the selection into the month now on screen so the day preview never lags behind the
+        // grid: today when landing on the current month, otherwise its first day.
+        val today = LocalDate.now()
+        _selectedDate.value = if (month == YearMonth.from(today)) today else month.atDay(1)
     }
 }
 
