@@ -289,7 +289,7 @@ private fun EventBlock(
 
 private fun paletteColor(event: Event): Color = Color(event.color)
 
-private data class PositionedEvent(
+internal data class PositionedEvent(
     val event: Event,
     val column: Int,
     val columnCount: Int,
@@ -297,7 +297,7 @@ private data class PositionedEvent(
     val heightDp: Dp,
 )
 
-private fun layoutTimed(
+internal fun layoutTimed(
     events: List<Event>,
     hourHeight: Dp,
     zone: ZoneId,
@@ -340,8 +340,10 @@ private fun layoutTimed(
             val endZ = e.end.atZone(zone)
             val startFrac = (startZ.hour + startZ.minute / 60f + startZ.second / 3600f)
                 .coerceIn(0f, 24f)
+            // Keep a minimum visible slice, but never let the lower bound exceed 24h — an event
+            // starting after 23:45 would otherwise make coerceIn's range empty and crash.
             val endFrac = (endZ.hour + endZ.minute / 60f + endZ.second / 3600f)
-                .coerceIn(startFrac + 0.25f, 24f)
+                .coerceIn((startFrac + 0.25f).coerceAtMost(24f), 24f)
             val top = hourHeight * startFrac
             val height = (hourHeight * (endFrac - startFrac)).coerceAtLeast(32.dp)
             out.add(PositionedEvent(e, col, totalCols, top, height))
