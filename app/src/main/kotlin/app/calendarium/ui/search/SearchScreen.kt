@@ -124,7 +124,7 @@ fun SearchRoute(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(results, key = { it.id }) { event ->
+                items(results, key = { it.id to it.start.toEpochMilli() }) { event ->
                     SearchResultRow(
                         event = event,
                         isToday = event.startLocalDate(zone) == today,

@@ -70,7 +70,12 @@ fun DayEventsSheet(
                     )
                 }
             }
-            items(events.sortedBy { it.start }, key = { it.id }) { event ->
+            // Key by (id, instance start): recurring occurrences share their master's id, so id
+            // alone collides when a day holds more than one occurrence of the same series.
+            items(
+                events.sortedBy { it.start },
+                key = { it.id to it.start.toEpochMilli() },
+            ) { event ->
                 EventListRow(
                     event = event,
                     onClick = { onEventClick(event.id, event.start.toEpochMilli()) },
