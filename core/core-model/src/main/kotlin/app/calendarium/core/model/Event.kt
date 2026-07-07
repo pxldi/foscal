@@ -2,6 +2,7 @@ package app.calendarium.core.model
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -49,7 +50,15 @@ data class Event(
      */
     fun lastLocalDate(zone: ZoneId): LocalDate {
         val raw = endLocalDate(zone)
-        return if (allDay) raw.minusDays(1) else raw
+        return when {
+            allDay -> raw.minusDays(1)
+            // A timed event ending exactly at local midnight is half-open [start, midnight): it
+            // does not occupy that final day, so pull the last day back. Otherwise it shows a
+            // phantom "…– 00:00" entry on the following day in agenda/month/week views.
+            end.isAfter(start) && end.atZone(zone).toLocalTime() == LocalTime.MIDNIGHT ->
+                raw.minusDays(1)
+            else -> raw
+        }
     }
 
     /** All calendar days this event covers, inclusive. Multi-day events span every day. */

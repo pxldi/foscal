@@ -67,6 +67,14 @@ class EventSpannedDaysTest {
     }
 
     @Test
+    fun `timed event ending exactly at midnight does not spill into the next day`() {
+        // Jul 6 16:00 Berlin -> Jul 7 00:00 Berlin is half-open, so it covers only Jul 6.
+        val e = event("2026-07-06T14:00:00Z", "2026-07-06T22:00:00Z", allDay = false)
+        assertEquals(listOf(LocalDate.of(2026, 7, 6)), e.spannedDays(berlin))
+        assertFalse(e.spansDay(LocalDate.of(2026, 7, 7), berlin))
+    }
+
+    @Test
     fun `all-day event ignores the passed zone and uses UTC`() {
         // If it used Berlin, the start would shift a day for the UTC-midnight instant.
         val e = event("2026-07-06T00:00:00Z", "2026-07-07T00:00:00Z", allDay = true)

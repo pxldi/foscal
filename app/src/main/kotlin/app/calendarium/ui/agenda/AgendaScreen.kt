@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.ui.util.Dates
 import java.time.LocalDate
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,6 +143,7 @@ private fun AgendaDayRow(
             day.events.forEach { event ->
                 AgendaEventCard(
                     event = event,
+                    date = day.date,
                     onClick = { onEventClick(event.id, event.start.toEpochMilli()) },
                 )
             }
@@ -150,7 +152,7 @@ private fun AgendaDayRow(
 }
 
 @Composable
-private fun AgendaEventCard(event: Event, onClick: () -> Unit) {
+private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -175,7 +177,7 @@ private fun AgendaEventCard(event: Event, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = buildEventSubtitle(event)
+            val subtitle = buildEventSubtitle(event, date)
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -187,14 +189,26 @@ private fun AgendaEventCard(event: Event, onClick: () -> Unit) {
     }
 }
 
-private fun buildEventSubtitle(event: Event): String {
+private fun buildEventSubtitle(event: Event, date: LocalDate): String {
     val parts = mutableListOf<String>()
     if (event.allDay) {
         parts += "All day"
     } else {
-        val start = Dates.instantToLocal(event.start).toLocalTime().format(Dates.timeFormatter)
-        val end = Dates.instantToLocal(event.end).toLocalTime().format(Dates.timeFormatter)
-        parts += "$start – $end"
+        val zone = ZoneId.systemDefault()
+        val startT = Dates.instantToLocal(event.start).toLocalTime().format(Dates.timeFormatter)
+        val endT = Dates.instantToLocal(event.end).toLocalTime().format(Dates.timeFormatter)
+        // Use the model's inclusive last day so an event ending exactly at midnight is treated as
+        // single-day (matching the days it actually appears on), not a phantom overnight span.
+        val firstDay = event.startLocalDate(zone)
+        val lastDay = event.lastLocalDate(zone)
+        parts += when {
+            firstDay == lastDay -> "$startT – $endT"
+            // Genuine multi-day timed event: show only the portion that belongs to this day so
+            // the times aren't misread as a single-day span (e.g. a bare "22:00 – 03:00").
+            date == firstDay -> "$startT → overnight"
+            date == lastDay -> "Until $endT"
+            else -> "All day"
+        }
     }
     if (!event.location.isNullOrBlank()) parts += event.location!!
     return parts.joinToString(" • ")
