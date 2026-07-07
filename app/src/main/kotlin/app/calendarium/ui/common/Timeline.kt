@@ -75,10 +75,12 @@ fun TimelineLayout(
     val totalHeight = hourHeight * 24
     // Advance the current-time marker while the view stays open instead of freezing it at the
     // instant this composable first ran.
-    val liveNow by androidx.compose.runtime.produceState(initialValue = now, now) {
+    val liveNowState = remember(now) { mutableStateOf(now) }
+    val liveNow by liveNowState
+    LaunchedEffect(now) {
         while (true) {
             kotlinx.coroutines.delay(60_000L)
-            value = Instant.now()
+            liveNowState.value = Instant.now()
         }
     }
     val today = LocalDate.now(zone)
