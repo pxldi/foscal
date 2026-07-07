@@ -24,6 +24,8 @@ enum class DAVxStatus { INSTALLED, NOT_INSTALLED }
 
 data class OnboardingUiState(
     val completing: Boolean = false,
+    val setupComplete: Boolean = false,
+    val finished: Boolean = false,
     val davxStatus: DAVxStatus = DAVxStatus.NOT_INSTALLED,
     val calendarPermissionGranted: Boolean = false,
     val error: String? = null,
@@ -86,7 +88,10 @@ class OnboardingViewModel @Inject constructor(
                     )
                     return@launch
                 }
-                finishOnboarding()
+                _internal.value = _internal.value.copy(
+                    completing = false,
+                    setupComplete = true,
+                )
             } catch (t: Throwable) {
                 _internal.value = _internal.value.copy(completing = false, error = t.message)
             }
@@ -96,16 +101,27 @@ class OnboardingViewModel @Inject constructor(
     fun useExisting() {
         if (_internal.value.completing) return
         _internal.value = _internal.value.copy(completing = true, error = null)
-        viewModelScope.launch { finishOnboarding() }
+        viewModelScope.launch {
+            _internal.value = _internal.value.copy(
+                completing = false,
+                setupComplete = true,
+            )
+        }
     }
 
     fun finishAfterSync() {
+        _internal.value = _internal.value.copy(setupComplete = true)
+    }
+
+    fun completeOnboarding() {
+        if (_internal.value.completing) return
+        _internal.value = _internal.value.copy(completing = true, error = null)
         viewModelScope.launch { finishOnboarding() }
     }
 
     private suspend fun finishOnboarding() {
         prefs.setOnboardingCompleted()
-        _internal.value = _internal.value.copy(completing = false)
+        _internal.value = _internal.value.copy(completing = false, finished = true)
     }
 
     companion object {

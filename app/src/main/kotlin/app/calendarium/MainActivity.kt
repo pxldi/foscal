@@ -1,14 +1,10 @@
 package app.calendarium
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,14 +29,9 @@ class MainActivity : ComponentActivity() {
     private var pendingEventId by mutableLongStateOf(-1L)
     private var pendingQuickAdd by mutableStateOf(false)
 
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { /* granted or denied — the app still functions */ }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        requestNotificationPermission()
         pendingEventId = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
         pendingQuickAdd = intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)
         setContent {
@@ -76,16 +67,6 @@ class MainActivity : ComponentActivity() {
         // The user may have granted access from the system settings screen; pick it up so
         // provider-backed flows and reminders resume without needing a restart.
         permissionState.refresh()
-    }
-
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
     }
 
     companion object {

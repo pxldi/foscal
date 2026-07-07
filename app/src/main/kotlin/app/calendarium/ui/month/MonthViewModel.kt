@@ -36,7 +36,7 @@ class MonthViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _visibleMonth = MutableStateFlow(YearMonth.now())
-    private val _selectedDate = MutableStateFlow<LocalDate?>(LocalDate.now())
+    private val _selectedDate = MutableStateFlow<LocalDate?>(null)
     private val zone: ZoneId = ZoneId.systemDefault()
 
     private val calendarIds = combine(
@@ -75,7 +75,7 @@ class MonthViewModel @Inject constructor(
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        MonthUiState(YearMonth.now(), LocalDate.now()),
+        MonthUiState(YearMonth.now(), null),
     )
 
     fun selectDate(date: LocalDate?) {

@@ -1,6 +1,9 @@
 package app.calendarium.ui.onboarding
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,139 +27,126 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DevicesOther
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.calendarium.core.data.CalendarPermissionState
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class OnboardingStep { WELCOME, CALENDARS, NOTIFICATIONS }
+
 @Composable
 fun OnboardingRoute(
     onContinue: () -> Unit,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val granted = state.calendarPermissionGranted
+    val context = LocalContext.current
+    var step by remember { mutableStateOf(OnboardingStep.WELCOME) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { viewModel.onPermissionResult() }
+    ) {
+        viewModel.onPermissionResult()
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CALENDAR,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) step = OnboardingStep.CALENDARS
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        viewModel.completeOnboarding()
+    }
+
+    LaunchedEffect(state.calendarPermissionGranted, step) {
+        if (step == OnboardingStep.WELCOME && state.calendarPermissionGranted) {
+            step = OnboardingStep.CALENDARS
+        }
+    }
+
+    LaunchedEffect(state.setupComplete) {
+        if (state.setupComplete) step = OnboardingStep.NOTIFICATIONS
+    }
+
+    LaunchedEffect(state.finished) {
+        if (state.finished) onContinue()
+    }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = { Text("Welcome") },
-                scrollBehavior = scrollBehavior,
-            )
-        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 22.dp, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.CalendarMonth,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(36.dp),
-                )
-            }
-            Text(
-                "Calendarium",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "A modern, private calendar. Works fully offline, or sync with " +
-                    "Nextcloud, ownCloud or any CalDAV server via DAVx\u2085.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            PermissionCard(
-                granted = granted,
-                onGrant = {
-                    permissionLauncher.launch(CalendarPermissionState.REQUIRED_PERMISSIONS)
+            StepProgress(
+                active = when (step) {
+                    OnboardingStep.WELCOME -> 0
+                    OnboardingStep.CALENDARS -> 1
+                    OnboardingStep.NOTIFICATIONS -> 2
                 },
             )
-
-            if (granted) {
-                Text(
-                    "Now choose how you want to start:",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-
-                ChoiceCard(
-                    icon = Icons.Outlined.DevicesOther,
-                    title = "Use offline",
-                    subtitle = "Create a local calendar that stays only on this device. " +
-                        "No account, no network.",
-                    buttonText = "Create local calendar",
-                    enabled = !state.completing,
-                    onClick = { viewModel.useLocalOnly() },
-                )
-
-                ChoiceCard(
-                    icon = Icons.Outlined.CloudSync,
-                    title = "Sync with Nextcloud / ownCloud",
-                    subtitle = if (state.davxStatus == DAVxStatus.INSTALLED) {
-                        "DAVx\u2085 detected. Tap to open it and add your CalDAV account."
-                    } else {
-                        "Requires DAVx\u2085 (free, FOSS). Tap to install from F-Droid."
+            when (step) {
+                OnboardingStep.WELCOME -> WelcomeStep(
+                    onStart = {
+                        if (state.calendarPermissionGranted) {
+                            step = OnboardingStep.CALENDARS
+                        } else {
+                            calendarPermissionLauncher.launch(
+                                CalendarPermissionState.REQUIRED_PERMISSIONS,
+                            )
+                        }
                     },
-                    buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) "Open DAVx\u2085"
-                    else "Install DAVx\u2085",
-                    enabled = !state.completing,
-                    onClick = {
+                )
+                OnboardingStep.CALENDARS -> CalendarSetupStep(
+                    state = state,
+                    onUseLocal = viewModel::useLocalOnly,
+                    onUseExisting = viewModel::useExisting,
+                    onUseDavx = {
                         viewModel.openDavxOrStore()
                         viewModel.finishAfterSync()
                     },
                 )
-
-                ChoiceCard(
-                    icon = Icons.Outlined.CalendarMonth,
-                    title = "Use my existing calendars",
-                    subtitle = "Show calendars that are already on this device " +
-                        "(Google, Exchange, DAVx\u2085, etc.).",
-                    buttonText = "Continue",
-                    enabled = !state.completing,
-                    onClick = { viewModel.useExisting() },
+                OnboardingStep.NOTIFICATIONS -> NotificationStep(
+                    completing = state.completing,
+                    onEnable = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            viewModel.completeOnboarding()
+                        }
+                    },
+                    onSkip = viewModel::completeOnboarding,
                 )
             }
 
@@ -184,6 +174,210 @@ fun OnboardingRoute(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun StepProgress(active: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        repeat(3) { index ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (index <= active) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WelcomeStep(onStart: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(96.dp))
+        CalendariumMark(Modifier.size(104.dp))
+        Spacer(Modifier.height(34.dp))
+        Text(
+            "Calendarium",
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Text(
+            "Your calendars, quietly organized. Local first, open source, and ready for DAVx5 sync.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+        Spacer(Modifier.height(140.dp))
+        Button(
+            onClick = onStart,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text("Get started", fontWeight = FontWeight.SemiBold)
+        }
+        Text(
+            "No account needed · Open source",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
+}
+
+@Composable
+private fun CalendarSetupStep(
+    state: OnboardingUiState,
+    onUseLocal: () -> Unit,
+    onUseExisting: () -> Unit,
+    onUseDavx: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(
+            "Your calendars",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 18.dp),
+        )
+        Text(
+            "Choose where Calendarium should start. You can change visible calendars later in Settings.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ChoiceCard(
+            icon = Icons.Outlined.DevicesOther,
+            title = "Use offline",
+            subtitle = "Create a local calendar that stays on this device.",
+            buttonText = "Create local calendar",
+            enabled = !state.completing,
+            onClick = onUseLocal,
+        )
+        ChoiceCard(
+            icon = Icons.Outlined.CalendarMonth,
+            title = "Use existing calendars",
+            subtitle = "Show calendars Android already has on this device.",
+            buttonText = "Continue",
+            enabled = !state.completing,
+            onClick = onUseExisting,
+        )
+        ChoiceCard(
+            icon = Icons.Outlined.CloudSync,
+            title = "Sync with CalDAV",
+            subtitle = if (state.davxStatus == DAVxStatus.INSTALLED) {
+                "DAVx5 is installed. Open it to add Nextcloud, ownCloud, or another CalDAV account."
+            } else {
+                "Install DAVx5 from F-Droid to add Nextcloud, ownCloud, or another CalDAV account."
+            },
+            buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) "Open DAVx5" else "Install DAVx5",
+            enabled = !state.completing,
+            onClick = onUseDavx,
+        )
+    }
+}
+
+@Composable
+private fun NotificationStep(
+    completing: Boolean,
+    onEnable: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Text(
+            "Make it yours",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 18.dp),
+        )
+        Text(
+            "Calendarium can remind you about events. You can keep notifications off and still use every calendar view.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ChoiceCard(
+            icon = Icons.Outlined.CheckCircle,
+            title = "Enable notifications",
+            subtitle = "Get reminders from your local Android calendar data.",
+            buttonText = "Allow notifications",
+            enabled = !completing,
+            onClick = onEnable,
+        )
+        OutlinedButton(
+            onClick = onSkip,
+            enabled = !completing,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text("Not now")
+        }
+        Button(
+            onClick = onSkip,
+            enabled = !completing,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+            ),
+        ) {
+            Text("Start using Calendarium", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun CalendariumMark(modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    Canvas(modifier) {
+        val side = size.minDimension
+        val icon = Size(side, side)
+        drawRoundRect(
+            color = primary,
+            size = icon,
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.28f),
+        )
+        val stroke = side * 0.075f
+        val white = Color.White
+        drawRoundRect(
+            color = white,
+            topLeft = Offset(side * 0.24f, side * 0.29f),
+            size = Size(side * 0.52f, side * 0.44f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.10f),
+            style = Stroke(width = stroke, cap = StrokeCap.Round),
+        )
+        drawLine(
+            color = white,
+            start = Offset(side * 0.31f, side * 0.24f),
+            end = Offset(side * 0.31f, side * 0.36f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = white,
+            start = Offset(side * 0.69f, side * 0.24f),
+            end = Offset(side * 0.69f, side * 0.36f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+        drawCircle(white, radius = side * 0.035f, center = Offset(side * 0.39f, side * 0.54f))
+        drawCircle(white, radius = side * 0.035f, center = Offset(side * 0.52f, side * 0.54f))
+        drawCircle(white, radius = side * 0.035f, center = Offset(side * 0.65f, side * 0.54f))
     }
 }
 

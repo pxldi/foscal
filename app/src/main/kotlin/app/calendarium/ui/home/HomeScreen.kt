@@ -14,12 +14,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ViewAgenda
-import androidx.compose.material.icons.outlined.ViewDay
 import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.agenda.AgendaRoute
-import app.calendarium.ui.day.DayRoute
 import app.calendarium.ui.event.EventDetailSheet
 import app.calendarium.ui.month.MonthRoute
 import app.calendarium.ui.settings.SettingsSheet
@@ -43,7 +42,6 @@ import app.calendarium.ui.week.WeekRoute
 private enum class HomeTab(val label: String, val icon: ImageVector) {
     Month("Month", Icons.Outlined.CalendarMonth),
     Week("Week", Icons.Outlined.ViewWeek),
-    Day("Day", Icons.Outlined.ViewDay),
     Agenda("Agenda", Icons.Outlined.ViewAgenda),
 }
 
@@ -78,7 +76,7 @@ fun HomeRoute(
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(windowInsets = NavigationBarDefaults.windowInsets) {
                 HomeTab.entries.forEach { entry ->
                     NavigationBarItem(
                         selected = tab == entry,
@@ -87,14 +85,24 @@ fun HomeRoute(
                         label = { Text(entry.label) },
                     )
                 }
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { showSettings = true },
+                    icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") },
+                    label = { Text("Settings") },
+                )
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { onOpenEditor(null, null, null) },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("New event") },
-            )
+            if (tab != HomeTab.Month) {
+                FloatingActionButton(
+                    onClick = { onOpenEditor(null, null, null) },
+                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "New event")
+                }
+            }
         },
     ) { padding ->
         Box(
@@ -121,22 +129,14 @@ fun HomeRoute(
                     HomeTab.Month -> MonthRoute(
                         onEventClick = onEventClick,
                         onNewEvent = { start, end -> onOpenEditor(null, start, end) },
-                        onOpenSettings = { showSettings = true },
                         onOpenSearch = onOpenSearch,
                     )
                     HomeTab.Week -> WeekRoute(
                         onEventClick = onEventClick,
-                        onOpenSettings = { showSettings = true },
-                        onOpenSearch = onOpenSearch,
-                    )
-                    HomeTab.Day -> DayRoute(
-                        onEventClick = onEventClick,
-                        onOpenSettings = { showSettings = true },
                         onOpenSearch = onOpenSearch,
                     )
                     HomeTab.Agenda -> AgendaRoute(
                         onEventClick = onEventClick,
-                        onOpenSettings = { showSettings = true },
                         onOpenSearch = onOpenSearch,
                     )
                 }

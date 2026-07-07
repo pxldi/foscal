@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,6 +99,10 @@ fun EventEditorRoute(
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
                 title = { Text(if (state.isEditing) "Edit event" else "New event") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -154,7 +159,7 @@ private fun EditorForm(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                label = { Text("Title") },
+                placeholder = { Text("Add title") },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.titleLarge,
             )

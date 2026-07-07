@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -25,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -45,7 +45,6 @@ import java.time.ZoneId
 @Composable
 fun AgendaRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
@@ -54,13 +53,14 @@ fun AgendaRoute(
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
                 title = { Text("Agenda", fontWeight = FontWeight.SemiBold) },
                 actions = {
                     IconButton(onClick = onOpenSearch) {
                         Icon(Icons.Outlined.Search, "Search")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Outlined.Settings, "Settings")
                     }
                 },
             )
@@ -124,12 +124,20 @@ private fun AgendaDayRow(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = day.date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = if (day.date == today) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface,
-            )
+            text = day.date.dayOfMonth.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (day.date == today) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurface,
+            modifier = if (day.date == today) {
+                Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            } else {
+                Modifier
+            },
+        )
             Text(
                 text = day.date.format(Dates.fullWeekdayFormatter),
                 style = MaterialTheme.typography.labelSmall,
@@ -156,10 +164,10 @@ private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -213,4 +221,3 @@ private fun buildEventSubtitle(event: Event, date: LocalDate): String {
     if (!event.location.isNullOrBlank()) parts += event.location!!
     return parts.joinToString(" • ")
 }
-

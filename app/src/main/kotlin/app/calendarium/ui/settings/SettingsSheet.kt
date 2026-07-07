@@ -67,7 +67,7 @@ fun SettingsSheet(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Drag down any time to close.",
+                        "Calendars come from Android. Sync stays with your calendar provider.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
@@ -108,7 +108,7 @@ fun SettingsSheet(
             }
             item {
                 Text(
-                    "Sync for CalDAV calendars (Nextcloud, ownCloud) is managed by DAVx\u2085 or your account app.",
+                    "Calendarium does not run its own sync service. DAVx\u2085 or your account app keeps CalDAV calendars current.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -127,7 +127,7 @@ private fun CalendarRowCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),

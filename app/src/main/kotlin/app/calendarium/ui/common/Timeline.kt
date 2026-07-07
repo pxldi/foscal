@@ -331,7 +331,8 @@ private fun EventBlock(
     onClick: () -> Unit,
 ) {
     val baseColor = paletteColor(event)
-    val textColor = contrastColor(event.color)
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val mutedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
@@ -347,7 +348,8 @@ private fun EventBlock(
 
     Row(
         modifier = modifier
-            .background(baseColor.copy(alpha = 0.90f), RoundedCornerShape(cornerRadius))
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(baseColor.copy(alpha = if (compact) 0.12f else 0.10f))
             .clickable(onClick = onClick),
     ) {
         if (accentStripe) {
@@ -370,7 +372,7 @@ private fun EventBlock(
             if (showTime) {
                 Text(
                     "${start.toLocalTime().format(timeFmt)} – ${end.toLocalTime().format(timeFmt)}",
-                    color = textColor.copy(alpha = 0.75f),
+                    color = mutedTextColor,
                     fontSize = detailScale,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
