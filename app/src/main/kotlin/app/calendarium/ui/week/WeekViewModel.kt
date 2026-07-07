@@ -3,7 +3,7 @@ package app.calendarium.ui.week
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
-import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
 import app.calendarium.ui.common.TimelineDay
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,7 +32,7 @@ data class WeekUiState(
 @HiltViewModel
 class WeekViewModel @Inject constructor(
     private val repository: CalendarRepository,
-    private val prefs: UserPreferencesRepository,
+    private val prefs: Preferences,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()

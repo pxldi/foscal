@@ -3,7 +3,7 @@ package app.calendarium.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
-import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,7 +23,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val repository: CalendarRepository,
-    private val prefs: UserPreferencesRepository,
+    private val prefs: Preferences,
 ) : ViewModel() {
 
     val zone: ZoneId = ZoneId.systemDefault()

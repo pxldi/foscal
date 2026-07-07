@@ -3,7 +3,7 @@ package app.calendarium.ui.agenda
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
-import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,7 +35,7 @@ private const val AGENDA_HORIZON_DAYS = 60L
 @HiltViewModel
 class AgendaViewModel @Inject constructor(
     private val repository: CalendarRepository,
-    private val prefs: UserPreferencesRepository,
+    private val prefs: Preferences,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()

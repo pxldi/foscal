@@ -3,7 +3,7 @@ package app.calendarium.ui.month
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
-import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,7 +32,7 @@ data class MonthUiState(
 @HiltViewModel
 class MonthViewModel @Inject constructor(
     private val repository: CalendarRepository,
-    private val prefs: UserPreferencesRepository,
+    private val prefs: Preferences,
 ) : ViewModel() {
 
     private val _visibleMonth = MutableStateFlow(YearMonth.now())
