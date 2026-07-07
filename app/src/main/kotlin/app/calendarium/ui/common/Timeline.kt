@@ -75,8 +75,14 @@ fun TimelineLayout(
     val nowFractionalHour = nowZ.hour + nowZ.minute / 60f
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val nowColor = MaterialTheme.colorScheme.error
+    val todayTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
     val allDayEvents = days.flatMap { day -> day.events.filter { it.allDay } }
     val timedDays = days.map { day -> day.copy(events = day.events.filter { !it.allDay }) }
+    // Only worth tinting a whole column when several are shown side by side (week view); in day
+    // view the single column fills the screen so a tint just muddies the background.
+    val highlightTodayColumn = days.size > 1
+    val showNowLabel = timedDays.any { it.date == today }
+    val nowLabelFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
 
     var initialScrolled = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -124,6 +130,7 @@ fun TimelineLayout(
         }
 
         Column(modifier = Modifier.verticalScroll(scrollState)) {
+          Box {
             Row(modifier = Modifier.height(totalHeight)) {
                 Column(Modifier.width(54.dp)) {
                     for (h in 0..23) {
@@ -146,7 +153,14 @@ fun TimelineLayout(
                     BoxWithConstraints(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight(),
+                            .fillMaxHeight()
+                            .then(
+                                if (highlightTodayColumn && day.date == today) {
+                                    Modifier.background(todayTint)
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     ) {
                         val colWidth = maxWidth
                         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -198,6 +212,29 @@ fun TimelineLayout(
                     }
                 }
             }
+            // Current-time label pinned to the left gutter, aligned with the now line drawn in the
+            // day columns. Overlaid on the Row so it lines up across the shared vertical scale.
+            if (showNowLabel) {
+                Box(
+                    Modifier
+                        .width(54.dp)
+                        .offset(y = hourHeight * nowFractionalHour - 8.dp),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Text(
+                        nowZ.format(nowLabelFmt),
+                        modifier = Modifier
+                            .padding(end = 5.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(nowColor)
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+          }
         }
     }
 }
