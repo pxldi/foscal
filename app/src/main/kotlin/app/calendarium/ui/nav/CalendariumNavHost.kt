@@ -18,11 +18,13 @@ import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
 import app.calendarium.ui.quickadd.QuickAddRoute
 import app.calendarium.ui.search.SearchRoute
+import app.calendarium.ui.settings.SettingsScreen
 
 object Routes {
     const val ONBOARDING = "onboarding"
     const val MAIN = "main"
     const val SEARCH = "search"
+    const val SETTINGS = "settings"
     const val QUICK_ADD = "quick_add"
 
     /**
@@ -92,10 +94,28 @@ fun CalendariumNavHost(
                         navController.navigate(Routes.editorEdit(id, instanceStart))
                     },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     openDetailEventId = openEventId,
                     onEventConsumed = onEventConsumed,
                 )
             }
+        }
+        composable(
+            route = Routes.SETTINGS,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(Motion.DurationMedium),
+                )
+            },
+        ) {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = Routes.EVENT_EDITOR,

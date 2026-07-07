@@ -51,10 +51,34 @@ emulator -avd calendarium_test -no-snapshot -no-audio -no-boot-anim -gpu swiftsh
 
 ## Current status
 
-Beta. Working: month/week/day/agenda views, event create/edit/delete, recurring
-events (this-vs-all-events, exceptions), reminders/notifications, real calendar
-colors, offline local calendars, permission-first onboarding. See the README
-"Current status" and "Roadmap" sections for the full picture and what's next.
+Beta. Working: Month / Week / Agenda views (bottom nav) plus a full-screen
+Settings destination, event create/edit/delete, recurring events
+(this-vs-all-events, exceptions), reminders/notifications, real calendar colors,
+offline local calendars, permission-first onboarding. There is no separate Day
+view — it was dropped as redundant (Week's schedule + Agenda cover it);
+`ui/day/DayScreen.kt` still exists but is not wired into navigation. See the
+README "Current status" and "Roadmap" sections for the full picture and what's next.
+
+## Design system
+
+The visual identity ("the Calendarium voice") is derived from the Claude Design
+project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-system:
+
+- **Typography** — two variable fonts bundled in `core/core-ui/src/main/res/font`:
+  **Bricolage Grotesque** (display/voice: date numerals, month header, screen
+  titles, event-detail title) and **Hanken Grotesque** (all body/UI). Wired via
+  `core-ui/.../theme/Type.kt` → `CalendariumTypography`; display+headline styles
+  are Bricolage, everything else Hanken. Reach for `BricolageFamily` directly
+  only for numerals/headers that need the voice.
+- **Accent** — Cobalt `#1A73E8` (`CalendariumBlue`). Drives today, selection,
+  buttons and the FAB. (A configurable multi-accent picker — Cobalt/Violet/Forest
+  — is designed but not yet built; see Roadmap.)
+- **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
+  never a hardcoded value.
+- **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
+  and the in-app onboarding hero (`OnboardingScreen.CalendariumMark`). Keep them
+  in sync if you change one.
+- Time is **24-hour by default** (`HH:mm`) — this is intentional, per the design.
 
 ## Architecture
 
@@ -84,15 +108,14 @@ colors, offline local calendars, permission-first onboarding. See the README
   owns them) — do not touch those.
 - **All-day events are stored at UTC midnight.** Read them back in UTC
   (`Event.startLocalDate`), not the device zone, or they shift a day west of UTC.
-- **Month view is a `VerticalPager` of whole-month grids, not a continuous
-  week scroll.** Each page is a 6-week (42-cell) grid from
-  `Dates.monthCells(month)`; the page's month is
-  `baseMonth.plusMonths(page - initialPage)` and drives the per-page
-  in-month/out-of-month (black/grey) coloring. `snapshotFlow {
-  pagerState.currentPage }` feeds `viewModel.goToMonth`. The ViewModel
-  fetches a ±2-month window (`mapMonthToRange`) so adjacent pages are
-  populated mid-swipe. Prev/next arrows and the Today button call
-  `pagerState.animateScrollToPage`.
+- **Month view swaps whole-month grids via `AnimatedContent`, not a continuous
+  week scroll.** The visible month lives in the ViewModel; `nextMonth()` /
+  `previousMonth()` / `goToMonth()` change it and `AnimatedContent` slides the
+  new grid in (direction inferred from which month is greater). Each grid is
+  built from `visibleMonthCells(month)` and animates per-cell in-month /
+  out-of-month (black↔grey) coloring. The ViewModel fetches a ±2-month window so
+  adjacent months are already populated. Tapping a day updates an inline preview
+  panel under the grid (no modal) — there is no day-events bottom sheet.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.

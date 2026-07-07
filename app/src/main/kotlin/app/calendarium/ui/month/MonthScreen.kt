@@ -54,14 +54,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.calendarium.core.ui.theme.BricolageFamily
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
@@ -221,11 +222,11 @@ private fun MonthTitle(month: YearMonth, onNextMonth: () -> Unit) {
                     append(month.year.toString())
                 }
             },
-            fontFamily = FontFamily.SansSerif,
-            fontSize = 22.sp,
-            lineHeight = 26.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.sp,
+            fontFamily = app.calendarium.core.ui.theme.BricolageFamily,
+            fontSize = 24.sp,
+            lineHeight = 28.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.01).em,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -428,7 +429,7 @@ private fun WeekHeader() {
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = if (index >= 5) {
-                    Color(0xFFA47700)
+                    app.calendarium.core.ui.theme.weekendLabelColor()
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
@@ -497,11 +498,22 @@ private fun DayCell(
         label = "inMonthFraction",
     )
     val dayNumberColor = lerp(muted, onSurface, fraction)
-    val selectedCircle by animateColorAsState(
-        targetValue = if (isSelected) primary else Color.Transparent,
+    // Today reads as a filled accent disc; a tapped (but not-today) day gets a soft tonal disc so
+    // both states are legible without competing with the accent.
+    val discColor by animateColorAsState(
+        targetValue = when {
+            isToday -> primary
+            isSelected -> MaterialTheme.colorScheme.surfaceContainerHigh
+            else -> Color.Transparent
+        },
         animationSpec = tween(Motion.DurationMedium),
-        label = "selectedDayCircle",
+        label = "dayDisc",
     )
+    val numberColor = when {
+        isToday -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> onSurface
+        else -> dayNumberColor
+    }
     Box(
         modifier = modifier
             .clip(shape)
@@ -510,31 +522,22 @@ private fun DayCell(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 7.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.Start,
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(selectedCircle),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        maxLines = 1,
-                    )
-                }
-            } else {
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(discColor),
+                contentAlignment = Alignment.Center,
+            ) {
                 Text(
                     text = date.dayOfMonth.toString(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isToday) MaterialTheme.colorScheme.error else dayNumberColor,
+                    fontFamily = BricolageFamily,
+                    fontSize = 15.5.sp,
+                    fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = numberColor,
                     maxLines = 1,
                 )
             }

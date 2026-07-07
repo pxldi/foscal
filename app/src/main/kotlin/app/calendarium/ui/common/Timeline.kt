@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -71,8 +72,16 @@ fun TimelineLayout(
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val totalHeight = hourHeight * 24
+    // Advance the current-time marker while the view stays open instead of freezing it at the
+    // instant this composable first ran.
+    val liveNow by androidx.compose.runtime.produceState(initialValue = now, now) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L)
+            value = Instant.now()
+        }
+    }
     val today = LocalDate.now(zone)
-    val nowZ = now.atZone(zone)
+    val nowZ = liveNow.atZone(zone)
     val nowFractionalHour = nowZ.hour + nowZ.minute / 60f
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val nowColor = MaterialTheme.colorScheme.error
@@ -335,7 +344,7 @@ private fun EventBlock(
     val mutedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
-    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+    val timeFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
     val showTime = !compact && heightDp >= 36.dp
     val textPadding = if (compact) {
         Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)

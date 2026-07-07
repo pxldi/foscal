@@ -25,9 +25,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DevicesOther
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -307,14 +305,22 @@ private fun NotificationStep(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        ChoiceCard(
+        InfoCard(
             icon = Icons.Outlined.CheckCircle,
-            title = "Enable notifications",
-            subtitle = "Get reminders from your local Android calendar data.",
-            buttonText = "Allow notifications",
-            enabled = !completing,
-            onClick = onEnable,
+            title = "Reminders",
+            subtitle = "Calendarium can nudge you before events, using only your local calendar data.",
         )
+        Spacer(Modifier.height(4.dp))
+        Button(
+            onClick = onEnable,
+            enabled = !completing,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text("Allow notifications", fontWeight = FontWeight.SemiBold)
+        }
         OutlinedButton(
             onClick = onSkip,
             enabled = !completing,
@@ -325,18 +331,35 @@ private fun NotificationStep(
         ) {
             Text("Not now")
         }
-        Button(
-            onClick = onSkip,
-            enabled = !completing,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-            ),
-        ) {
-            Text("Start using Calendarium", fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun InfoCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+) {
+    androidx.compose.material3.Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp),
+            )
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -346,91 +369,46 @@ private fun CalendariumMark(modifier: Modifier = Modifier) {
     val primary = MaterialTheme.colorScheme.primary
     Canvas(modifier) {
         val side = size.minDimension
-        val icon = Size(side, side)
         drawRoundRect(
             color = primary,
-            size = icon,
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.28f),
+            size = Size(side, side),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.29f),
         )
-        val stroke = side * 0.075f
+        val stroke = side * 0.058f
         val white = Color.White
+        // Calendar body
         drawRoundRect(
             color = white,
-            topLeft = Offset(side * 0.24f, side * 0.29f),
-            size = Size(side * 0.52f, side * 0.44f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.10f),
+            topLeft = Offset(side * 0.26f, side * 0.30f),
+            size = Size(side * 0.48f, side * 0.42f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.11f),
             style = Stroke(width = stroke, cap = StrokeCap.Round),
         )
+        // Header divider
         drawLine(
             color = white,
-            start = Offset(side * 0.31f, side * 0.24f),
-            end = Offset(side * 0.31f, side * 0.36f),
+            start = Offset(side * 0.26f, side * 0.42f),
+            end = Offset(side * 0.74f, side * 0.42f),
+            strokeWidth = stroke * 0.9f,
+        )
+        // Top tabs
+        drawLine(
+            color = white,
+            start = Offset(side * 0.39f, side * 0.255f),
+            end = Offset(side * 0.39f, side * 0.345f),
             strokeWidth = stroke,
             cap = StrokeCap.Round,
         )
         drawLine(
             color = white,
-            start = Offset(side * 0.69f, side * 0.24f),
-            end = Offset(side * 0.69f, side * 0.36f),
+            start = Offset(side * 0.61f, side * 0.255f),
+            end = Offset(side * 0.61f, side * 0.345f),
             strokeWidth = stroke,
             cap = StrokeCap.Round,
         )
-        drawCircle(white, radius = side * 0.035f, center = Offset(side * 0.39f, side * 0.54f))
-        drawCircle(white, radius = side * 0.035f, center = Offset(side * 0.52f, side * 0.54f))
-        drawCircle(white, radius = side * 0.035f, center = Offset(side * 0.65f, side * 0.54f))
-    }
-}
-
-@Composable
-private fun PermissionCard(
-    granted: Boolean,
-    onGrant: () -> Unit,
-) {
-    androidx.compose.material3.Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = if (granted) {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            } else {
-                MaterialTheme.colorScheme.primaryContainer
-            },
-        ),
-    ) {
-        val success = Color(0xFF2E7D32)
-        val onCard = if (granted) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        }
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(
-                if (granted) Icons.Outlined.CheckCircle else Icons.Outlined.Lock,
-                contentDescription = null,
-                tint = if (granted) success else MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(28.dp),
-            )
-            Text(
-                if (granted) "Calendar access granted" else "Calendar access required",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = onCard,
-            )
-            Text(
-                if (granted) {
-                    "You're all set. Calendarium can now read and create events."
-                } else {
-                    "Calendarium needs access to your calendars to show and create events. " +
-                        "Your data never leaves this device and the system calendar."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (granted) MaterialTheme.colorScheme.onSurfaceVariant else onCard,
-            )
-            if (!granted) {
-                Spacer(Modifier.height(2.dp))
-                Button(onClick = onGrant) { Text("Grant calendar access") }
-            }
-        }
+        // Two dots
+        drawCircle(white, radius = side * 0.038f, center = Offset(side * 0.43f, side * 0.56f))
+        drawCircle(white, radius = side * 0.038f, center = Offset(side * 0.57f, side * 0.56f))
     }
 }
 

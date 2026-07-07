@@ -37,7 +37,6 @@ import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.agenda.AgendaRoute
 import app.calendarium.ui.event.EventDetailSheet
 import app.calendarium.ui.month.MonthRoute
-import app.calendarium.ui.settings.SettingsSheet
 import app.calendarium.ui.week.WeekRoute
 
 private enum class HomeTab(val label: String, val icon: ImageVector) {
@@ -52,11 +51,11 @@ fun HomeRoute(
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
     onOpenEditEvent: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenSettings: () -> Unit,
     openDetailEventId: Long = -1L,
     onEventConsumed: () -> Unit = {},
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
-    var showSettings by remember { mutableStateOf(false) }
     var detailEventId by remember { mutableLongStateOf(-1L) }
     var detailInstanceStart by remember { mutableLongStateOf(0L) }
 
@@ -89,7 +88,7 @@ fun HomeRoute(
                 }
                 NavigationBarItem(
                     selected = false,
-                    onClick = { showSettings = true },
+                    onClick = onOpenSettings,
                     icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") },
                     label = { Text("Settings") },
                 )
@@ -146,9 +145,6 @@ fun HomeRoute(
         }
     }
 
-    if (showSettings) {
-        SettingsSheet(onDismiss = { showSettings = false })
-    }
     if (detailEventId > 0L) {
         EventDetailSheet(
             eventId = detailEventId,

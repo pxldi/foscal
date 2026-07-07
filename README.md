@@ -24,10 +24,17 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Working today**
 
-- Four calendar views: **Month** (titled event chips; a vertical pager of
-  whole-month grids that fades out-of-month days to grey), **Week** and **Day**
-  (positioned time-grid blocks with overlap handling), and **Agenda**.
-  Multi-day and spanning all-day events render on every day they cover.
+- Three calendar views in the bottom nav: **Month** (centered date numerals with
+  per-calendar color dots; whole-month grids that slide between months and fade
+  out-of-month days to grey, with an inline day preview under the grid), **Week**
+  (a tappable weekday strip over a schedule grouped by day), and **Agenda** (an
+  infinite grouped schedule). Multi-day and spanning all-day events render on
+  every day they cover.
+- **Custom design system** — the app's own visual voice: the *Bricolage
+  Grotesque* display face on dates and titles, *Hanken Grotesque* for UI, a
+  Cobalt accent, soft color-stripe event cards, a unified app/onboarding icon,
+  and 24-hour time by default. Full light & dark support.
+- **Settings** is a full screen (calendar visibility toggles + default reminder).
 - **Event editor** — create, edit, and delete events with title, calendar,
   all-day toggle, start/end date-time pickers, location, notes, and reminder.
 - **Recurring events** — daily / weekly / monthly / yearly, with a custom
@@ -56,7 +63,15 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Week/day view: drag-to-create and drag-to-move events.
+- **Event detail as a full screen.** Promote the current bottom-sheet event
+  detail to a full-screen destination matching the design mockup: a color-tinted
+  header (calendar color), title in the display face, and roomier rows —
+  with space for future fields (map preview, guests/attendees, join-video-call).
+  Used from both Month and Search, so route it through the nav host.
+- Configurable accent theme — the design specifies **Cobalt / Violet / Forest**
+  presets with a picker in Settings (persist in preferences; the whole UI already
+  reads `colorScheme.primary`, so it's mostly plumbing).
+- Week view: drag-to-create and drag-to-move events.
 
 **Later / future goals**
 

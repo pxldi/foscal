@@ -74,6 +74,12 @@ fun CalendariumTheme(
     }
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = CalendariumTypography,
         content = content,
     )
 }
+
+/** Weekend day-of-week label color, adjusted so the gold stays legible on the dark surface. */
+@Composable
+fun weekendLabelColor(darkTheme: Boolean = isSystemInDarkTheme()): Color =
+    if (darkTheme) WeekendGoldDark else WeekendGoldLight
