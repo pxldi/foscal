@@ -39,6 +39,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.ui.util.Dates
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -187,7 +189,7 @@ private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) 
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = buildEventSubtitle(event, date)
+            val subtitle = buildEventSubtitle(event, date, LocalUse24HourClock.current)
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -199,14 +201,15 @@ private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) 
     }
 }
 
-private fun buildEventSubtitle(event: Event, date: LocalDate): String {
+private fun buildEventSubtitle(event: Event, date: LocalDate, is24Hour: Boolean): String {
     val parts = mutableListOf<String>()
     if (event.allDay) {
         parts += "All day"
     } else {
         val zone = ZoneId.systemDefault()
-        val startT = Dates.instantToLocal(event.start).toLocalTime().format(Dates.timeFormatter)
-        val endT = Dates.instantToLocal(event.end).toLocalTime().format(Dates.timeFormatter)
+        val fmt = timeFormatter(is24Hour)
+        val startT = Dates.instantToLocal(event.start).toLocalTime().format(fmt)
+        val endT = Dates.instantToLocal(event.end).toLocalTime().format(fmt)
         // Use the model's inclusive last day so an event ending exactly at midnight is treated as
         // single-day (matching the days it actually appears on), not a phantom overnight span.
         val firstDay = event.startLocalDate(zone)

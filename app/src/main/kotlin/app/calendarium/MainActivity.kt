@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -12,8 +14,11 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.data.CalendarPermissionState
 import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.model.AccentColor
+import app.calendarium.core.model.ThemeMode
 import app.calendarium.core.ui.theme.CalendariumTheme
 import app.calendarium.ui.nav.CalendariumNavHost
+import app.calendarium.ui.util.LocalUse24HourClock
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -37,18 +42,31 @@ class MainActivity : ComponentActivity() {
         setContent {
             val onboardingDone by prefs.onboardingCompleted
                 .collectAsStateWithLifecycle(initialValue = null)
+            val accent by prefs.accentColor
+                .collectAsStateWithLifecycle(initialValue = AccentColor.Default)
+            val themeMode by prefs.themeMode
+                .collectAsStateWithLifecycle(initialValue = ThemeMode.Default)
+            val use24Hour by prefs.use24HourClock
+                .collectAsStateWithLifecycle(initialValue = true)
             val openEventId = pendingEventId
             val openQuickAdd = pendingQuickAdd
-            CalendariumTheme {
-                when (val done = onboardingDone) {
-                    null -> { /* splash while DataStore loads */ }
-                    else -> CalendariumNavHost(
-                        startOnboarding = done.not(),
-                        openEventId = openEventId,
-                        openQuickAdd = openQuickAdd,
-                        onEventConsumed = { pendingEventId = -1L },
-                        onQuickAddConsumed = { pendingQuickAdd = false },
-                    )
+            val darkTheme = when (themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            CalendariumTheme(darkTheme = darkTheme, accent = accent) {
+                CompositionLocalProvider(LocalUse24HourClock provides use24Hour) {
+                    when (val done = onboardingDone) {
+                        null -> { /* splash while DataStore loads */ }
+                        else -> CalendariumNavHost(
+                            startOnboarding = done.not(),
+                            openEventId = openEventId,
+                            openQuickAdd = openQuickAdd,
+                            onEventConsumed = { pendingEventId = -1L },
+                            onQuickAddConsumed = { pendingQuickAdd = false },
+                        )
+                    }
                 }
             }
         }

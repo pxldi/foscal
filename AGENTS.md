@@ -51,8 +51,9 @@ emulator -avd calendarium_test -no-snapshot -no-audio -no-boot-anim -gpu swiftsh
 
 ## Current status
 
-Beta. Working: Month / Week / Agenda views (bottom nav) plus a full-screen
-Settings destination, event create/edit/delete, recurring events
+Beta. Working: Month / Week / Agenda / Settings tabs (bottom nav — Settings is a
+tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination), event
+create/edit/delete, recurring events
 (this-vs-all-events, exceptions), reminders/notifications, real calendar colors,
 offline local calendars, permission-first onboarding. There is no separate Day
 view — it was dropped as redundant (Week's schedule + Agenda cover it);
@@ -70,15 +71,24 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `core-ui/.../theme/Type.kt` → `CalendariumTypography`; display+headline styles
   are Bricolage, everything else Hanken. Reach for `BricolageFamily` directly
   only for numerals/headers that need the voice.
-- **Accent** — Cobalt `#1A73E8` (`CalendariumBlue`). Drives today, selection,
-  buttons and the FAB. (A configurable multi-accent picker — Cobalt/Violet/Forest
-  — is designed but not yet built; see Roadmap.)
+- **Accent** — Cobalt `#1A73E8` (`CalendariumBlue`) is the default, driving today,
+  selection, buttons and the FAB. Users can switch to **Violet** or **Forest** in
+  Settings; the choice persists via `Preferences.accentColor` (`AccentColor` enum
+  in `:core-model`) and `CalendariumTheme(accent = …)` rebuilds the color scheme.
+  Per-accent tokens live in `theme/Color.kt` (`AccentTokens`); never hardcode the
+  accent — read `colorScheme.primary`.
 - **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
   never a hardcoded value.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
   and the in-app onboarding hero (`OnboardingScreen.CalendariumMark`). Keep them
   in sync if you change one.
-- Time is **24-hour by default** (`HH:mm`) — this is intentional, per the design.
+- Time is **24-hour by default** (`HH:mm`), but the user can switch to 12-hour in
+  Settings. Never hardcode a time pattern in UI: read the ambient
+  `LocalUse24HourClock` (in `ui/util/TimeFormat.kt`) and format via
+  `timeFormatter(is24Hour)` / `rememberTimeFormatter()`. Non-composable label
+  helpers take an `is24Hour: Boolean` threaded from the composable call site.
+  `ThemeMode` (System/Light/Dark, `:core-model`) similarly drives
+  `CalendariumTheme(darkTheme = …)` from `MainActivity`.
 
 ## Architecture
 

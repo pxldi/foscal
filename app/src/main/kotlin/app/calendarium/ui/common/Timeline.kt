@@ -40,10 +40,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.calendarium.core.model.Event
 import app.calendarium.ui.contrastColor
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 data class TimelineDay(
     val date: LocalDate,
@@ -92,7 +93,8 @@ fun TimelineLayout(
     // view the single column fills the screen so a tint just muddies the background.
     val highlightTodayColumn = days.size > 1
     val showNowLabel = timedDays.any { it.date == today }
-    val nowLabelFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val is24Hour = LocalUse24HourClock.current
+    val nowLabelFmt = remember(is24Hour) { timeFormatter(is24Hour) }
 
     var initialScrolled = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -344,7 +346,8 @@ private fun EventBlock(
     val mutedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
-    val timeFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val is24Hour = LocalUse24HourClock.current
+    val timeFmt = remember(is24Hour) { timeFormatter(is24Hour) }
     val showTime = !compact && heightDp >= 36.dp
     val textPadding = if (compact) {
         Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)

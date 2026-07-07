@@ -49,6 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.core.ui.theme.BricolageFamily
 import app.calendarium.core.ui.theme.Motion
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -183,7 +185,7 @@ private fun DetailContent(
             )
         }
 
-        InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event))
+        InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event, LocalUse24HourClock.current))
         event.rrule?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.Repeat, "Repeats", describeRecurrence(it))
         }
@@ -278,10 +280,10 @@ private fun describeRecurrence(rrule: String): String {
     }
 }
 
-private fun formatWhen(event: Event): String {
+private fun formatWhen(event: Event, is24Hour: Boolean): String {
     val zone = ZoneId.systemDefault()
     val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")
-    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+    val timeFmt = timeFormatter(is24Hour)
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     return if (event.allDay) {

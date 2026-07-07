@@ -10,16 +10,17 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import app.calendarium.core.model.AccentColor
 
-private val LightColors = lightColorScheme(
-    primary = CalendariumBlue,
+private fun lightColorsFor(accent: AccentTokens) = lightColorScheme(
+    primary = accent.primaryLight,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE7F0FF),
-    onPrimaryContainer = Color(0xFF0C3B78),
-    secondary = CalendariumBlue,
+    primaryContainer = accent.primaryContainerLight,
+    onPrimaryContainer = accent.onPrimaryContainerLight,
+    secondary = accent.primaryLight,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE7F0FF),
-    onSecondaryContainer = Color(0xFF0C3B78),
+    secondaryContainer = accent.primaryContainerLight,
+    onSecondaryContainer = accent.onPrimaryContainerLight,
     background = CalendariumLightBackground,
     onBackground = Color(0xFF1F2328),
     surface = CalendariumLightSurface,
@@ -35,15 +36,15 @@ private val LightColors = lightColorScheme(
     error = Color(0xFFE53935),
 )
 
-private val DarkColors = darkColorScheme(
-    primary = CalendariumBlueDark,
-    onPrimary = Color(0xFF07121F),
-    primaryContainer = Color(0xFF183A66),
-    onPrimaryContainer = Color(0xFFD8E7FF),
-    secondary = CalendariumBlueDark,
-    onSecondary = Color(0xFF07121F),
-    secondaryContainer = Color(0xFF183A66),
-    onSecondaryContainer = Color(0xFFD8E7FF),
+private fun darkColorsFor(accent: AccentTokens) = darkColorScheme(
+    primary = accent.primaryDark,
+    onPrimary = accent.onPrimaryDark,
+    primaryContainer = accent.primaryContainerDark,
+    onPrimaryContainer = accent.onPrimaryContainerDark,
+    secondary = accent.primaryDark,
+    onSecondary = accent.onPrimaryDark,
+    secondaryContainer = accent.primaryContainerDark,
+    onSecondaryContainer = accent.onPrimaryContainerDark,
     background = CalendariumDarkBackground,
     onBackground = Color(0xFFE7EAEE),
     surface = CalendariumDarkSurface,
@@ -63,20 +64,29 @@ private val DarkColors = darkColorScheme(
 fun CalendariumTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    accent: AccentColor = AccentColor.Default,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val tokens = accent.tokens()
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        darkTheme -> DarkColors
-        else -> LightColors
+        darkTheme -> darkColorsFor(tokens)
+        else -> lightColorsFor(tokens)
     }
     MaterialTheme(
         colorScheme = colorScheme,
         typography = CalendariumTypography,
         content = content,
     )
+}
+
+/** Maps a persisted [AccentColor] preset to its light/dark color tokens. */
+fun AccentColor.tokens(): AccentTokens = when (this) {
+    AccentColor.COBALT -> CobaltAccent
+    AccentColor.VIOLET -> VioletAccent
+    AccentColor.FOREST -> ForestAccent
 }
 
 /** Weekend day-of-week label color, adjusted so the gold stays legible on the dark surface. */

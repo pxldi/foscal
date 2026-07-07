@@ -68,6 +68,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.util.Dates
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
@@ -406,7 +408,7 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
                 .background(Color(event.color)),
         )
         Text(
-            text = previewTimeLabel(event),
+            text = previewTimeLabel(event, LocalUse24HourClock.current),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -424,13 +426,13 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
     }
 }
 
-private fun previewTimeLabel(event: Event): String =
+private fun previewTimeLabel(event: Event, is24Hour: Boolean): String =
     if (event.allDay) {
         "All day"
     } else {
         event.start.atZone(ZoneId.systemDefault())
             .toLocalTime()
-            .format(DateTimeFormatter.ofPattern("HH:mm"))
+            .format(timeFormatter(is24Hour))
     }
 
 @Composable

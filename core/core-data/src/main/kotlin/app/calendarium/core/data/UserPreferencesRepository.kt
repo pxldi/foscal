@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import app.calendarium.core.model.AccentColor
+import app.calendarium.core.model.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -28,6 +31,15 @@ class UserPreferencesRepository @Inject constructor(
     override val defaultReminderMinutes: Flow<Int?> =
         context.dataStore.data.map { it[DEFAULT_REMINDER]?.takeIf { m -> m != -1 } }
 
+    override val accentColor: Flow<AccentColor> =
+        context.dataStore.data.map { AccentColor.fromKey(it[ACCENT_COLOR]) }
+
+    override val themeMode: Flow<ThemeMode> =
+        context.dataStore.data.map { ThemeMode.fromKey(it[THEME_MODE]) }
+
+    override val use24HourClock: Flow<Boolean> =
+        context.dataStore.data.map { it[USE_24H_CLOCK] ?: true }
+
     override suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
     }
@@ -40,9 +52,24 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[DEFAULT_REMINDER] = minutes ?: -1 }
     }
 
+    override suspend fun setAccentColor(accent: AccentColor) {
+        context.dataStore.edit { prefs -> prefs[ACCENT_COLOR] = accent.key }
+    }
+
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { prefs -> prefs[THEME_MODE] = mode.key }
+    }
+
+    override suspend fun setUse24HourClock(use24Hour: Boolean) {
+        context.dataStore.edit { prefs -> prefs[USE_24H_CLOCK] = use24Hour }
+    }
+
     companion object {
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         private val HIDDEN_CALENDARS = stringSetPreferencesKey("hidden_calendars")
         private val DEFAULT_REMINDER = intPreferencesKey("default_reminder_minutes")
+        private val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val THEME_MODE = stringPreferencesKey("theme_mode")
+        private val USE_24H_CLOCK = booleanPreferencesKey("use_24h_clock")
     }
 }

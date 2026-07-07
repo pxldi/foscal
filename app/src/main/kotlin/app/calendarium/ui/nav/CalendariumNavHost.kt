@@ -19,13 +19,11 @@ import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
 import app.calendarium.ui.quickadd.QuickAddRoute
 import app.calendarium.ui.search.SearchRoute
-import app.calendarium.ui.settings.SettingsScreen
 
 object Routes {
     const val ONBOARDING = "onboarding"
     const val MAIN = "main"
     const val SEARCH = "search"
-    const val SETTINGS = "settings"
     const val QUICK_ADD = "quick_add"
 
     /** Full-screen event detail. `start` selects the tapped occurrence of a recurring event. */
@@ -106,29 +104,11 @@ fun CalendariumNavHost(
                         navController.navigate(Routes.editorNew(calId, start, end))
                     },
                     onOpenSearch = { navController.navigate(Routes.SEARCH) },
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onOpenEventDetail = { id, instanceStart ->
                         navController.navigate(Routes.detail(id, instanceStart))
                     },
                 )
             }
-        }
-        composable(
-            route = Routes.SETTINGS,
-            enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Start,
-                    tween(Motion.DurationMedium),
-                )
-            },
-            popExitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.End,
-                    tween(Motion.DurationMedium),
-                )
-            },
-        ) {
-            SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = Routes.EVENT_EDITOR,

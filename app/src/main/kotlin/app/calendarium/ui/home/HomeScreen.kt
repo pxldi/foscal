@@ -34,12 +34,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.agenda.AgendaRoute
 import app.calendarium.ui.month.MonthRoute
+import app.calendarium.ui.settings.SettingsScreen
 import app.calendarium.ui.week.WeekRoute
 
 private enum class HomeTab(val label: String, val icon: ImageVector) {
     Month("Month", Icons.Outlined.CalendarMonth),
     Week("Week", Icons.Outlined.ViewWeek),
     Agenda("Agenda", Icons.Outlined.ViewAgenda),
+    Settings("Settings", Icons.Outlined.Settings),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,7 +50,6 @@ fun HomeRoute(
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
     onOpenEventDetail: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSearch: () -> Unit,
-    onOpenSettings: () -> Unit,
 ) {
     var tab by remember { mutableStateOf(HomeTab.Month) }
 
@@ -68,16 +69,10 @@ fun HomeRoute(
                         label = { Text(entry.label) },
                     )
                 }
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onOpenSettings,
-                    icon = { Icon(Icons.Outlined.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") },
-                )
             }
         },
         floatingActionButton = {
-            if (tab != HomeTab.Month) {
+            if (tab == HomeTab.Week || tab == HomeTab.Agenda) {
                 FloatingActionButton(
                     onClick = { onOpenEditor(null, null, null) },
                     containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
@@ -122,6 +117,7 @@ fun HomeRoute(
                         onEventClick = onEventClick,
                         onOpenSearch = onOpenSearch,
                     )
+                    HomeTab.Settings -> SettingsScreen()
                 }
             }
         }

@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.QuickAddParser
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -146,7 +148,7 @@ private fun PreviewRow(parsed: app.calendarium.core.model.QuickAddResult) {
         "All day"
     } else {
         val t = parsed.time ?: defaultNextHour()
-        t.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
+        t.format(timeFormatter(LocalUse24HourClock.current))
     }
     val title = parsed.title.ifBlank { "(Untitled)" }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

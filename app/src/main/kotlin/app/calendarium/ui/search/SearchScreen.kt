@@ -46,6 +46,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.ui.util.Dates
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -185,7 +187,7 @@ private fun SearchResultRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = buildSubtitle(event, zone, isToday)
+            val subtitle = buildSubtitle(event, zone, isToday, LocalUse24HourClock.current)
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -199,7 +201,7 @@ private fun SearchResultRow(
     }
 }
 
-private fun buildSubtitle(event: Event, zone: java.time.ZoneId, isToday: Boolean): String {
+private fun buildSubtitle(event: Event, zone: java.time.ZoneId, isToday: Boolean, is24Hour: Boolean): String {
     val parts = mutableListOf<String>()
     val date = event.startLocalDate(zone)
     val dateText = if (isToday) {
@@ -211,7 +213,7 @@ private fun buildSubtitle(event: Event, zone: java.time.ZoneId, isToday: Boolean
     parts += if (event.allDay) {
         "All day · $dateText"
     } else {
-        val time = Dates.instantToLocal(event.start, zone).toLocalTime().format(Dates.timeFormatter)
+        val time = Dates.instantToLocal(event.start, zone).toLocalTime().format(timeFormatter(is24Hour))
         "$dateText · $time"
     }
     if (!event.location.isNullOrBlank()) parts += event.location!!

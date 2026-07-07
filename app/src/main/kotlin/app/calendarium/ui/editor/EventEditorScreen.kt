@@ -67,6 +67,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Frequency
 import app.calendarium.core.ui.theme.Motion
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -440,7 +442,7 @@ private fun DateTimeRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    time.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())),
+                    time.format(timeFormatter(LocalUse24HourClock.current)),
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { showTimePicker = true }
@@ -455,7 +457,12 @@ private fun DateTimeRow(
         DatePickerModal(initial = date, onDismiss = { showDatePicker = false }, onSelect = onPickDate)
     }
     if (showTimePicker) {
-        TimePickerModal(initial = time, onDismiss = { showTimePicker = false }, onSelect = onPickTime)
+        TimePickerModal(
+            initial = time,
+            is24Hour = LocalUse24HourClock.current,
+            onDismiss = { showTimePicker = false },
+            onSelect = onPickTime,
+        )
     }
 }
 

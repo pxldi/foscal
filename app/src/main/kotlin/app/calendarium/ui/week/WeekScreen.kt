@@ -49,6 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.util.Dates
+import app.calendarium.ui.util.LocalUse24HourClock
+import app.calendarium.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -221,8 +223,9 @@ private fun WeekEventCard(event: Event, date: LocalDate, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val is24Hour = LocalUse24HourClock.current
         Text(
-            eventTimeLabel(event),
+            eventTimeLabel(event, is24Hour),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -245,7 +248,7 @@ private fun WeekEventCard(event: Event, date: LocalDate, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = weekEventSubtitle(event, date)
+            val subtitle = weekEventSubtitle(event, date, is24Hour)
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -259,19 +262,20 @@ private fun WeekEventCard(event: Event, date: LocalDate, onClick: () -> Unit) {
     }
 }
 
-private fun eventTimeLabel(event: Event): String =
+private fun eventTimeLabel(event: Event, is24Hour: Boolean): String =
     if (event.allDay) {
         "All day"
     } else {
-        Dates.instantToLocal(event.start).toLocalTime().format(Dates.timeFormatter)
+        Dates.instantToLocal(event.start).toLocalTime().format(timeFormatter(is24Hour))
     }
 
-private fun weekEventSubtitle(event: Event, date: LocalDate): String {
+private fun weekEventSubtitle(event: Event, date: LocalDate, is24Hour: Boolean): String {
     val parts = mutableListOf<String>()
     if (!event.allDay) {
         val zone = ZoneId.systemDefault()
-        val startT = Dates.instantToLocal(event.start, zone).toLocalTime().format(Dates.timeFormatter)
-        val endT = Dates.instantToLocal(event.end, zone).toLocalTime().format(Dates.timeFormatter)
+        val fmt = timeFormatter(is24Hour)
+        val startT = Dates.instantToLocal(event.start, zone).toLocalTime().format(fmt)
+        val endT = Dates.instantToLocal(event.end, zone).toLocalTime().format(fmt)
         val firstDay = event.startLocalDate(zone)
         val lastDay = event.lastLocalDate(zone)
         parts += when {

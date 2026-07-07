@@ -34,7 +34,12 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   Grotesque* display face on dates and titles, *Hanken Grotesque* for UI, a
   Cobalt accent, soft color-stripe event cards, a unified app/onboarding icon,
   and 24-hour time by default. Full light & dark support.
-- **Settings** is a full screen (calendar visibility toggles + default reminder).
+- **Settings** is a fourth bottom-nav tab (it slides in alongside Month / Week /
+  Agenda) with appearance, date & time, calendar visibility, and reminder options.
+- **Configurable accent** — pick **Cobalt / Violet / Forest** in Settings; the
+  whole UI re-tints instantly and the choice is persisted.
+- **Theme & clock** — force **System / Light / Dark** and toggle **12- / 24-hour
+  time**; both apply live across every screen and persist.
 - **Event editor** — create, edit, and delete events with title, calendar,
   all-day toggle, start/end date-time pickers, location, notes, and reminder.
 - **Recurring events** — daily / weekly / monthly / yearly, with a custom
@@ -63,9 +68,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Configurable accent theme — the design specifies **Cobalt / Violet / Forest**
-  presets with a picker in Settings (persist in preferences; the whole UI already
-  reads `colorScheme.primary`, so it's mostly plumbing).
 - Week view: drag-to-create and drag-to-move events.
 
 **Later / future goals**

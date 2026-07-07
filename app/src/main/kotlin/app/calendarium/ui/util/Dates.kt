@@ -26,9 +26,6 @@ object Dates {
     val agendaDateFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())
 
-    val timeFormatter: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())
-
     fun weekStartLabels(firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY): List<String> {
         val order = (0..6).map { firstDayOfWeek.plus(it.toLong()) }
         return order.map { it.getDisplayName(java.time.format.TextStyle.NARROW, Locale.getDefault()) }
