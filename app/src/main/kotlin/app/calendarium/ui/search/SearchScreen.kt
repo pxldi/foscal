@@ -31,7 +31,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,22 +69,48 @@ fun SearchRoute(
     val zone = viewModel.zone
     val today = remember { LocalDate.now() }
     val listState = rememberLazyListState()
+    var positionedQuery by remember { mutableStateOf("") }
+    var olderRequestedAt by remember { mutableStateOf<Long?>(null) }
+    var newerRequestedAt by remember { mutableStateOf<Long?>(null) }
 
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    LaunchedEffect(query) { listState.scrollToItem(0) }
+    LaunchedEffect(query) {
+        positionedQuery = ""
+        olderRequestedAt = null
+        newerRequestedAt = null
+    }
+    LaunchedEffect(query, results) {
+        val q = query.trim()
+        if (q.isNotEmpty() && positionedQuery != q && results.isNotEmpty()) {
+            positionedQuery = q
+            val now = java.time.Instant.now()
+            val index = results.indexOfFirst { !it.start.isBefore(now) }
+                .takeIf { it >= 0 } ?: results.lastIndex
+            listState.scrollToItem(index.coerceAtLeast(0))
+        }
+    }
     LaunchedEffect(listState, results.size, query) {
         snapshotFlow {
             val visible = listState.layoutInfo.visibleItemsInfo
             val first = visible.firstOrNull()?.index ?: -1
             val last = visible.lastOrNull()?.index ?: -1
-            first to last
-        }.distinctUntilChanged().collect { (first, last) ->
+            Triple(first, last, listState.isScrollInProgress)
+        }.distinctUntilChanged().collect { (first, last, isScrolling) ->
             if (query.isBlank() || results.isEmpty()) return@collect
-            if (first in 0..2) viewModel.loadOlder()
-            if (last >= results.lastIndex - 2) viewModel.loadNewer()
+            if (!isScrolling) return@collect
+            val firstStart = results.first().start.toEpochMilli()
+            val lastStart = results.last().start.toEpochMilli()
+            if (first in 0..2 && olderRequestedAt != firstStart) {
+                olderRequestedAt = firstStart
+                viewModel.loadOlder()
+            }
+            if (last >= results.lastIndex - 2 && newerRequestedAt != lastStart) {
+                newerRequestedAt = lastStart
+                viewModel.loadNewer()
+            }
         }
     }
 

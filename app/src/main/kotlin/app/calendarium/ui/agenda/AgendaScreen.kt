@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,8 @@ fun AgendaRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val positionedAtToday = remember { mutableStateOf(false) }
+    var olderRequestedAt by remember { mutableStateOf<LocalDate?>(null) }
+    var newerRequestedAt by remember { mutableStateOf<LocalDate?>(null) }
 
     LaunchedEffect(state.days) {
         if (!positionedAtToday.value && state.days.isNotEmpty()) {
@@ -75,11 +78,20 @@ fun AgendaRoute(
             val visible = listState.layoutInfo.visibleItemsInfo
             val first = visible.firstOrNull()?.index ?: -1
             val last = visible.lastOrNull()?.index ?: -1
-            first to last
-        }.distinctUntilChanged().collect { (first, last) ->
+            Triple(first, last, listState.isScrollInProgress)
+        }.distinctUntilChanged().collect { (first, last, isScrolling) ->
             if (state.days.isEmpty()) return@collect
-            if (first in 0..2) viewModel.loadOlder()
-            if (last >= state.days.lastIndex - 2) viewModel.loadNewer()
+            if (!isScrolling) return@collect
+            val firstDate = state.days.first().date
+            val lastDate = state.days.last().date
+            if (first in 0..2 && olderRequestedAt != firstDate) {
+                olderRequestedAt = firstDate
+                viewModel.loadOlder()
+            }
+            if (last >= state.days.lastIndex - 2 && newerRequestedAt != lastDate) {
+                newerRequestedAt = lastDate
+                viewModel.loadNewer()
+            }
         }
     }
 
