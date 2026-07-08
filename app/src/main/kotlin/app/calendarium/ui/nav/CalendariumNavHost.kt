@@ -1,15 +1,16 @@
 package app.calendarium.ui.nav
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import android.net.Uri
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,7 +19,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -36,6 +40,8 @@ import app.calendarium.ui.permission.PermissionGate
 import app.calendarium.ui.quickadd.QuickAddRoute
 import app.calendarium.ui.search.SearchRoute
 import kotlin.math.hypot
+
+private const val OnboardingRevealDurationMillis = 1100
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -95,7 +101,7 @@ fun CalendariumNavHost(
     onQuickAddConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
-    var revealTick by remember { mutableIntStateOf(0) }
+    var onboardingRevealTick by remember { mutableIntStateOf(0) }
 
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
 
@@ -125,27 +131,62 @@ fun CalendariumNavHost(
             popEnterTransition = { fadeIn(tween(Motion.DurationMedium)) },
             popExitTransition = { fadeOut(tween(Motion.DurationMedium)) },
         ) {
-            composable(Routes.ONBOARDING) {
+            composable(
+                route = Routes.ONBOARDING,
+                exitTransition = {
+                    if (targetState.destination.route == Routes.MAIN) {
+                        fadeOut(
+                            animationSpec = tween(
+                                durationMillis = 80,
+                                delayMillis = OnboardingRevealDurationMillis - 80,
+                            ),
+                        )
+                    } else {
+                        fadeOut(tween(Motion.DurationMedium))
+                    }
+                },
+            ) {
                 OnboardingRoute(
                     onContinue = {
+                        onboardingRevealTick += 1
                         navController.navigate(Routes.MAIN) {
                             popUpTo(Routes.ONBOARDING) { inclusive = true }
                         }
-                        revealTick += 1
                     },
                 )
             }
-            composable(Routes.MAIN) {
-                PermissionGate {
-                    HomeRoute(
-                        onOpenEditor = { calId, start, end ->
-                            navController.navigate(Routes.editorNew(calId, start, end))
-                        },
-                        onOpenSearch = { navController.navigate(Routes.SEARCH) },
-                        onOpenEventDetail = { id, instanceStart ->
-                            navController.navigate(Routes.detail(id, instanceStart))
-                        },
-                    )
+            composable(
+                route = Routes.MAIN,
+                enterTransition = {
+                    if (initialState.destination.route == Routes.ONBOARDING) {
+                        EnterTransition.None
+                    } else {
+                        fadeIn(tween(Motion.DurationMedium))
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route == Routes.ONBOARDING) {
+                        ExitTransition.None
+                    } else {
+                        fadeOut(tween(Motion.DurationMedium))
+                    }
+                },
+            ) {
+                OnboardingMainReveal(
+                    trigger = onboardingRevealTick,
+                    onRevealFinished = { onboardingRevealTick = 0 },
+                ) {
+                    PermissionGate {
+                        HomeRoute(
+                            onOpenEditor = { calId, start, end ->
+                                navController.navigate(Routes.editorNew(calId, start, end))
+                            },
+                            onOpenSearch = { navController.navigate(Routes.SEARCH) },
+                            onOpenEventDetail = { id, instanceStart ->
+                                navController.navigate(Routes.detail(id, instanceStart))
+                            },
+                        )
+                    }
                 }
             }
             composable(
@@ -317,31 +358,64 @@ fun CalendariumNavHost(
             QuickAddRoute(onBack = { navController.popBackStack() })
         }
         }
-        OnboardingCompleteReveal(revealTick)
     }
 }
 
 @Composable
-private fun OnboardingCompleteReveal(trigger: Int) {
-    if (trigger == 0) return
+private fun OnboardingMainReveal(
+    trigger: Int,
+    onRevealFinished: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (trigger == 0) {
+        content()
+        return
+    }
 
     val progress = remember(trigger) { Animatable(0f) }
-    var visible by remember(trigger) { mutableStateOf(true) }
-    val color = MaterialTheme.colorScheme.primary
+    var revealing by remember(trigger) { mutableStateOf(true) }
 
     LaunchedEffect(trigger) {
-        progress.animateTo(1f, tween(720))
-        visible = false
+        progress.snapTo(0f)
+        revealing = true
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = OnboardingRevealDurationMillis,
+                easing = FastOutSlowInEasing,
+            ),
+        )
+        revealing = false
+        onRevealFinished()
     }
 
-    if (!visible) return
-
-    Canvas(Modifier.fillMaxSize()) {
-        val radius = hypot(size.width, size.height) * progress.value
-        drawCircle(
-            color = color.copy(alpha = 1f - progress.value),
-            radius = radius,
-            center = Offset(size.width / 2f, size.height * 0.9f),
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (revealing) {
+                    Modifier.circularReveal(progress.value)
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        content()
     }
 }
+
+private fun Modifier.circularReveal(progress: Float): Modifier =
+    drawWithContent {
+        val radius = hypot(size.width, size.height) * progress
+        val path = Path().apply {
+            addOval(
+                androidx.compose.ui.geometry.Rect(
+                    center = Offset(size.width / 2f, size.height * 0.9f),
+                    radius = radius,
+                ),
+            )
+        }
+        clipPath(path) {
+            this@drawWithContent.drawContent()
+        }
+    }
