@@ -25,12 +25,14 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DevicesOther
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -137,6 +139,8 @@ fun OnboardingRoute(
                 )
                 OnboardingStep.NOTIFICATIONS -> NotificationStep(
                     completing = state.completing,
+                    mapsEnabled = state.mapsEnabled,
+                    onMapsToggle = viewModel::setMapsEnabled,
                     onEnable = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -290,6 +294,8 @@ private fun CalendarSetupStep(
 @Composable
 private fun NotificationStep(
     completing: Boolean,
+    mapsEnabled: Boolean,
+    onMapsToggle: (Boolean) -> Unit,
     onEnable: () -> Unit,
     onSkip: () -> Unit,
 ) {
@@ -310,6 +316,7 @@ private fun NotificationStep(
             title = "Reminders",
             subtitle = "Calendarium can nudge you before events, using only your local calendar data.",
         )
+        MapsConsentCard(enabled = mapsEnabled, onToggle = onMapsToggle)
         Spacer(Modifier.height(4.dp))
         Button(
             onClick = onEnable,
@@ -330,6 +337,51 @@ private fun NotificationStep(
             shape = RoundedCornerShape(16.dp),
         ) {
             Text("Not now")
+        }
+    }
+}
+
+@Composable
+private fun MapsConsentCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    androidx.compose.material3.Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Map,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Text(
+                    "Pick locations on a map",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(checked = enabled, onCheckedChange = onToggle)
+            }
+            Text(
+                "Optional. Lets you choose an event's location on an OpenStreetMap map instead of " +
+                    "typing it. This is the only feature that uses the internet — the map and " +
+                    "address lookup contact OpenStreetMap's servers (no ads, no tracking profile), " +
+                    "so they can see your IP and the places you look up. Everything else stays " +
+                    "offline. You can change this anytime in Settings.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

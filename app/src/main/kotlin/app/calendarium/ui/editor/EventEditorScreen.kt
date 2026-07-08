@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -83,12 +84,23 @@ private val rowPadding = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
 @Composable
 fun EventEditorRoute(
     onBack: () -> Unit,
+    onPickLocation: (currentQuery: String) -> Unit = {},
+    pickedLocation: String? = null,
+    onPickedLocationConsumed: () -> Unit = {},
     viewModel: EventEditorViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.finished) {
         if (state.finished) onBack()
+    }
+
+    // A place chosen on the map picker comes back through the nav back-stack; apply it once.
+    LaunchedEffect(pickedLocation) {
+        pickedLocation?.let {
+            viewModel.updateLocation(it)
+            onPickedLocationConsumed()
+        }
     }
 
     state.scopePrompt?.let { prompt ->
@@ -139,6 +151,7 @@ fun EventEditorRoute(
                 EditorForm(
                     state = state,
                     viewModel = viewModel,
+                    onPickLocation = onPickLocation,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -151,6 +164,7 @@ fun EventEditorRoute(
 private fun EditorForm(
     state: EditorUiState,
     viewModel: EventEditorViewModel,
+    onPickLocation: (currentQuery: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
@@ -329,6 +343,20 @@ private fun EditorForm(
                             },
                         )
                     }
+                }
+            }
+            if (state.mapsEnabled) {
+                TextButton(
+                    onClick = { onPickLocation(state.location) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Map,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text("Pick on map")
                 }
             }
         }

@@ -28,6 +28,7 @@ data class OnboardingUiState(
     val finished: Boolean = false,
     val davxStatus: DAVxStatus = DAVxStatus.NOT_INSTALLED,
     val calendarPermissionGranted: Boolean = false,
+    val mapsEnabled: Boolean = false,
     val error: String? = null,
 )
 
@@ -53,6 +54,12 @@ class OnboardingViewModel @Inject constructor(
     /** Called after the system permission dialog returns, so the UI reflects the new grant. */
     fun onPermissionResult() {
         permissionState.refresh()
+    }
+
+    /** Opt into the OpenStreetMap location picker (the only networked feature). Off by default. */
+    fun setMapsEnabled(enabled: Boolean) {
+        _internal.value = _internal.value.copy(mapsEnabled = enabled)
+        viewModelScope.launch { prefs.setOsmMapsEnabled(enabled) }
     }
 
     private fun davxStatus(): DAVxStatus {

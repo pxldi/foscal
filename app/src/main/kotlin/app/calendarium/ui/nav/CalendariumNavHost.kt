@@ -4,8 +4,11 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,6 +18,7 @@ import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.editor.EventEditorRoute
 import app.calendarium.ui.event.EventDetailScreen
 import app.calendarium.ui.home.HomeRoute
+import app.calendarium.ui.location.LocationPickerRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
 import app.calendarium.ui.quickadd.QuickAddRoute
@@ -25,6 +29,15 @@ object Routes {
     const val MAIN = "main"
     const val SEARCH = "search"
     const val QUICK_ADD = "quick_add"
+
+    /** On-demand OpenStreetMap picker. `query` pre-centers the map on any existing location text. */
+    const val LOCATION_PICKER = "location_picker?query={query}"
+
+    /** Back-stack key the picker uses to hand the chosen location back to the editor. */
+    const val PICKED_LOCATION_KEY = "picked_location"
+
+    fun locationPicker(query: String): String =
+        "location_picker?query=${Uri.encode(query)}"
 
     /** Full-screen event detail. `start` selects the tapped occurrence of a recurring event. */
     const val EVENT_DETAIL = "detail?eventId={eventId}&start={start}"
@@ -149,8 +162,49 @@ fun CalendariumNavHost(
                     tween(Motion.DurationMedium),
                 )
             },
+        ) { backStackEntry ->
+            val pickedLocation by backStackEntry.savedStateHandle
+                .getStateFlow<String?>(Routes.PICKED_LOCATION_KEY, null)
+                .collectAsStateWithLifecycle()
+            EventEditorRoute(
+                onBack = { navController.popBackStack() },
+                onPickLocation = { query -> navController.navigate(Routes.locationPicker(query)) },
+                pickedLocation = pickedLocation,
+                onPickedLocationConsumed = {
+                    backStackEntry.savedStateHandle[Routes.PICKED_LOCATION_KEY] = null
+                },
+            )
+        }
+        composable(
+            route = Routes.LOCATION_PICKER,
+            arguments = listOf(
+                navArgument("query") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
+            ),
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Up,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Down,
+                    tween(Motion.DurationMedium),
+                )
+            },
         ) {
-            EventEditorRoute(onBack = { navController.popBackStack() })
+            LocationPickerRoute(
+                onCancel = { navController.popBackStack() },
+                onConfirm = { location ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle?.set(Routes.PICKED_LOCATION_KEY, location)
+                    navController.popBackStack()
+                },
+            )
         }
         composable(Routes.SEARCH) {
             SearchRoute(

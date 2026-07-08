@@ -147,6 +147,23 @@ fun SettingsScreen(
             }
             item {
                 Spacer(Modifier.height(12.dp))
+                SectionHeader("Location")
+            }
+            item {
+                ToggleRow(
+                    title = "Pick locations on a map",
+                    subtitle = if (state.osmMapsEnabled) {
+                        "On · uses OpenStreetMap (contacts the network)"
+                    } else {
+                        "Off · location entry stays fully offline"
+                    },
+                    checked = state.osmMapsEnabled,
+                    onToggle = { viewModel.setOsmMapsEnabled(it) },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
+            item {
+                Spacer(Modifier.height(12.dp))
                 SectionHeader("Calendars")
             }
             items(state.items, key = { it.calendar.id }) { row ->

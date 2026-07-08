@@ -136,12 +136,18 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.
-- **The app holds no `INTERNET` permission — keep it that way.** "Nothing leaves
-  your phone" is enforced at the manifest, so features must stay offline. Event
-  location is plain free text: the editor autocompletes only from the user's own
-  past locations (`getRecentLocations`), and the detail screen's location card
-  hands the text to the device maps app via a `geo:` intent (maps does the
-  geocoding). No stored coordinates, no geocoding API, no network calls of ours.
+- **The app is offline by default; the ONLY networked feature is the opt-in map
+  picker.** `INTERNET` exists in the manifest solely for the OpenStreetMap
+  location picker, which is gated behind the `osmMapsEnabled` preference (off by
+  default, toggled in onboarding or Settings). Do not add network calls anywhere
+  else. Location entry is otherwise plain free text: the editor autocompletes
+  only from the user's own past locations (`getRecentLocations`), and the detail
+  screen's location card hands the text to the device maps app via a `geo:`
+  intent. When maps are enabled, "Pick on map" opens `LocationPickerScreen`
+  (osmdroid + OSM tiles); `NominatimGeocoder` forward-geocodes the query to
+  center the map and reverse-geocodes the confirmed pin to an address string —
+  the chosen text returns to the editor via the nav back-stack
+  (`PICKED_LOCATION_KEY`). Still no stored coordinates; location stays a String.
 
 ## Conventions
 

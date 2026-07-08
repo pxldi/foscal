@@ -40,6 +40,9 @@ class UserPreferencesRepository @Inject constructor(
     override val use24HourClock: Flow<Boolean> =
         context.dataStore.data.map { it[USE_24H_CLOCK] ?: true }
 
+    override val osmMapsEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[OSM_MAPS_ENABLED] ?: false }
+
     override suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
     }
@@ -64,6 +67,10 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[USE_24H_CLOCK] = use24Hour }
     }
 
+    override suspend fun setOsmMapsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[OSM_MAPS_ENABLED] = enabled }
+    }
+
     companion object {
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         private val HIDDEN_CALENDARS = stringSetPreferencesKey("hidden_calendars")
@@ -71,5 +78,6 @@ class UserPreferencesRepository @Inject constructor(
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val USE_24H_CLOCK = booleanPreferencesKey("use_24h_clock")
+        private val OSM_MAPS_ENABLED = booleanPreferencesKey("osm_maps_enabled")
     }
 }

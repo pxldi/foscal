@@ -16,6 +16,7 @@ work = "2.10.0"
 datastore = "1.1.1"
 kizitonwose-calendar = "2.6.1"
 glance = "1.1.1"
+osmdroid = "6.1.20"
 
 junit = "4.13.2"
 mockk = "1.13.13"
@@ -62,6 +63,8 @@ kizitonwose-calendar = { group = "com.kizitonwose.calendar", name = "compose", v
 
 glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
+
+osmdroid-android = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }

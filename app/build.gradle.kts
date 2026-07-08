@@ -111,6 +111,9 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // OpenStreetMap map view for the on-demand location picker (Apache-2.0, FOSS).
+    implementation(libs.osmdroid.android)
+
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.junit)

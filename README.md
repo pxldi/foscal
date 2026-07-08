@@ -71,14 +71,14 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Time-zone-aware editing UI and a world-clock style secondary zone.
+- Import/export of `.ics` files.
 
 **Later / future goals**
 
 - Richer event detail: map preview, guests/attendees, join-video-call.
-- Import/export of `.ics` files.
 - More unit/UI test coverage (repository, more view models, widget factory).
 - Play Store / F-Droid release: signing config, screenshots, store listing.
+- Time-zone-aware editing UI and a world-clock style secondary zone.
 
 ## Tech stack
 

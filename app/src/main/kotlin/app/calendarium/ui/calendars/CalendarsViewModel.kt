@@ -24,6 +24,7 @@ data class CalendarsUiState(
     val accentColor: AccentColor = AccentColor.Default,
     val themeMode: ThemeMode = ThemeMode.Default,
     val use24HourClock: Boolean = true,
+    val osmMapsEnabled: Boolean = false,
 )
 
 data class CalendarRow(
@@ -37,6 +38,7 @@ private data class PrefsSnapshot(
     val accent: AccentColor,
     val themeMode: ThemeMode,
     val use24Hour: Boolean,
+    val osmMaps: Boolean,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,15 +48,19 @@ class CalendarsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
 ) : ViewModel() {
 
+    // combine() has no typed 6-arg overload, so fold the sixth preference in with a nested combine.
     private val prefsFlow = combine(
-        prefs.hiddenCalendarIds,
-        prefs.defaultReminderMinutes,
-        prefs.accentColor,
-        prefs.themeMode,
-        prefs.use24HourClock,
-    ) { hidden, defaultReminder, accent, themeMode, use24Hour ->
-        PrefsSnapshot(hidden, defaultReminder, accent, themeMode, use24Hour)
-    }
+        combine(
+            prefs.hiddenCalendarIds,
+            prefs.defaultReminderMinutes,
+            prefs.accentColor,
+            prefs.themeMode,
+            prefs.use24HourClock,
+        ) { hidden, defaultReminder, accent, themeMode, use24Hour ->
+            PrefsSnapshot(hidden, defaultReminder, accent, themeMode, use24Hour, osmMaps = false)
+        },
+        prefs.osmMapsEnabled,
+    ) { snapshot, osmMaps -> snapshot.copy(osmMaps = osmMaps) }
 
     val state: StateFlow<CalendarsUiState> = combine(
         repository.observeCalendars(),
@@ -69,6 +75,7 @@ class CalendarsViewModel @Inject constructor(
             accentColor = p.accent,
             themeMode = p.themeMode,
             use24HourClock = p.use24Hour,
+            osmMapsEnabled = p.osmMaps,
         )
     }.stateIn(
         viewModelScope,
@@ -99,5 +106,9 @@ class CalendarsViewModel @Inject constructor(
 
     fun setUse24HourClock(use24Hour: Boolean) {
         viewModelScope.launch { prefs.setUse24HourClock(use24Hour) }
+    }
+
+    fun setOsmMapsEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setOsmMapsEnabled(enabled) }
     }
 }
