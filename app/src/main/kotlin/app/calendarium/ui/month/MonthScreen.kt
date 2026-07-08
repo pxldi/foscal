@@ -12,10 +12,11 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -83,7 +85,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.YearMonth
 import java.time.format.TextStyle
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -98,6 +99,7 @@ fun MonthRoute(
     val selectedDate = state.selectedDate ?: state.today
     val selectedEvents = state.eventsByDay[selectedDate].orEmpty()
     var showMonthPicker by remember { mutableStateOf(false) }
+    var monthTransitionAxis by remember { mutableStateOf(MonthSwipeAxis.Horizontal) }
 
     if (showMonthPicker) {
         MonthJumpDialog(
@@ -105,6 +107,7 @@ fun MonthRoute(
             onDismiss = { showMonthPicker = false },
             onSelect = { month ->
                 showMonthPicker = false
+                monthTransitionAxis = MonthSwipeAxis.Horizontal
                 viewModel.goToMonth(month)
             },
         )
@@ -126,7 +129,12 @@ fun MonthRoute(
                     )
                 },
                 actions = {
-                    TodayPill(onClick = { viewModel.goToMonth(YearMonth.now()) })
+                    TodayPill(
+                        onClick = {
+                            monthTransitionAxis = MonthSwipeAxis.Horizontal
+                            viewModel.goToMonth(YearMonth.now())
+                        },
+                    )
                     Spacer(Modifier.size(6.dp))
                     Surface(
                         onClick = onOpenSearch,
@@ -155,25 +163,41 @@ fun MonthRoute(
                     .fillMaxWidth()
                     .weight(1f)
                     .pointerInput(Unit) {
-                        var total = 0f
+                        var total = Offset.Zero
                         val threshold = 56.dp.toPx()
-                        detectHorizontalDragGestures(
-                            onDragStart = { total = 0f },
+                        detectDragGestures(
+                            onDragStart = { total = Offset.Zero },
                             onDragEnd = {
-                                if (total <= -threshold) viewModel.nextMonth()
-                                else if (total >= threshold) viewModel.previousMonth()
+                                val swipe = monthSwipe(total, threshold)
+                                if (swipe != null) monthTransitionAxis = swipe.axis
+                                when (swipe?.direction) {
+                                    MonthSwipeDirection.Next -> viewModel.nextMonth()
+                                    MonthSwipeDirection.Previous -> viewModel.previousMonth()
+                                    null -> Unit
+                                }
                             },
-                            onHorizontalDrag = { _, delta -> total += delta },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                total += dragAmount
+                            },
                         )
                     },
             ) {
                 AnimatedContent(
                     targetState = state.visibleMonth,
                     transitionSpec = {
-                        val direction = if (targetState > initialState) {
-                            AnimatedContentTransitionScope.SlideDirection.Start
+                        val direction = if (monthTransitionAxis == MonthSwipeAxis.Vertical) {
+                            if (targetState > initialState) {
+                                AnimatedContentTransitionScope.SlideDirection.Up
+                            } else {
+                                AnimatedContentTransitionScope.SlideDirection.Down
+                            }
                         } else {
-                            AnimatedContentTransitionScope.SlideDirection.End
+                            if (targetState > initialState) {
+                                AnimatedContentTransitionScope.SlideDirection.Start
+                            } else {
+                                AnimatedContentTransitionScope.SlideDirection.End
+                            }
                         }
                         (slideIntoContainer(direction, tween(Motion.DurationMedium)) +
                             fadeIn(tween(Motion.DurationMedium))) togetherWith
@@ -545,6 +569,41 @@ private fun previewTimeLabel(event: Event, is24Hour: Boolean): String =
             .format(timeFormatter(is24Hour))
     }
 
+internal enum class MonthSwipeDirection {
+    Previous,
+    Next,
+}
+
+internal enum class MonthSwipeAxis {
+    Horizontal,
+    Vertical,
+}
+
+internal data class MonthSwipe(
+    val direction: MonthSwipeDirection,
+    val axis: MonthSwipeAxis,
+)
+
+internal fun monthSwipe(totalDrag: Offset, threshold: Float): MonthSwipe? {
+    val absX = kotlin.math.abs(totalDrag.x)
+    val absY = kotlin.math.abs(totalDrag.y)
+    return when {
+        absX >= absY && absX >= threshold -> {
+            MonthSwipe(
+                direction = if (totalDrag.x < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous,
+                axis = MonthSwipeAxis.Horizontal,
+            )
+        }
+        absY > absX && absY >= threshold -> {
+            MonthSwipe(
+                direction = if (totalDrag.y < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous,
+                axis = MonthSwipeAxis.Vertical,
+            )
+        }
+        else -> null
+    }
+}
+
 @Composable
 private fun WeekHeader() {
     Row(
@@ -656,7 +715,7 @@ private fun DayCell(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
+                .padding(horizontal = 4.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
@@ -683,20 +742,21 @@ private fun DayCell(
 @Composable
 private fun EventDots(events: List<Event>, inMonthFraction: Float = 1f) {
     val f = inMonthFraction
+    // Keep the dot size fixed and small enough that the cell content fits even in a six-row month;
+    // otherwise Compose squeezes the overflowing dots and they render smaller in taller months than
+    // in shorter ones. See DayCell's vertical padding, which is tuned to leave room for this row.
     Row(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier
-            .padding(top = 5.dp)
-            .height(7.dp),
+            .padding(top = 4.dp)
+            .height(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         events.forEach { event ->
-            Box(
-                modifier = Modifier
-                    .size(5.dp)
-                    .clip(CircleShape)
-                    .background(Color(event.color).copy(alpha = lerpFloat(0.4f, 1f, f))),
-            )
+            val color = Color(event.color).copy(alpha = lerpFloat(0.4f, 1f, f))
+            Canvas(modifier = Modifier.size(5.dp)) {
+                drawCircle(color = color)
+            }
         }
     }
 }
@@ -704,18 +764,17 @@ private fun EventDots(events: List<Event>, inMonthFraction: Float = 1f) {
 private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float =
     start + (stop - start) * fraction
 
-private fun visibleMonthCells(
+internal fun visibleMonthCells(
     month: YearMonth,
     firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
 ): List<LocalDate> {
     val first = month.atDay(1)
     val offset = (first.dayOfWeek.value - firstDayOfWeek.value + 7) % 7
     val origin = first.minusDays(offset.toLong())
-    val last = month.atEndOfMonth()
-    val trailing = (firstDayOfWeek.value - last.dayOfWeek.value - 1 + 7) % 7
-    val end = last.plusDays(trailing.toLong())
-    val days = ChronoUnit.DAYS.between(origin, end).toInt() + 1
-    return (0 until days).map { origin.plusDays(it.toLong()) }
+    // Only render as many whole weeks as the month actually spans (4, 5, or 6 rows) rather than
+    // padding every month to a fixed six-week grid.
+    val weeks = ((offset + month.lengthOfMonth()) + 6) / 7
+    return (0 until weeks * 7).map { origin.plusDays(it.toLong()) }
 }
 
 @Composable

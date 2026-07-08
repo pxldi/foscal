@@ -6,6 +6,7 @@ import app.calendarium.core.data.FakeCalendarRepository
 import app.calendarium.core.data.FakePreferences
 import app.calendarium.testCalendar
 import app.calendarium.timedEvent
+import androidx.compose.ui.geometry.Offset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -19,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -77,5 +79,57 @@ class MonthViewModelTest {
 
         vm.selectDate(null); advanceUntilIdle()
         assertTrue(vm.state.value.selectedDate == null)
+    }
+
+    @Test
+    fun `visible month cells span only the weeks the month occupies`() {
+        val july = visibleMonthCells(YearMonth.of(2026, 7), firstDayOfWeek = DayOfWeek.MONDAY)
+        val august = visibleMonthCells(YearMonth.of(2026, 8), firstDayOfWeek = DayOfWeek.MONDAY)
+
+        // July 2026 starts on a Wednesday and fits in five weeks.
+        assertEquals(35, july.size)
+        assertEquals(LocalDate.of(2026, 6, 29), july.first())
+        assertEquals(LocalDate.of(2026, 8, 2), july.last())
+        // August 2026 starts on a Saturday and needs six weeks.
+        assertEquals(42, august.size)
+        assertEquals(LocalDate.of(2026, 7, 27), august.first())
+        assertEquals(LocalDate.of(2026, 9, 6), august.last())
+    }
+
+    @Test
+    fun `month swipe direction supports horizontal and vertical navigation`() {
+        val threshold = 56f
+
+        assertEquals(
+            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Horizontal),
+            monthSwipe(Offset(-80f, 12f), threshold),
+        )
+        assertEquals(
+            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Horizontal),
+            monthSwipe(Offset(80f, -12f), threshold),
+        )
+        assertEquals(
+            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Vertical),
+            monthSwipe(Offset(8f, -80f), threshold),
+        )
+        assertEquals(
+            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Vertical),
+            monthSwipe(Offset(-8f, 80f), threshold),
+        )
+    }
+
+    @Test
+    fun `month swipe direction ignores short or non-dominant diagonal drags`() {
+        val threshold = 56f
+
+        assertTrue(monthSwipe(Offset(40f, 4f), threshold) == null)
+        assertEquals(
+            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Horizontal),
+            monthSwipe(Offset(-80f, 78f), threshold),
+        )
+        assertEquals(
+            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Vertical),
+            monthSwipe(Offset(-78f, 80f), threshold),
+        )
     }
 }

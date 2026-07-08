@@ -130,6 +130,9 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   out-of-month (black↔grey) coloring. The ViewModel fetches a ±2-month window so
   adjacent months are already populated. Tapping a day updates an inline preview
   panel under the grid (no modal) — there is no day-events bottom sheet.
+  Vertical swipes on the month grid are aliases for month navigation (up =
+  next month, down = previous month) and use dominant-axis drag detection so
+  diagonal gestures do not trigger both horizontal and vertical navigation.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.
