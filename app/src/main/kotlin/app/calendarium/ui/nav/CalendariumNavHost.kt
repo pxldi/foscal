@@ -19,6 +19,7 @@ import app.calendarium.ui.editor.EventEditorRoute
 import app.calendarium.ui.event.EventDetailScreen
 import app.calendarium.ui.home.HomeRoute
 import app.calendarium.ui.location.LocationPickerRoute
+import app.calendarium.ui.location.LocationViewerRoute
 import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
 import app.calendarium.ui.quickadd.QuickAddRoute
@@ -32,6 +33,12 @@ object Routes {
 
     /** On-demand OpenStreetMap picker. `query` pre-centers the map on any existing location text. */
     const val LOCATION_PICKER = "location_picker?query={query}"
+
+    /** Read-only OpenStreetMap view of an event's location, shown from the detail screen. */
+    const val LOCATION_VIEWER = "location_viewer?location={location}"
+
+    fun locationViewer(location: String): String =
+        "location_viewer?location=${Uri.encode(location)}"
 
     /** Back-stack key the picker uses to hand the chosen location back to the editor. */
     const val PICKED_LOCATION_KEY = "picked_location"
@@ -206,6 +213,30 @@ fun CalendariumNavHost(
                 },
             )
         }
+        composable(
+            route = Routes.LOCATION_VIEWER,
+            arguments = listOf(
+                navArgument("location") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
+            ),
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Up,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Down,
+                    tween(Motion.DurationMedium),
+                )
+            },
+        ) {
+            LocationViewerRoute(onBack = { navController.popBackStack() })
+        }
         composable(Routes.SEARCH) {
             SearchRoute(
                 onBack = { navController.popBackStack() },
@@ -247,6 +278,9 @@ fun CalendariumNavHost(
                 onBack = { navController.popBackStack() },
                 onEdit = { id, instanceStart ->
                     navController.navigate(Routes.editorEdit(id, instanceStart))
+                },
+                onOpenLocationMap = { location ->
+                    navController.navigate(Routes.locationViewer(location))
                 },
             )
         }

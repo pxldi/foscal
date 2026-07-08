@@ -1,9 +1,5 @@
 package app.calendarium.ui.event
 
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -54,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
+import app.calendarium.location.openInMaps
 import app.calendarium.core.ui.theme.BricolageFamily
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.util.LocalUse24HourClock
@@ -68,6 +65,7 @@ fun EventDetailScreen(
     instanceStartMillis: Long = 0L,
     onBack: () -> Unit,
     onEdit: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    onOpenLocationMap: (location: String) -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -146,6 +144,8 @@ fun EventDetailScreen(
                             event = current,
                             calendarName = state.calendar?.displayName ?: "Calendar",
                             calendarColor = current.color,
+                            mapsEnabled = state.mapsEnabled,
+                            onOpenLocationMap = onOpenLocationMap,
                         )
                     } else {
                         Box(
@@ -166,6 +166,8 @@ private fun DetailContent(
     event: Event,
     calendarName: String,
     calendarColor: Int,
+    mapsEnabled: Boolean,
+    onOpenLocationMap: (location: String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -202,11 +204,12 @@ private fun DetailContent(
                 icon = Icons.Outlined.LocationOn,
                 label = "Location",
                 value = location,
-                // Hand the location text off to the device's maps app, which geocodes it. This
-                // works for both a free-text room ("Room 3B") and a full address, and keeps the
-                // app fully offline — we only fire an intent, no network call of our own.
                 trailingIcon = Icons.Outlined.Map,
-                onClick = { openInMaps(context, location) },
+                // With the opt-in map on, show the place on an in-app OpenStreetMap; otherwise hand
+                // the text to the device's maps app via a geo: intent so we stay offline.
+                onClick = {
+                    if (mapsEnabled) onOpenLocationMap(location) else openInMaps(context, location)
+                },
             )
         }
         event.description?.takeIf { it.isNotBlank() }?.let {
@@ -294,29 +297,6 @@ private fun InfoCard(
                     modifier = Modifier.size(22.dp),
                 )
             }
-        }
-    }
-}
-
-/**
- * Opens [query] in the device's maps app. Tries a `geo:` intent first (Google Maps, Organic Maps,
- * OsmAnd, …) and falls back to a Google Maps web search so a device without a dedicated maps app
- * still resolves the place in a browser. We only fire an intent — no network call of our own — so
- * this stays true to the app's offline design.
- */
-private fun openInMaps(context: Context, query: String) {
-    val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${Uri.encode(query)}"))
-    try {
-        context.startActivity(geo)
-    } catch (_: ActivityNotFoundException) {
-        val web = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("https://www.google.com/maps/search/?api=1&query=${Uri.encode(query)}"),
-        )
-        try {
-            context.startActivity(web)
-        } catch (_: ActivityNotFoundException) {
-            // No maps app and no browser — nothing we can do; silently ignore rather than crash.
         }
     }
 }
