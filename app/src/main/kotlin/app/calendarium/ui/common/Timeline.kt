@@ -3,6 +3,7 @@ package app.calendarium.ui.common
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,11 +28,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +48,7 @@ import app.calendarium.ui.util.timeFormatter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.math.floor
 
 data class TimelineDay(
     val date: LocalDate,
@@ -69,6 +73,8 @@ fun TimelineLayout(
     zone: ZoneId = ZoneId.systemDefault(),
     blockCornerRadius: Dp = if (compact) 5.dp else 7.dp,
     accentStripe: Boolean = !compact,
+    onTimeRangeSelected: ((startMillis: Long, endMillis: Long) -> Unit)? = null,
+    onEventMove: ((event: Event, newStartMillis: Long, newEndMillis: Long) -> Unit)? = null,
 ) {
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
@@ -97,6 +103,8 @@ fun TimelineLayout(
     val showNowLabel = timedDays.any { it.date == today }
     val is24Hour = LocalUse24HourClock.current
     val nowLabelFmt = remember(is24Hour) { timeFormatter(is24Hour) }
+    var selection by remember { mutableStateOf<TimeSelection?>(null) }
+    var eventDrag by remember { mutableStateOf<EventDrag?>(null) }
 
     var initialScrolled = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -119,113 +127,244 @@ fun TimelineLayout(
         }
 
         Column(modifier = Modifier.verticalScroll(scrollState)) {
-          Box {
-            Row(modifier = Modifier.height(totalHeight)) {
-                Column(Modifier.width(54.dp)) {
-                    for (h in 0..23) {
-                        Box(
-                            Modifier
-                                .height(hourHeight)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.TopEnd,
+            Box {
+                Row(modifier = Modifier.height(totalHeight)) {
+                    Column(Modifier.width(54.dp)) {
+                        for (h in 0..23) {
+                            Box(
+                                Modifier
+                                    .height(hourHeight)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.TopEnd,
+                            ) {
+                                Text(
+                                    "${"%02d".format(h)}",
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    timedDays.forEachIndexed { dayIndex, day ->
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .then(
+                                    if (onTimeRangeSelected != null) {
+                                        Modifier.pointerInput(day.date, hourHeight, onTimeRangeSelected) {
+                                            fun minuteAt(y: Float): Int {
+                                                val raw = (y / hourHeight.toPx() * 60f).toInt()
+                                                return raw.roundToStep(15).coerceIn(0, 24 * 60)
+                                            }
+
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { offset ->
+                                                    val minute = minuteAt(offset.y)
+                                                    selection = TimeSelection(day.date, minute, minute)
+                                                },
+                                                onDrag = { change, _ ->
+                                                    change.consume()
+                                                    val start = selection ?: return@detectDragGesturesAfterLongPress
+                                                    selection = start.copy(endMinute = minuteAt(change.position.y))
+                                                },
+                                                onDragCancel = { selection = null },
+                                                onDragEnd = {
+                                                    val finalSelection = selection
+                                                    selection = null
+                                                    if (finalSelection != null) {
+                                                        val range = finalSelection.normalized()
+                                                        val startMinute = range.first
+                                                        val endMinute = when {
+                                                            range.second > range.first -> range.second
+                                                            range.first <= 23 * 60 -> range.first + 60
+                                                            else -> 24 * 60
+                                                        }
+                                                        val start = finalSelection.date.atStartOfDay(zone)
+                                                            .plusMinutes(startMinute.toLong())
+                                                        val end = finalSelection.date.atStartOfDay(zone)
+                                                            .plusMinutes(endMinute.toLong())
+                                                        onTimeRangeSelected(
+                                                            start.toInstant().toEpochMilli(),
+                                                            end.toInstant().toEpochMilli(),
+                                                        )
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .then(
+                                    if (highlightTodayColumn && day.date == today) {
+                                        Modifier.background(todayTint)
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
                         ) {
-                            Text(
-                                "${"%02d".format(h)}",
-                                modifier = Modifier.padding(end = 8.dp),
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            val colWidth = maxWidth
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val hourPx = hourHeight.toPx()
+                                for (h in 1..23) {
+                                    drawLine(
+                                        color = gridColor,
+                                        start = Offset(0f, h * hourPx),
+                                        end = Offset(size.width, h * hourPx),
+                                        strokeWidth = 0.5f,
+                                    )
+                                }
+                            }
+                            if (day.date == today) {
+                                val nowY = nowFractionalHour * with(density) { hourHeight.toPx() }
+                                Canvas(Modifier.fillMaxSize()) {
+                                    drawLine(
+                                        color = nowColor,
+                                        start = Offset(0f, nowY),
+                                        end = Offset(size.width, nowY),
+                                        strokeWidth = 1.5f,
+                                    )
+                                    drawCircle(
+                                        color = nowColor,
+                                        radius = 4.5f,
+                                        center = Offset(0f, nowY),
+                                    )
+                                }
+                            }
+                            selection
+                                ?.takeIf { it.date == day.date }
+                                ?.let { current ->
+                                    val range = current.normalized()
+                                    val top = hourHeight * (range.first / 60f)
+                                    val height = (hourHeight * ((range.second - range.first).coerceAtLeast(15) / 60f))
+                                        .coerceAtLeast(18.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(y = top)
+                                            .fillMaxWidth()
+                                            .height(height)
+                                            .padding(horizontal = 3.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                                    )
+                                }
+                            val positioned = remember(day.events, hourHeight, zone) {
+                                layoutTimed(day.events, hourHeight, zone)
+                            }
+                            positioned.forEach { pe ->
+                                val eachWidth = (colWidth / pe.columnCount) - 2.dp
+                                val drag = eventDrag?.takeIf {
+                                    it.eventId == pe.event.id &&
+                                        it.instanceStartMillis == pe.event.start.toEpochMilli()
+                                }
+                                EventBlock(
+                                    event = pe.event,
+                                    zone = zone,
+                                    heightDp = pe.heightDp,
+                                    compact = compact,
+                                    accentStripe = accentStripe,
+                                    cornerRadius = blockCornerRadius,
+                                    modifier = Modifier
+                                        .offset(
+                                            x = eachWidth * pe.column + 1.dp +
+                                                colWidth * (drag?.deltaDays ?: 0),
+                                            y = pe.topDp + hourHeight * ((drag?.deltaMinutes ?: 0) / 60f),
+                                        )
+                                        .width(eachWidth)
+                                        .height(pe.heightDp),
+                                    onClick = { onEventClick(pe.event.id, pe.event.start.toEpochMilli()) },
+                                    onMove = onEventMove?.let { move ->
+                                        { deltaDays, deltaMinutes ->
+                                            val start = pe.event.start.atZone(zone)
+                                                .plusDays(deltaDays.toLong())
+                                                .plusMinutes(deltaMinutes.toLong())
+                                            val end = pe.event.end.atZone(zone)
+                                                .plusDays(deltaDays.toLong())
+                                                .plusMinutes(deltaMinutes.toLong())
+                                            move(
+                                                pe.event,
+                                                start.toInstant().toEpochMilli(),
+                                                end.toInstant().toEpochMilli(),
+                                            )
+                                        }
+                                    },
+                                    onMovePreview = if (onEventMove != null) {
+                                        { deltaDays, deltaMinutes ->
+                                            eventDrag = EventDrag(
+                                                eventId = pe.event.id,
+                                                instanceStartMillis = pe.event.start.toEpochMilli(),
+                                                deltaDays = deltaDays,
+                                                deltaMinutes = deltaMinutes,
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    onMovePreviewEnd = { eventDrag = null },
+                                    dayIndex = dayIndex,
+                                    visibleDayCount = timedDays.size,
+                                    eventLeftInDay = eachWidth * pe.column + 1.dp,
+                                    dayWidth = colWidth,
+                                    hourHeight = hourHeight,
+                                )
+                            }
                         }
                     }
                 }
-                timedDays.forEach { day ->
-                    BoxWithConstraints(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .then(
-                                if (highlightTodayColumn && day.date == today) {
-                                    Modifier.background(todayTint)
-                                } else {
-                                    Modifier
-                                },
-                            ),
+                // Current-time label pinned to the left gutter, aligned with the now line drawn in
+                // the day columns. Overlaid on the Row so it lines up across the shared scale.
+                if (showNowLabel) {
+                    Box(
+                        Modifier
+                            .width(54.dp)
+                            .offset(y = hourHeight * nowFractionalHour - 8.dp),
+                        contentAlignment = Alignment.CenterEnd,
                     ) {
-                        val colWidth = maxWidth
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val hourPx = hourHeight.toPx()
-                            for (h in 1..23) {
-                                drawLine(
-                                    color = gridColor,
-                                    start = Offset(0f, h * hourPx),
-                                    end = Offset(size.width, h * hourPx),
-                                    strokeWidth = 0.5f,
-                                )
-                            }
-                        }
-                        if (day.date == today) {
-                            val nowY = nowFractionalHour * with(density) { hourHeight.toPx() }
-                            Canvas(Modifier.fillMaxSize()) {
-                                drawLine(
-                                    color = nowColor,
-                                    start = Offset(0f, nowY),
-                                    end = Offset(size.width, nowY),
-                                    strokeWidth = 1.5f,
-                                )
-                                drawCircle(
-                                    color = nowColor,
-                                    radius = 4.5f,
-                                    center = Offset(0f, nowY),
-                                )
-                            }
-                        }
-                        val positioned = remember(day.events, hourHeight, zone) {
-                            layoutTimed(day.events, hourHeight, zone)
-                        }
-                        positioned.forEach { pe ->
-                            val eachWidth = (colWidth / pe.columnCount) - 2.dp
-                            EventBlock(
-                                event = pe.event,
-                                zone = zone,
-                                heightDp = pe.heightDp,
-                                compact = compact,
-                                accentStripe = accentStripe,
-                                cornerRadius = blockCornerRadius,
-                                modifier = Modifier
-                                    .offset(x = eachWidth * pe.column + 1.dp, y = pe.topDp)
-                                    .width(eachWidth)
-                                    .height(pe.heightDp),
-                                onClick = { onEventClick(pe.event.id, pe.event.start.toEpochMilli()) },
-                            )
-                        }
+                        Text(
+                            nowZ.format(nowLabelFmt),
+                            modifier = Modifier
+                                .padding(end = 5.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(nowColor)
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }
-            // Current-time label pinned to the left gutter, aligned with the now line drawn in the
-            // day columns. Overlaid on the Row so it lines up across the shared vertical scale.
-            if (showNowLabel) {
-                Box(
-                    Modifier
-                        .width(54.dp)
-                        .offset(y = hourHeight * nowFractionalHour - 8.dp),
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    Text(
-                        nowZ.format(nowLabelFmt),
-                        modifier = Modifier
-                            .padding(end = 5.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(nowColor)
-                            .padding(horizontal = 4.dp, vertical = 1.dp),
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-          }
         }
     }
+}
+
+private data class TimeSelection(
+    val date: LocalDate,
+    val startMinute: Int,
+    val endMinute: Int,
+) {
+    fun normalized(): IntRangeLike =
+        if (startMinute <= endMinute) {
+            IntRangeLike(startMinute, endMinute)
+        } else {
+            IntRangeLike(endMinute, startMinute)
+        }
+}
+
+private data class IntRangeLike(val first: Int, val second: Int)
+
+private data class EventDrag(
+    val eventId: Long,
+    val instanceStartMillis: Long,
+    val deltaDays: Int,
+    val deltaMinutes: Int,
+)
+
+private fun Int.roundToStep(step: Int): Int {
+    val half = step / 2
+    return ((this + half) / step) * step
 }
 
 /** An all-day event and the inclusive range of visible day columns it covers. */
@@ -342,6 +481,14 @@ private fun EventBlock(
     cornerRadius: Dp,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
+    onMove: ((deltaDays: Int, deltaMinutes: Int) -> Unit)? = null,
+    onMovePreview: ((deltaDays: Int, deltaMinutes: Int) -> Unit)? = null,
+    onMovePreviewEnd: () -> Unit = {},
+    dayIndex: Int = 0,
+    visibleDayCount: Int = 1,
+    eventLeftInDay: Dp = 0.dp,
+    dayWidth: Dp = 0.dp,
+    hourHeight: Dp = 60.dp,
 ) {
     val baseColor = paletteColor(event)
     val textColor = MaterialTheme.colorScheme.onSurface
@@ -364,6 +511,49 @@ private fun EventBlock(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
             .background(baseColor.copy(alpha = if (compact) 0.12f else 0.10f))
+            .then(
+                if (onMove != null) {
+                    Modifier.pointerInput(event.id, event.start, eventLeftInDay, dayWidth, hourHeight) {
+                        var totalDrag = Offset.Zero
+                        fun deltas(): Pair<Int, Int> {
+                            val rawMinutes = (totalDrag.y / hourHeight.toPx() * 60f).toInt()
+                            val deltaMinutes = rawMinutes.roundToStep(15)
+                            val widthPx = dayWidth.toPx().takeIf { it > 0f } ?: return 0 to deltaMinutes
+                            val centerInWeek = eventLeftInDay.toPx() + size.width / 2f + totalDrag.x
+                            val relativeDay = floor(centerInWeek / widthPx).toInt()
+                            val targetDay = (dayIndex + relativeDay).coerceIn(0, visibleDayCount - 1)
+                            return (targetDay - dayIndex) to deltaMinutes
+                        }
+
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                totalDrag = Offset.Zero
+                                onMovePreview?.invoke(0, 0)
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                totalDrag += dragAmount
+                                val (deltaDays, deltaMinutes) = deltas()
+                                onMovePreview?.invoke(deltaDays, deltaMinutes)
+                            },
+                            onDragCancel = {
+                                totalDrag = Offset.Zero
+                                onMovePreviewEnd()
+                            },
+                            onDragEnd = {
+                                val (deltaDays, deltaMinutes) = deltas()
+                                totalDrag = Offset.Zero
+                                onMovePreviewEnd()
+                                if (deltaDays != 0 || deltaMinutes != 0) {
+                                    onMove(deltaDays, deltaMinutes)
+                                }
+                            },
+                        )
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .clickable(onClick = onClick),
     ) {
         if (accentStripe) {

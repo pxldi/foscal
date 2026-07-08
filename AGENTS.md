@@ -52,12 +52,16 @@ emulator -avd calendarium_test -no-snapshot -no-audio -no-boot-anim -gpu swiftsh
 ## Current status
 
 Beta. Working: Month / Week / Agenda / Settings tabs (bottom nav — Settings is a
-tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination), event
-create/edit/delete, recurring events
+tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination; the
+selected tab is `rememberSaveable` so returning from detail/editor preserves the
+current tab), event create/edit/delete, recurring events
 (this-vs-all-events, exceptions), reminders/notifications, real calendar colors,
-offline local calendars, permission-first onboarding. There is no separate Day
-view — it was dropped as redundant (Week's schedule + Agenda cover it). See the
-README "Current status" and "Roadmap" sections for the full picture and what's next.
+offline local calendars, permission-first onboarding. Week view is the shared
+hourly `TimelineLayout` with long-press drag-to-create and long-press
+drag-to-move for timed events; recurring timed moves are stored as single
+occurrence exceptions. There is no separate Day view — it was dropped as
+redundant (Week's schedule + Agenda cover it). See the README "Current status"
+and "Roadmap" sections for the full picture and what's next.
 
 ## Design system
 
@@ -120,8 +124,9 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **Month view swaps whole-month grids via `AnimatedContent`, not a continuous
   week scroll.** The visible month lives in the ViewModel; `nextMonth()` /
   `previousMonth()` / `goToMonth()` change it and `AnimatedContent` slides the
-  new grid in (direction inferred from which month is greater). Each grid is
-  built from `visibleMonthCells(month)` and animates per-cell in-month /
+  new grid in (direction inferred from which month is greater). The month/year
+  title opens a compact month/year jump dialog that calls `goToMonth()`. Each
+  grid is built from `visibleMonthCells(month)` and animates per-cell in-month /
   out-of-month (black↔grey) coloring. The ViewModel fetches a ±2-month window so
   adjacent months are already populated. Tapping a day updates an inline preview
   panel under the grid (no modal) — there is no day-events bottom sheet.

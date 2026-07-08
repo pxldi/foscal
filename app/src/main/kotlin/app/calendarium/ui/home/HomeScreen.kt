@@ -22,14 +22,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.agenda.AgendaRoute
@@ -51,7 +54,7 @@ fun HomeRoute(
     onOpenEventDetail: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSearch: () -> Unit,
 ) {
-    var tab by remember { mutableStateOf(HomeTab.Month) }
+    var tab by rememberSaveable { mutableStateOf(HomeTab.Month) }
 
     val onEventClick: (Long, Long) -> Unit = { id, instanceStart ->
         onOpenEventDetail(id, instanceStart)
@@ -67,6 +70,13 @@ fun HomeRoute(
                         onClick = { tab = entry },
                         icon = { Icon(entry.icon, contentDescription = entry.label) },
                         label = { Text(entry.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            indicatorColor = Color.Transparent,
+                        ),
                     )
                 }
             }
@@ -75,8 +85,8 @@ fun HomeRoute(
             if (tab == HomeTab.Week || tab == HomeTab.Agenda) {
                 FloatingActionButton(
                     onClick = { onOpenEditor(null, null, null) },
-                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "New event")
                 }
@@ -111,6 +121,7 @@ fun HomeRoute(
                     )
                     HomeTab.Week -> WeekRoute(
                         onEventClick = onEventClick,
+                        onNewEvent = { start, end -> onOpenEditor(null, start, end) },
                         onOpenSearch = onOpenSearch,
                     )
                     HomeTab.Agenda -> AgendaRoute(

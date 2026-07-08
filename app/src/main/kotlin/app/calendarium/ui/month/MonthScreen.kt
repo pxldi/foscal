@@ -34,21 +34,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -90,6 +97,18 @@ fun MonthRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selectedDate = state.selectedDate ?: state.today
     val selectedEvents = state.eventsByDay[selectedDate].orEmpty()
+    var showMonthPicker by remember { mutableStateOf(false) }
+
+    if (showMonthPicker) {
+        MonthJumpDialog(
+            initialMonth = state.visibleMonth,
+            onDismiss = { showMonthPicker = false },
+            onSelect = { month ->
+                showMonthPicker = false
+                viewModel.goToMonth(month)
+            },
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -101,7 +120,10 @@ fun MonthRoute(
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
                 title = {
-                    MonthTitle(month = state.visibleMonth)
+                    MonthTitle(
+                        month = state.visibleMonth,
+                        onClick = { showMonthPicker = true },
+                    )
                 },
                 actions = {
                     TodayPill(onClick = { viewModel.goToMonth(YearMonth.now()) })
@@ -205,9 +227,15 @@ fun MonthRoute(
 }
 
 @Composable
-private fun MonthTitle(month: YearMonth) {
+private fun MonthTitle(month: YearMonth, onClick: () -> Unit) {
     val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         AnimatedLetters(
             text = monthName,
             color = MaterialTheme.colorScheme.onSurface,
@@ -220,6 +248,88 @@ private fun MonthTitle(month: YearMonth) {
             fontWeight = FontWeight.Normal,
         )
     }
+}
+
+@Composable
+private fun MonthJumpDialog(
+    initialMonth: YearMonth,
+    onDismiss: () -> Unit,
+    onSelect: (YearMonth) -> Unit,
+) {
+    var year by remember(initialMonth) { mutableStateOf(initialMonth.year) }
+    val monthRows = remember { java.time.Month.entries.chunked(3) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                IconButton(onClick = { year-- }) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous year")
+                }
+                Text(
+                    year.toString(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(onClick = { year++ }) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next year")
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                monthRows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.forEach { month ->
+                            val selected = year == initialMonth.year && month == initialMonth.month
+                            Surface(
+                                onClick = { onSelect(YearMonth.of(year, month)) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerLow
+                                },
+                                contentColor = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        month.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSelect(YearMonth.of(year, initialMonth.month)) }) {
+                Text("Go")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 /**
@@ -328,8 +438,8 @@ private fun DayPreviewPanel(
                             text = date.format(
                                 DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()),
                             ),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -338,7 +448,7 @@ private fun DayPreviewPanel(
                             text = if (events.isEmpty()) "No events" else {
                                 "${events.size} event${if (events.size == 1) "" else "s"}"
                             },
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                         )
@@ -347,7 +457,7 @@ private fun DayPreviewPanel(
                 if (events.isEmpty()) {
                     Text(
                         "Tap + to add something to this day.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp),
                     )
@@ -409,16 +519,16 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
         )
         Text(
             text = previewTimeLabel(event, LocalUse24HourClock.current),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            modifier = Modifier.size(width = 54.dp, height = 18.dp),
+            modifier = Modifier.size(width = 62.dp, height = 22.dp),
         )
         Text(
             text = event.title,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),

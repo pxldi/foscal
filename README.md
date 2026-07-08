@@ -26,10 +26,12 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 - Three calendar views in the bottom nav: **Month** (centered date numerals with
   per-calendar color dots; whole-month grids that slide between months and fade
-  out-of-month days to grey, with an inline day preview under the grid), **Week**
-  (a tappable weekday strip over a schedule grouped by day), and **Agenda** (a
-  grouped schedule that loads older and newer events as you scroll). Multi-day
-  and spanning all-day events render on every day they cover.
+  out-of-month days to grey, tap the month/year title to jump to a specific
+  month, with an inline day preview under the grid), **Week** (an hourly
+  schedule with a weekday strip, long-press drag-to-create, and long-press
+  drag-to-move timed events), and **Agenda** (a grouped schedule that loads
+  older and newer events as you scroll). Multi-day and spanning all-day events
+  render on every day they cover.
 - **Custom design system** — the app's own visual voice: the *Bricolage
   Grotesque* display face on dates and titles, *Hanken Grotesque* for UI, a
   Cobalt accent, soft color-stripe event cards, a unified app/onboarding icon,
@@ -69,11 +71,10 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Week view: drag-to-create and drag-to-move events.
+- Time-zone-aware editing UI and a world-clock style secondary zone.
 
 **Later / future goals**
 
-- Time-zone-aware editing UI and a world-clock style secondary zone.
 - Richer event detail: map preview, guests/attendees, join-video-call.
 - Import/export of `.ics` files.
 - More unit/UI test coverage (repository, more view models, widget factory).

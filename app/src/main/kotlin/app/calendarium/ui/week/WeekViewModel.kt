@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarRepository
 import app.calendarium.core.data.Preferences
 import app.calendarium.core.model.Event
+import app.calendarium.core.model.EventInput
+import app.calendarium.core.model.Frequency
 import app.calendarium.ui.common.TimelineDay
 import app.calendarium.ui.util.Dates
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,6 +18,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -98,6 +101,31 @@ class WeekViewModel @Inject constructor(
 
     fun goToThisWeek() {
         _weekStart.value = startOfWeek(LocalDate.now(zone))
+    }
+
+    fun moveEvent(event: Event, newStartMillis: Long, newEndMillis: Long) {
+        if (event.allDay) return
+        viewModelScope.launch {
+            val reminder = repository.getReminderMinutes(event.id).minOrNull()
+            val input = EventInput(
+                calendarId = event.calendarId,
+                title = event.title,
+                location = event.location,
+                description = event.description,
+                start = Instant.ofEpochMilli(newStartMillis),
+                end = Instant.ofEpochMilli(newEndMillis),
+                allDay = false,
+                timezone = event.timezone ?: zone.id,
+                frequency = Frequency.NONE,
+                rrule = null,
+                reminderMinutesBefore = reminder,
+            )
+            if (event.isRecurring) {
+                repository.updateEventInstance(event.id, event.start.toEpochMilli(), input)
+            } else {
+                repository.updateEvent(event.id, input)
+            }
+        }
     }
 
     companion object {
