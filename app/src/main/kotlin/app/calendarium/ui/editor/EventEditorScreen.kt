@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -278,17 +279,58 @@ private fun EditorForm(
             )
         }
 
-        // Location
+        // Location — free text with offline autocomplete over the user's own past locations.
         Section {
-            OutlinedTextField(
-                value = state.location,
-                onValueChange = viewModel::updateLocation,
+            val suggestions = remember(state.location, state.recentLocations) {
+                val query = state.location.trim()
+                state.recentLocations
+                    .filter { it != state.location && (query.isEmpty() || it.contains(query, ignoreCase = true)) }
+                    .take(6)
+            }
+            var expanded by remember { mutableStateOf(false) }
+            val menuOpen = expanded && suggestions.isNotEmpty()
+            ExposedDropdownMenuBox(
+                expanded = menuOpen,
+                onExpandedChange = { expanded = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                label = { Text("Location") },
-                singleLine = true,
-            )
+            ) {
+                OutlinedTextField(
+                    value = state.location,
+                    onValueChange = {
+                        viewModel.updateLocation(it)
+                        expanded = true
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    label = { Text("Location") },
+                    singleLine = true,
+                    trailingIcon = if (suggestions.isNotEmpty()) {
+                        { ExposedDropdownMenuDefaults.TrailingIcon(menuOpen) }
+                    } else {
+                        null
+                    },
+                )
+                ExposedDropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    suggestions.forEach { suggestion ->
+                        DropdownMenuItem(
+                            text = { Text(suggestion) },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.LocationOn, contentDescription = null)
+                            },
+                            onClick = {
+                                viewModel.updateLocation(suggestion)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
         }
 
         // Notes

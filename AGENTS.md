@@ -136,6 +136,12 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.
+- **The app holds no `INTERNET` permission — keep it that way.** "Nothing leaves
+  your phone" is enforced at the manifest, so features must stay offline. Event
+  location is plain free text: the editor autocompletes only from the user's own
+  past locations (`getRecentLocations`), and the detail screen's location card
+  hands the text to the device maps app via a `geo:` intent (maps does the
+  geocoding). No stored coordinates, no geocoding API, no network calls of ours.
 
 ## Conventions
 
