@@ -34,11 +34,17 @@ class UserPreferencesRepository @Inject constructor(
     override val accentColor: Flow<AccentColor> =
         context.dataStore.data.map { AccentColor.fromKey(it[ACCENT_COLOR]) }
 
+    override val accentCustomColor: Flow<Int> =
+        context.dataStore.data.map { it[ACCENT_CUSTOM_COLOR] ?: AccentColor.DEFAULT_CUSTOM_COLOR }
+
     override val themeMode: Flow<ThemeMode> =
         context.dataStore.data.map { ThemeMode.fromKey(it[THEME_MODE]) }
 
     override val use24HourClock: Flow<Boolean> =
         context.dataStore.data.map { it[USE_24H_CLOCK] ?: true }
+
+    override val osmMapsEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[OSM_MAPS_ENABLED] ?: false }
 
     override suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
@@ -56,6 +62,10 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[ACCENT_COLOR] = accent.key }
     }
 
+    override suspend fun setAccentCustomColor(color: Int) {
+        context.dataStore.edit { prefs -> prefs[ACCENT_CUSTOM_COLOR] = color }
+    }
+
     override suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { prefs -> prefs[THEME_MODE] = mode.key }
     }
@@ -64,12 +74,18 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[USE_24H_CLOCK] = use24Hour }
     }
 
+    override suspend fun setOsmMapsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[OSM_MAPS_ENABLED] = enabled }
+    }
+
     companion object {
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         private val HIDDEN_CALENDARS = stringSetPreferencesKey("hidden_calendars")
         private val DEFAULT_REMINDER = intPreferencesKey("default_reminder_minutes")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
+        private val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val USE_24H_CLOCK = booleanPreferencesKey("use_24h_clock")
+        private val OSM_MAPS_ENABLED = booleanPreferencesKey("osm_maps_enabled")
     }
 }

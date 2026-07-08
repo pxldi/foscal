@@ -3,6 +3,7 @@ package app.calendarium.ui.event
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,12 +43,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.calendarium.core.model.Event
+import app.calendarium.location.openInMaps
 import app.calendarium.core.ui.theme.BricolageFamily
 import app.calendarium.core.ui.theme.Motion
 import app.calendarium.ui.util.LocalUse24HourClock
@@ -61,6 +65,7 @@ fun EventDetailScreen(
     instanceStartMillis: Long = 0L,
     onBack: () -> Unit,
     onEdit: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    onOpenLocationMap: (location: String) -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -139,6 +144,8 @@ fun EventDetailScreen(
                             event = current,
                             calendarName = state.calendar?.displayName ?: "Calendar",
                             calendarColor = current.color,
+                            mapsEnabled = state.mapsEnabled,
+                            onOpenLocationMap = onOpenLocationMap,
                         )
                     } else {
                         Box(
@@ -159,6 +166,8 @@ private fun DetailContent(
     event: Event,
     calendarName: String,
     calendarColor: Int,
+    mapsEnabled: Boolean,
+    onOpenLocationMap: (location: String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -189,8 +198,19 @@ private fun DetailContent(
         event.rrule?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.Repeat, "Repeats", describeRecurrence(it))
         }
-        event.location?.takeIf { it.isNotBlank() }?.let {
-            InfoCard(Icons.Outlined.LocationOn, "Location", it)
+        event.location?.takeIf { it.isNotBlank() }?.let { location ->
+            val context = LocalContext.current
+            InfoCard(
+                icon = Icons.Outlined.LocationOn,
+                label = "Location",
+                value = location,
+                trailingIcon = Icons.Outlined.Map,
+                // With the opt-in map on, show the place on an in-app OpenStreetMap; otherwise hand
+                // the text to the device's maps app via a geo: intent so we stay offline.
+                onClick = {
+                    if (mapsEnabled) onOpenLocationMap(location) else openInMaps(context, location)
+                },
+            )
         }
         event.description?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.Description, "Notes", it)
@@ -224,7 +244,13 @@ private fun LabelPill(calendarName: String, calendarColor: Int) {
 }
 
 @Composable
-private fun InfoCard(icon: ImageVector, label: String, value: String) {
+private fun InfoCard(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    trailingIcon: ImageVector? = null,
+    onClick: (() -> Unit)? = null,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -235,6 +261,7 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -261,6 +288,14 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
                 )
                 Spacer(Modifier.size(2.dp))
                 Text(value, style = MaterialTheme.typography.bodyLarge)
+            }
+            if (trailingIcon != null) {
+                Icon(
+                    trailingIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
             }
         }
     }

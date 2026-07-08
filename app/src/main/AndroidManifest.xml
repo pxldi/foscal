@@ -8,6 +8,15 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      INTERNET is used ONLY by the opt-in "Pick on map" location picker (OpenStreetMap tiles +
+      Nominatim reverse-geocoding). No other feature touches the network; the app is otherwise
+      fully offline. See AGENTS.md.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Optional: only used to center the opt-in map picker on the user's current area. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <uses-feature android:name="android.hardware.alarm" android:required="false" />
 

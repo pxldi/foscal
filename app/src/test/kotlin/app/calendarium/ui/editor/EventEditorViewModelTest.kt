@@ -158,6 +158,31 @@ class EventEditorViewModelTest {
     }
 
     @Test
+    fun `new event loads recent locations newest-first and deduped`() = runTest(dispatcher) {
+        fun located(id: Long, location: String?, at: Instant) = recurring.copy(
+            id = id,
+            location = location,
+            start = at,
+            end = at.plusSeconds(3_600L),
+            rrule = null,
+        )
+        // Two events share "Room 3B"; the blank one is ignored. Newest start wins for ordering.
+        repo = FakeCalendarRepository(
+            calendars = listOf(calendar),
+            events = listOf(
+                located(1, "Room 3B", start),
+                located(2, "Cafeteria", start.plusSeconds(86_400L)),
+                located(3, "Room 3B", start.plusSeconds(172_800L)),
+                located(4, "  ", start.plusSeconds(259_200L)),
+            ),
+        )
+        val vm = newEventVm()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Room 3B", "Cafeteria"), vm.state.value.recentLocations)
+    }
+
+    @Test
     fun `delete SINGLE vs FOLLOWING vs ALL route correctly`() = runTest(dispatcher) {
         // SINGLE
         val a = recurringEditVm()

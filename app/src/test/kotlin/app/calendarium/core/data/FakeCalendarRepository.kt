@@ -56,6 +56,12 @@ class FakeCalendarRepository(
             it.title.contains(query, ignoreCase = true)
     }
 
+    override suspend fun getRecentLocations(limit: Int): List<String> =
+        events.sortedByDescending { it.start }
+            .mapNotNull { it.location?.trim()?.takeIf(String::isNotEmpty) }
+            .distinct()
+            .take(limit)
+
     override fun observeCalendars(): Flow<List<Calendar>> = MutableStateFlow(calendars)
 
     override fun observeEvents(

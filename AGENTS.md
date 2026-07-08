@@ -75,11 +75,12 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   are Bricolage, everything else Hanken. Reach for `BricolageFamily` directly
   only for numerals/headers that need the voice.
 - **Accent** — Cobalt `#1A73E8` (`CalendariumBlue`) is the default, driving today,
-  selection, buttons and the FAB. Users can switch to **Violet** or **Forest** in
-  Settings; the choice persists via `Preferences.accentColor` (`AccentColor` enum
-  in `:core-model`) and `CalendariumTheme(accent = …)` rebuilds the color scheme.
-  Per-accent tokens live in `theme/Color.kt` (`AccentTokens`); never hardcode the
-  accent — read `colorScheme.primary`.
+  selection, buttons and the FAB. Users can switch to **Violet**, **Forest**, or a
+  custom ARGB color in onboarding or Settings; the choice persists via
+  `Preferences.accentColor`, with `Preferences.accentCustomColor` storing the
+  custom seed. Fixed per-accent tokens live in `theme/Color.kt` (`AccentTokens`);
+  custom colors are expanded by `customAccentTokens(seed)` in `Theme.kt`.
+  Never hardcode the accent — read `colorScheme.primary`.
 - **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
   never a hardcoded value.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
@@ -130,9 +131,24 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   out-of-month (black↔grey) coloring. The ViewModel fetches a ±2-month window so
   adjacent months are already populated. Tapping a day updates an inline preview
   panel under the grid (no modal) — there is no day-events bottom sheet.
+  Vertical swipes on the month grid are aliases for month navigation (up =
+  next month, down = previous month) and use dominant-axis drag detection so
+  diagonal gestures do not trigger both horizontal and vertical navigation.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.
+- **The app is offline by default; the ONLY networked feature is the opt-in map
+  picker.** `INTERNET` exists in the manifest solely for the OpenStreetMap
+  location picker, which is gated behind the `osmMapsEnabled` preference (off by
+  default, toggled in onboarding or Settings). Do not add network calls anywhere
+  else. Location entry is otherwise plain free text: the editor autocompletes
+  only from the user's own past locations (`getRecentLocations`), and the detail
+  screen's location card hands the text to the device maps app via a `geo:`
+  intent. When maps are enabled, "Pick on map" opens `LocationPickerScreen`
+  (osmdroid + OSM tiles); `NominatimGeocoder` forward-geocodes the query to
+  center the map and reverse-geocodes the confirmed pin to an address string —
+  the chosen text returns to the editor via the nav back-stack
+  (`PICKED_LOCATION_KEY`). Still no stored coordinates; location stays a String.
 
 ## Conventions
 

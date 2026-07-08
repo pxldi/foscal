@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = null)
             val accent by prefs.accentColor
                 .collectAsStateWithLifecycle(initialValue = AccentColor.Default)
+            val customAccent by prefs.accentCustomColor
+                .collectAsStateWithLifecycle(initialValue = AccentColor.DEFAULT_CUSTOM_COLOR)
             val themeMode by prefs.themeMode
                 .collectAsStateWithLifecycle(initialValue = ThemeMode.Default)
             val use24Hour by prefs.use24HourClock
@@ -58,7 +60,11 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
-            CalendariumTheme(darkTheme = darkTheme, accent = accent) {
+            CalendariumTheme(
+                darkTheme = darkTheme,
+                accent = accent,
+                customSeed = androidx.compose.ui.graphics.Color(customAccent),
+            ) {
                 CompositionLocalProvider(LocalUse24HourClock provides use24Hour) {
                     when (val done = onboardingDone) {
                         null -> { /* splash while DataStore loads */ }

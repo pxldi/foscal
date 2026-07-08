@@ -46,6 +46,10 @@ data class EditorUiState(
     val endDate: LocalDate = LocalDate.now(),
     val endTime: LocalTime = LocalTime.of(10, 0),
     val location: String = "",
+    /** Distinct locations from the user's history, for the editor's offline autocomplete. */
+    val recentLocations: List<String> = emptyList(),
+    /** Whether the opt-in OpenStreetMap "Pick on map" button should be offered. */
+    val mapsEnabled: Boolean = false,
     val description: String = "",
     val frequency: Frequency = Frequency.NONE,
     val interval: Int = 1,
@@ -90,6 +94,8 @@ class EventEditorViewModel @Inject constructor(
             val defaultReminder = prefs.defaultReminderMinutes.first() ?: 15
             val visible = repository.getCalendars()
                 .filter { it.visible && it.id.toString() !in hidden }
+            val recentLocations = repository.getRecentLocations()
+            val mapsEnabled = prefs.osmMapsEnabled.first()
             if (eventId > 0L) {
                 val allIds = repository.getCalendars().map { it.id }.toSet()
                 val from = LocalDate.now().minusYears(2).atStartOfDay(zone).toInstant()
@@ -121,6 +127,8 @@ class EventEditorViewModel @Inject constructor(
                         endDate = endZ.toLocalDate(),
                         endTime = if (event.allDay) LocalTime.MIDNIGHT else endZ.toLocalTime(),
                         location = event.location.orEmpty(),
+                        recentLocations = recentLocations,
+                        mapsEnabled = mapsEnabled,
                         description = event.description.orEmpty(),
                         frequency = spec.frequency,
                         interval = spec.interval,
@@ -150,6 +158,8 @@ class EventEditorViewModel @Inject constructor(
                 startTime = defaultStart.toLocalTime(),
                 endDate = defaultEnd.toLocalDate(),
                 endTime = defaultEnd.toLocalTime(),
+                recentLocations = recentLocations,
+                mapsEnabled = mapsEnabled,
                 reminderMinutesBefore = defaultReminder,
             )
         }

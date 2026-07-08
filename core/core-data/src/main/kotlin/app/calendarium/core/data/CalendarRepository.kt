@@ -61,6 +61,13 @@ interface CalendarRepository {
         to: Instant,
     ): List<Event>
 
+    /**
+     * Distinct non-blank event locations the user has used before, most-recently-used first.
+     * Backs the editor's offline location autocomplete — suggestions come only from the user's
+     * own history, so nothing leaves the device.
+     */
+    suspend fun getRecentLocations(limit: Int = 50): List<String>
+
     /** Emits the current list of calendars, then re-emits whenever the provider changes. */
     fun observeCalendars(): Flow<List<Calendar>>
 
@@ -231,6 +238,27 @@ class CalendarContractRepository @Inject constructor(
             .values
             .sortedBy { it.start }
     }
+
+    override suspend fun getRecentLocations(limit: Int): List<String> =
+        withContext(Dispatchers.IO) {
+            // Read straight from the Events table (not Instances) newest-first and dedupe in code —
+            // the provider has no DISTINCT — collecting locations until we have [limit] unique ones.
+            val seen = LinkedHashSet<String>()
+            safeQuery(
+                CalendarContract.Events.CONTENT_URI,
+                arrayOf(CalendarContract.Events.EVENT_LOCATION),
+                "${CalendarContract.Events.EVENT_LOCATION} IS NOT NULL AND " +
+                    "${CalendarContract.Events.EVENT_LOCATION} != ''",
+                null,
+                "${CalendarContract.Events.DTSTART} DESC",
+            )?.use { c ->
+                while (c.moveToNext() && seen.size < limit) {
+                    val location = c.getString(0)?.trim().orEmpty()
+                    if (location.isNotEmpty()) seen += location
+                }
+            }
+            seen.toList()
+        }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeCalendars(): Flow<List<Calendar>> =
