@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import app.calendarium.core.model.AccentColor
 
@@ -65,10 +66,15 @@ fun CalendariumTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     accent: AccentColor = AccentColor.Default,
+    customSeed: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val tokens = accent.tokens()
+    val tokens = if (accent == AccentColor.CUSTOM && customSeed != null) {
+        customAccentTokens(customSeed)
+    } else {
+        accent.tokens()
+    }
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -87,7 +93,24 @@ fun AccentColor.tokens(): AccentTokens = when (this) {
     AccentColor.COBALT -> CobaltAccent
     AccentColor.VIOLET -> VioletAccent
     AccentColor.FOREST -> ForestAccent
+    // CUSTOM has no fixed tokens; callers pass the seed to customAccentTokens. Fall back to the
+    // default preset if a seed isn't supplied.
+    AccentColor.CUSTOM -> CobaltAccent
 }
+
+/**
+ * Derives a full accent from a single [seed] color by blending it toward white/black, so any
+ * user-picked color yields a coherent light/dark palette without hand-tuning each token.
+ */
+fun customAccentTokens(seed: Color): AccentTokens = AccentTokens(
+    primaryLight = seed,
+    primaryContainerLight = lerp(seed, Color.White, 0.86f),
+    onPrimaryContainerLight = lerp(seed, Color.Black, 0.62f),
+    primaryDark = lerp(seed, Color.White, 0.55f),
+    onPrimaryDark = lerp(seed, Color.Black, 0.82f),
+    primaryContainerDark = lerp(seed, Color.Black, 0.58f),
+    onPrimaryContainerDark = lerp(seed, Color.White, 0.80f),
+)
 
 /** Weekend day-of-week label color, adjusted so the gold stays legible on the dark surface. */
 @Composable

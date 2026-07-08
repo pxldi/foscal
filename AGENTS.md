@@ -75,11 +75,12 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   are Bricolage, everything else Hanken. Reach for `BricolageFamily` directly
   only for numerals/headers that need the voice.
 - **Accent** — Cobalt `#1A73E8` (`CalendariumBlue`) is the default, driving today,
-  selection, buttons and the FAB. Users can switch to **Violet** or **Forest** in
-  Settings; the choice persists via `Preferences.accentColor` (`AccentColor` enum
-  in `:core-model`) and `CalendariumTheme(accent = …)` rebuilds the color scheme.
-  Per-accent tokens live in `theme/Color.kt` (`AccentTokens`); never hardcode the
-  accent — read `colorScheme.primary`.
+  selection, buttons and the FAB. Users can switch to **Violet**, **Forest**, or a
+  custom ARGB color in onboarding or Settings; the choice persists via
+  `Preferences.accentColor`, with `Preferences.accentCustomColor` storing the
+  custom seed. Fixed per-accent tokens live in `theme/Color.kt` (`AccentTokens`);
+  custom colors are expanded by `customAccentTokens(seed)` in `Theme.kt`.
+  Never hardcode the accent — read `colorScheme.primary`.
 - **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
   never a hardcoded value.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)

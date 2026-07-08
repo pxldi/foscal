@@ -1,13 +1,24 @@
 package app.calendarium.ui.nav
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import android.net.Uri
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -24,6 +35,7 @@ import app.calendarium.ui.onboarding.OnboardingRoute
 import app.calendarium.ui.permission.PermissionGate
 import app.calendarium.ui.quickadd.QuickAddRoute
 import app.calendarium.ui.search.SearchRoute
+import kotlin.math.hypot
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -83,6 +95,7 @@ fun CalendariumNavHost(
     onQuickAddConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
+    var revealTick by remember { mutableIntStateOf(0) }
 
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
 
@@ -103,37 +116,39 @@ fun CalendariumNavHost(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        enterTransition = { fadeIn(tween(Motion.DurationMedium)) },
-        exitTransition = { fadeOut(tween(Motion.DurationMedium)) },
-        popEnterTransition = { fadeIn(tween(Motion.DurationMedium)) },
-        popExitTransition = { fadeOut(tween(Motion.DurationMedium)) },
-    ) {
-        composable(Routes.ONBOARDING) {
-            OnboardingRoute(
-                onContinue = {
-                    navController.navigate(Routes.MAIN) {
-                        popUpTo(Routes.ONBOARDING) { inclusive = true }
-                    }
-                },
-            )
-        }
-        composable(Routes.MAIN) {
-            PermissionGate {
-                HomeRoute(
-                    onOpenEditor = { calId, start, end ->
-                        navController.navigate(Routes.editorNew(calId, start, end))
-                    },
-                    onOpenSearch = { navController.navigate(Routes.SEARCH) },
-                    onOpenEventDetail = { id, instanceStart ->
-                        navController.navigate(Routes.detail(id, instanceStart))
+    Box(Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            enterTransition = { fadeIn(tween(Motion.DurationMedium)) },
+            exitTransition = { fadeOut(tween(Motion.DurationMedium)) },
+            popEnterTransition = { fadeIn(tween(Motion.DurationMedium)) },
+            popExitTransition = { fadeOut(tween(Motion.DurationMedium)) },
+        ) {
+            composable(Routes.ONBOARDING) {
+                OnboardingRoute(
+                    onContinue = {
+                        navController.navigate(Routes.MAIN) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
+                        revealTick += 1
                     },
                 )
             }
-        }
-        composable(
+            composable(Routes.MAIN) {
+                PermissionGate {
+                    HomeRoute(
+                        onOpenEditor = { calId, start, end ->
+                            navController.navigate(Routes.editorNew(calId, start, end))
+                        },
+                        onOpenSearch = { navController.navigate(Routes.SEARCH) },
+                        onOpenEventDetail = { id, instanceStart ->
+                            navController.navigate(Routes.detail(id, instanceStart))
+                        },
+                    )
+                }
+            }
+            composable(
             route = Routes.EVENT_EDITOR,
             arguments = listOf(
                 navArgument("eventId") {
@@ -301,5 +316,32 @@ fun CalendariumNavHost(
         ) {
             QuickAddRoute(onBack = { navController.popBackStack() })
         }
+        }
+        OnboardingCompleteReveal(revealTick)
+    }
+}
+
+@Composable
+private fun OnboardingCompleteReveal(trigger: Int) {
+    if (trigger == 0) return
+
+    val progress = remember(trigger) { Animatable(0f) }
+    var visible by remember(trigger) { mutableStateOf(true) }
+    val color = MaterialTheme.colorScheme.primary
+
+    LaunchedEffect(trigger) {
+        progress.animateTo(1f, tween(720))
+        visible = false
+    }
+
+    if (!visible) return
+
+    Canvas(Modifier.fillMaxSize()) {
+        val radius = hypot(size.width, size.height) * progress.value
+        drawCircle(
+            color = color.copy(alpha = 1f - progress.value),
+            radius = radius,
+            center = Offset(size.width / 2f, size.height * 0.9f),
+        )
     }
 }

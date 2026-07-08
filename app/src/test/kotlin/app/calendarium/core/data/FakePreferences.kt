@@ -20,6 +20,8 @@ class FakePreferences(
     override val hiddenCalendarIds: Flow<Set<String>> = MutableStateFlow(hidden)
     override val defaultReminderMinutes: Flow<Int?> = MutableStateFlow(defaultReminder)
     override val accentColor: MutableStateFlow<AccentColor> = MutableStateFlow(accent)
+    override val accentCustomColor: MutableStateFlow<Int> =
+        MutableStateFlow(AccentColor.DEFAULT_CUSTOM_COLOR)
     override val themeMode: MutableStateFlow<ThemeMode> = MutableStateFlow(theme)
     override val use24HourClock: MutableStateFlow<Boolean> = MutableStateFlow(use24Hour)
     override val osmMapsEnabled: MutableStateFlow<Boolean> = MutableStateFlow(osmMaps)
@@ -29,6 +31,10 @@ class FakePreferences(
     override suspend fun setDefaultReminder(minutes: Int?) = Unit
     override suspend fun setAccentColor(accent: AccentColor) {
         accentColor.value = accent
+    }
+
+    override suspend fun setAccentCustomColor(color: Int) {
+        accentCustomColor.value = color
     }
 
     override suspend fun setThemeMode(mode: ThemeMode) {

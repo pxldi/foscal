@@ -22,6 +22,7 @@ data class CalendarsUiState(
     val loading: Boolean = true,
     val defaultReminderMinutes: Int? = 15,
     val accentColor: AccentColor = AccentColor.Default,
+    val accentCustomColor: Int = AccentColor.DEFAULT_CUSTOM_COLOR,
     val themeMode: ThemeMode = ThemeMode.Default,
     val use24HourClock: Boolean = true,
     val osmMapsEnabled: Boolean = false,
@@ -39,6 +40,7 @@ private data class PrefsSnapshot(
     val themeMode: ThemeMode,
     val use24Hour: Boolean,
     val osmMaps: Boolean,
+    val accentCustom: Int,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -48,7 +50,7 @@ class CalendarsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
 ) : ViewModel() {
 
-    // combine() has no typed 6-arg overload, so fold the sixth preference in with a nested combine.
+    // combine() has no typed 6+-arg overload, so fold the extra preferences in with a nested combine.
     private val prefsFlow = combine(
         combine(
             prefs.hiddenCalendarIds,
@@ -57,10 +59,13 @@ class CalendarsViewModel @Inject constructor(
             prefs.themeMode,
             prefs.use24HourClock,
         ) { hidden, defaultReminder, accent, themeMode, use24Hour ->
-            PrefsSnapshot(hidden, defaultReminder, accent, themeMode, use24Hour, osmMaps = false)
+            PrefsSnapshot(hidden, defaultReminder, accent, themeMode, use24Hour, osmMaps = false, accentCustom = 0)
         },
         prefs.osmMapsEnabled,
-    ) { snapshot, osmMaps -> snapshot.copy(osmMaps = osmMaps) }
+        prefs.accentCustomColor,
+    ) { snapshot, osmMaps, accentCustom ->
+        snapshot.copy(osmMaps = osmMaps, accentCustom = accentCustom)
+    }
 
     val state: StateFlow<CalendarsUiState> = combine(
         repository.observeCalendars(),
@@ -73,6 +78,7 @@ class CalendarsViewModel @Inject constructor(
             loading = false,
             defaultReminderMinutes = p.defaultReminder,
             accentColor = p.accent,
+            accentCustomColor = p.accentCustom,
             themeMode = p.themeMode,
             use24HourClock = p.use24Hour,
             osmMapsEnabled = p.osmMaps,
@@ -98,6 +104,14 @@ class CalendarsViewModel @Inject constructor(
 
     fun setAccentColor(accent: AccentColor) {
         viewModelScope.launch { prefs.setAccentColor(accent) }
+    }
+
+    /** Persists [color] as the custom accent seed and switches the accent to CUSTOM. */
+    fun setCustomAccentColor(color: Int) {
+        viewModelScope.launch {
+            prefs.setAccentCustomColor(color)
+            prefs.setAccentColor(AccentColor.CUSTOM)
+        }
     }
 
     fun setThemeMode(mode: ThemeMode) {

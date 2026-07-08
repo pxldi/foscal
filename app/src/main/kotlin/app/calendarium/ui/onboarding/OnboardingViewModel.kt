@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import app.calendarium.core.data.CalendarPermissionState
 import app.calendarium.core.data.CalendarRepository
 import app.calendarium.core.data.UserPreferencesRepository
+import app.calendarium.core.model.AccentColor
+import app.calendarium.core.model.ThemeMode
 import app.calendarium.ui.CalendarColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,6 +31,9 @@ data class OnboardingUiState(
     val davxStatus: DAVxStatus = DAVxStatus.NOT_INSTALLED,
     val calendarPermissionGranted: Boolean = false,
     val mapsEnabled: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val accentColor: AccentColor = AccentColor.Default,
+    val accentCustomColor: Int = AccentColor.DEFAULT_CUSTOM_COLOR,
     val error: String? = null,
 )
 
@@ -41,6 +46,20 @@ class OnboardingViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _internal = MutableStateFlow(OnboardingUiState(davxStatus = davxStatus()))
+
+    init {
+        viewModelScope.launch {
+            prefs.themeMode.collect { mode -> _internal.value = _internal.value.copy(themeMode = mode) }
+        }
+        viewModelScope.launch {
+            prefs.accentColor.collect { accent -> _internal.value = _internal.value.copy(accentColor = accent) }
+        }
+        viewModelScope.launch {
+            prefs.accentCustomColor.collect { color ->
+                _internal.value = _internal.value.copy(accentCustomColor = color)
+            }
+        }
+    }
 
     val state: StateFlow<OnboardingUiState> =
         combine(_internal, permissionState.granted) { internal, granted ->
@@ -60,6 +79,24 @@ class OnboardingViewModel @Inject constructor(
     fun setMapsEnabled(enabled: Boolean) {
         _internal.value = _internal.value.copy(mapsEnabled = enabled)
         viewModelScope.launch { prefs.setOsmMapsEnabled(enabled) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        _internal.value = _internal.value.copy(themeMode = mode)
+        viewModelScope.launch { prefs.setThemeMode(mode) }
+    }
+
+    fun setAccentColor(accent: AccentColor) {
+        _internal.value = _internal.value.copy(accentColor = accent)
+        viewModelScope.launch { prefs.setAccentColor(accent) }
+    }
+
+    fun setCustomAccentColor(color: Int) {
+        _internal.value = _internal.value.copy(accentColor = AccentColor.CUSTOM, accentCustomColor = color)
+        viewModelScope.launch {
+            prefs.setAccentCustomColor(color)
+            prefs.setAccentColor(AccentColor.CUSTOM)
+        }
     }
 
     private fun davxStatus(): DAVxStatus {

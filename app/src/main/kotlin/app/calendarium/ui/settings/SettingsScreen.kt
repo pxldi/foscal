@@ -1,9 +1,7 @@
 package app.calendarium.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,11 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -46,14 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.calendarium.core.model.AccentColor
 import app.calendarium.core.model.Calendar
 import app.calendarium.core.model.ThemeMode
-import app.calendarium.core.ui.theme.tokens
 import app.calendarium.ui.calendars.CalendarsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -120,7 +113,9 @@ fun SettingsScreen(
             item {
                 AccentPicker(
                     selected = state.accentColor,
-                    onSelect = { viewModel.setAccentColor(it) },
+                    customColor = state.accentCustomColor,
+                    onSelectPreset = { viewModel.setAccentColor(it) },
+                    onPickCustom = { viewModel.setCustomAccentColor(it) },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
@@ -330,87 +325,6 @@ private fun ToggleRow(
             }
             Switch(checked = checked, onCheckedChange = onToggle)
         }
-    }
-}
-
-@Composable
-private fun AccentPicker(
-    selected: AccentColor,
-    onSelect: (AccentColor) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val dark = isSystemInDarkTheme()
-    val options = listOf(
-        AccentColor.COBALT to "Cobalt",
-        AccentColor.VIOLET to "Violet",
-        AccentColor.FOREST to "Forest",
-    )
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Accent color",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            options.forEach { (accent, label) ->
-                val tokens = accent.tokens()
-                AccentSwatch(
-                    color = if (dark) tokens.primaryDark else tokens.primaryLight,
-                    label = label,
-                    selected = accent == selected,
-                    onClick = { onSelect(accent) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccentSwatch(
-    color: Color,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .selectable(selected = selected, onClick = onClick)
-            .padding(4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(color)
-                .then(
-                    if (selected) {
-                        Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                    } else {
-                        Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (selected) {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = Color.White,
-                )
-            }
-        }
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

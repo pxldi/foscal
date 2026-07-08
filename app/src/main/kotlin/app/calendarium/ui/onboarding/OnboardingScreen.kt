@@ -22,16 +22,20 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.DevicesOther
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +57,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.calendarium.core.data.CalendarPermissionState
+import app.calendarium.core.model.AccentColor
+import app.calendarium.core.model.ThemeMode
+import app.calendarium.ui.settings.AccentPicker
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
@@ -79,10 +86,11 @@ fun OnboardingRoute(
         if (granted) step = OnboardingStep.CALENDARS
     }
 
+    var notificationsEnabled by remember { mutableStateOf(hasNotificationPermission(context)) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) {
-        viewModel.completeOnboarding()
+    ) { granted ->
+        notificationsEnabled = granted
     }
 
     LaunchedEffect(state.calendarPermissionGranted, step) {
@@ -137,18 +145,27 @@ fun OnboardingRoute(
                         viewModel.finishAfterSync()
                     },
                 )
-                OnboardingStep.NOTIFICATIONS -> NotificationStep(
+                OnboardingStep.NOTIFICATIONS -> PersonalizeStep(
                     completing = state.completing,
-                    mapsEnabled = state.mapsEnabled,
-                    onMapsToggle = viewModel::setMapsEnabled,
-                    onEnable = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            viewModel.completeOnboarding()
+                    themeMode = state.themeMode,
+                    onThemeSelect = viewModel::setThemeMode,
+                    accentColor = state.accentColor,
+                    accentCustomColor = state.accentCustomColor,
+                    onAccentSelect = viewModel::setAccentColor,
+                    onCustomAccentPick = viewModel::setCustomAccentColor,
+                    notificationsEnabled = notificationsEnabled,
+                    onNotificationsToggle = { want ->
+                        when {
+                            !want -> notificationsEnabled = false
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                !hasNotificationPermission(context) ->
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            else -> notificationsEnabled = true
                         }
                     },
-                    onSkip = viewModel::completeOnboarding,
+                    mapsEnabled = state.mapsEnabled,
+                    onMapsToggle = viewModel::setMapsEnabled,
+                    onDone = viewModel::completeOnboarding,
                 )
             }
 
@@ -292,14 +309,21 @@ private fun CalendarSetupStep(
 }
 
 @Composable
-private fun NotificationStep(
+private fun PersonalizeStep(
     completing: Boolean,
+    themeMode: ThemeMode,
+    onThemeSelect: (ThemeMode) -> Unit,
+    accentColor: AccentColor,
+    accentCustomColor: Int,
+    onAccentSelect: (AccentColor) -> Unit,
+    onCustomAccentPick: (Int) -> Unit,
+    notificationsEnabled: Boolean,
+    onNotificationsToggle: (Boolean) -> Unit,
     mapsEnabled: Boolean,
     onMapsToggle: (Boolean) -> Unit,
-    onEnable: () -> Unit,
-    onSkip: () -> Unit,
+    onDone: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             "Make it yours",
             style = MaterialTheme.typography.headlineMedium,
@@ -307,43 +331,146 @@ private fun NotificationStep(
             modifier = Modifier.padding(top = 18.dp),
         )
         Text(
-            "Calendarium can remind you about events. You can keep notifications off and still use every calendar view.",
+            "Personalize Calendarium. You can change any of this later in Settings.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        InfoCard(
-            icon = Icons.Outlined.CheckCircle,
-            title = "Reminders",
-            subtitle = "Calendarium can nudge you before events, using only your local calendar data.",
+        ThemeCard(selected = themeMode, onSelect = onThemeSelect)
+        AccentCard(
+            selected = accentColor,
+            customColor = accentCustomColor,
+            onSelectPreset = onAccentSelect,
+            onPickCustom = onCustomAccentPick,
         )
-        MapsConsentCard(enabled = mapsEnabled, onToggle = onMapsToggle)
+        ToggleCard(
+            icon = Icons.Outlined.Notifications,
+            title = "Reminders",
+            subtitle = "Get a heads-up before events, using only your local calendar data.",
+            checked = notificationsEnabled,
+            onToggle = onNotificationsToggle,
+        )
+        ToggleCard(
+            icon = Icons.Outlined.Map,
+            title = "Pick locations on a map",
+            subtitle = "Optional — the only feature that uses the internet. Choose a location on " +
+                "an OpenStreetMap map instead of typing it. The map and address lookup contact " +
+                "OpenStreetMap's servers (no ads, no tracking profile), so they can see your IP " +
+                "and the places you look up. Everything else stays offline.",
+            checked = mapsEnabled,
+            onToggle = onMapsToggle,
+        )
         Spacer(Modifier.height(4.dp))
         Button(
-            onClick = onEnable,
+            onClick = onDone,
             enabled = !completing,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(58.dp),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Text("Allow notifications", fontWeight = FontWeight.SemiBold)
-        }
-        OutlinedButton(
-            onClick = onSkip,
-            enabled = !completing,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Text("Not now")
+            Text("Start using Calendarium", fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-private fun MapsConsentCard(
-    enabled: Boolean,
+private fun AccentCard(
+    selected: AccentColor,
+    customColor: Int,
+    onSelectPreset: (AccentColor) -> Unit,
+    onPickCustom: (Int) -> Unit,
+) {
+    androidx.compose.material3.Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Palette,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Text(
+                    "Main color",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            AccentPicker(
+                selected = selected,
+                customColor = customColor,
+                onSelectPreset = onSelectPreset,
+                onPickCustom = onPickCustom,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThemeCard(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit,
+) {
+    val options = listOf(
+        ThemeMode.SYSTEM to "System",
+        ThemeMode.LIGHT to "Light",
+        ThemeMode.DARK to "Dark",
+    )
+    androidx.compose.material3.Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Palette,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Text(
+                    "Theme",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, (mode, label) ->
+                    SegmentedButton(
+                        selected = mode == selected,
+                        onClick = { onSelect(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    ) {
+                        Text(label)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
     onToggle: (Boolean) -> Unit,
 ) {
     androidx.compose.material3.Card(
@@ -360,53 +487,19 @@ private fun MapsConsentCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(
-                    Icons.Outlined.Map,
+                    icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp),
                 )
                 Text(
-                    "Pick locations on a map",
+                    title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                Switch(checked = enabled, onCheckedChange = onToggle)
+                Switch(checked = checked, onCheckedChange = onToggle)
             }
-            Text(
-                "Optional. Lets you choose an event's location on an OpenStreetMap map instead of " +
-                    "typing it. This is the only feature that uses the internet — the map and " +
-                    "address lookup contact OpenStreetMap's servers (no ads, no tracking profile), " +
-                    "so they can see your IP and the places you look up. Everything else stays " +
-                    "offline. You can change this anytime in Settings.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun InfoCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-) {
-    androidx.compose.material3.Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-    ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp),
-            )
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodyMedium,
@@ -415,6 +508,14 @@ private fun InfoCard(
         }
     }
 }
+
+/** Whether reminder notifications may be shown — always true before Android 13's runtime grant. */
+private fun hasNotificationPermission(context: android.content.Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
 @Composable
 private fun CalendariumMark(modifier: Modifier = Modifier) {

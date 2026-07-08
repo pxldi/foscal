@@ -13,6 +13,8 @@ interface Preferences {
     val hiddenCalendarIds: Flow<Set<String>>
     val defaultReminderMinutes: Flow<Int?>
     val accentColor: Flow<AccentColor>
+    /** ARGB seed color used when [accentColor] is [AccentColor.CUSTOM]. */
+    val accentCustomColor: Flow<Int>
     val themeMode: Flow<ThemeMode>
     val use24HourClock: Flow<Boolean>
 
@@ -27,6 +29,7 @@ interface Preferences {
     suspend fun setHiddenCalendars(ids: Set<String>)
     suspend fun setDefaultReminder(minutes: Int?)
     suspend fun setAccentColor(accent: AccentColor)
+    suspend fun setAccentCustomColor(color: Int)
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setUse24HourClock(use24Hour: Boolean)
     suspend fun setOsmMapsEnabled(enabled: Boolean)
