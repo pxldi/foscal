@@ -1,8 +1,13 @@
 package app.calendarium.ui.event
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +27,7 @@ import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -189,8 +196,18 @@ private fun DetailContent(
         event.rrule?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.Repeat, "Repeats", describeRecurrence(it))
         }
-        event.location?.takeIf { it.isNotBlank() }?.let {
-            InfoCard(Icons.Outlined.LocationOn, "Location", it)
+        event.location?.takeIf { it.isNotBlank() }?.let { location ->
+            val context = LocalContext.current
+            InfoCard(
+                icon = Icons.Outlined.LocationOn,
+                label = "Location",
+                value = location,
+                // Hand the location text off to the device's maps app, which geocodes it. This
+                // works for both a free-text room ("Room 3B") and a full address, and keeps the
+                // app fully offline — we only fire an intent, no network call of our own.
+                trailingIcon = Icons.Outlined.Map,
+                onClick = { openInMaps(context, location) },
+            )
         }
         event.description?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.Description, "Notes", it)
@@ -224,7 +241,13 @@ private fun LabelPill(calendarName: String, calendarColor: Int) {
 }
 
 @Composable
-private fun InfoCard(icon: ImageVector, label: String, value: String) {
+private fun InfoCard(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    trailingIcon: ImageVector? = null,
+    onClick: (() -> Unit)? = null,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -235,6 +258,7 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -262,6 +286,37 @@ private fun InfoCard(icon: ImageVector, label: String, value: String) {
                 Spacer(Modifier.size(2.dp))
                 Text(value, style = MaterialTheme.typography.bodyLarge)
             }
+            if (trailingIcon != null) {
+                Icon(
+                    trailingIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Opens [query] in the device's maps app. Tries a `geo:` intent first (Google Maps, Organic Maps,
+ * OsmAnd, …) and falls back to a Google Maps web search so a device without a dedicated maps app
+ * still resolves the place in a browser. We only fire an intent — no network call of our own — so
+ * this stays true to the app's offline design.
+ */
+private fun openInMaps(context: Context, query: String) {
+    val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=${Uri.encode(query)}"))
+    try {
+        context.startActivity(geo)
+    } catch (_: ActivityNotFoundException) {
+        val web = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://www.google.com/maps/search/?api=1&query=${Uri.encode(query)}"),
+        )
+        try {
+            context.startActivity(web)
+        } catch (_: ActivityNotFoundException) {
+            // No maps app and no browser — nothing we can do; silently ignore rather than crash.
         }
     }
 }
