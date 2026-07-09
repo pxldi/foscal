@@ -3,7 +3,7 @@ package app.calendarium.ui.onboarding
 import android.Manifest
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,18 +48,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.calendarium.R
 import app.calendarium.core.data.CalendarPermissionState
 import app.calendarium.core.model.AccentColor
 import app.calendarium.core.model.ThemeMode
+import app.calendarium.core.ui.theme.BricolageFamily
 import app.calendarium.ui.settings.AccentPicker
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -225,18 +227,13 @@ private fun WelcomeStep(onStart: () -> Unit) {
     ) {
         Spacer(Modifier.height(96.dp))
         CalendariumMark(Modifier.size(104.dp))
-        Spacer(Modifier.height(34.dp))
-        Text(
-            "Calendarium",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
+        Spacer(Modifier.height(30.dp))
+        CalendariumWordmark()
         Text(
             "Your calendars, quietly organized. Local first, open source, and ready for DAVx5 sync.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 14.dp),
         )
         Spacer(Modifier.height(140.dp))
@@ -518,50 +515,46 @@ private fun hasNotificationPermission(context: android.content.Context): Boolean
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
 @Composable
+private fun CalendariumWordmark() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            "Calendarium",
+            style = MaterialTheme.typography.displayMedium.copy(fontFamily = BricolageFamily),
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .width(72.dp)
+                .height(4.dp)
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+    }
+}
+
+/**
+ * The Calendarium glyph: a minimal calendar showing "31" in Bricolage Grotesque on a
+ * brand-blue squircle. Reuses the launcher foreground drawable over the same blue field
+ * so the in-app mark and the home-screen icon stay pixel-identical.
+ */
+@Composable
 private fun CalendariumMark(modifier: Modifier = Modifier) {
-    val primary = MaterialTheme.colorScheme.primary
-    Canvas(modifier) {
-        val side = size.minDimension
-        drawRoundRect(
-            color = primary,
-            size = Size(side, side),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.29f),
+    Box(
+        modifier
+            .clip(RoundedCornerShape(percent = 26))
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFF3B86EE), Color(0xFF1A73E8))),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
         )
-        val stroke = side * 0.058f
-        val white = Color.White
-        // Calendar body
-        drawRoundRect(
-            color = white,
-            topLeft = Offset(side * 0.26f, side * 0.30f),
-            size = Size(side * 0.48f, side * 0.42f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(side * 0.11f),
-            style = Stroke(width = stroke, cap = StrokeCap.Round),
-        )
-        // Header divider
-        drawLine(
-            color = white,
-            start = Offset(side * 0.26f, side * 0.42f),
-            end = Offset(side * 0.74f, side * 0.42f),
-            strokeWidth = stroke * 0.9f,
-        )
-        // Top tabs
-        drawLine(
-            color = white,
-            start = Offset(side * 0.39f, side * 0.255f),
-            end = Offset(side * 0.39f, side * 0.345f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color = white,
-            start = Offset(side * 0.61f, side * 0.255f),
-            end = Offset(side * 0.61f, side * 0.345f),
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-        )
-        // Two dots
-        drawCircle(white, radius = side * 0.038f, center = Offset(side * 0.43f, side * 0.56f))
-        drawCircle(white, radius = side * 0.038f, center = Offset(side * 0.57f, side * 0.56f))
     }
 }
 
