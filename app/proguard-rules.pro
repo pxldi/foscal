@@ -1,6 +1,6 @@
 # Hilt
 -keep,allowobfuscation,allowshrinking class * extends dagger.hilt.android.lifecycle.HiltViewModel
--keep class app.calendarium.** { *; }
+-keep class app.foscal.** { *; }
 
 # CalendarContract usage does not require extra rules.
 

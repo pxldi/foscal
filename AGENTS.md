@@ -34,17 +34,17 @@ changes. Do not commit code that does not build or that fails lint.
 
 ## Testing on the emulator
 
-A headless AVD named `calendarium_test` is available for UI verification:
+A headless AVD named `foscal_test` is available for UI verification:
 
 ```bash
-emulator -avd calendarium_test -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect &
+emulator -avd foscal_test -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect &
 # wait until: adb shell getprop sys.boot_completed == 1
 ```
 
 - Screen is 1080x2400; captured screenshots display at 900x2000, so **multiply
   screenshot coordinates by 1.2** before `adb shell input tap` (input uses device px).
-- Reproduce first-run: `adb shell pm clear app.calendarium` then
-  `adb shell pm revoke app.calendarium android.permission.READ_CALENDAR` (+WRITE_CALENDAR,
+- Reproduce first-run: `adb shell pm clear app.foscal` then
+  `adb shell pm revoke app.foscal android.permission.READ_CALENDAR` (+WRITE_CALENDAR,
   POST_NOTIFICATIONS). Grant back with `pm grant`.
 - Inspect provider state directly with `adb shell content query/insert/update/delete --uri
   content://com.android.calendar/{events,instances/when/<from>/<to>,reminders,calendars,exception/<id>}`.
@@ -65,16 +65,16 @@ and "Roadmap" sections for the full picture and what's next.
 
 ## Design system
 
-The visual identity ("the Calendarium voice") is derived from the Claude Design
+The visual identity ("the Foscal voice") is derived from the Claude Design
 project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-system:
 
 - **Typography** — two variable fonts bundled in `core/core-ui/src/main/res/font`:
   **Bricolage Grotesque** (display/voice: date numerals, month header, screen
   titles, event-detail title) and **Hanken Grotesque** (all body/UI). Wired via
-  `core-ui/.../theme/Type.kt` → `CalendariumTypography`; display+headline styles
+  `core-ui/.../theme/Type.kt` → `FoscalTypography`; display+headline styles
   are Bricolage, everything else Hanken. Reach for `BricolageFamily` directly
   only for numerals/headers that need the voice.
-- **Accent** — Cobalt `#1A73E8` (`CalendariumBlue`) is the default, driving today,
+- **Accent** — Cobalt `#1A73E8` (`FoscalBlue`) is the default, driving today,
   selection, buttons and the FAB. Users can switch to **Violet**, **Forest**, or a
   custom ARGB color in onboarding or Settings; the choice persists via
   `Preferences.accentColor`, with `Preferences.accentCustomColor` storing the
@@ -84,7 +84,7 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
   never a hardcoded value.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
-  and the in-app onboarding hero (`OnboardingScreen.CalendariumMark`). Keep them
+  and the in-app onboarding hero (`OnboardingScreen.FoscalMark`). Keep them
   in sync if you change one.
 - Time is **24-hour by default** (`HH:mm`), but the user can switch to 12-hour in
   Settings. Never hardcode a time pattern in UI: read the ambient
@@ -92,7 +92,7 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `timeFormatter(is24Hour)` / `rememberTimeFormatter()`. Non-composable label
   helpers take an `is24Hour: Boolean` threaded from the composable call site.
   `ThemeMode` (System/Light/Dark, `:core-model`) similarly drives
-  `CalendariumTheme(darkTheme = …)` from `MainActivity`.
+  `FoscalTheme(darkTheme = …)` from `MainActivity`.
 
 ## Architecture
 
@@ -101,7 +101,7 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - `:app` is the only application module. `:core:*` are libraries.
 - Single-activity Compose app. Navigation Compose is used for routing.
 - Hilt for DI. The DI graph lives in `:app` plus `DataModule` in `:core:data`.
-- Data access goes through `app.calendarium.core.data.CalendarRepository`,
+- Data access goes through `app.foscal.core.data.CalendarRepository`,
   which is backed by `CalendarContract`. Do not query `CalendarContract`
   directly from UI/feature code — go through the repository so it can be
   faked in tests.
@@ -160,6 +160,6 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 
 ## Sync model
 
-Calendarium does **not** implement CalDAV itself. Syncing with Nextcloud /
+Foscal does **not** implement CalDAV itself. Syncing with Nextcloud /
 ownCloud is delegated to DAVx⁵ via the Android system Calendar Provider.
 Onboarding should detect DAVx⁵ and otherwise point the user to install it.

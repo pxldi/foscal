@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "app.calendarium"
+    namespace = "app.foscal"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.calendarium"
+        applicationId = "app.foscal"
         minSdk = 26
         targetSdk = 35
         versionCode = 7
@@ -35,15 +35,15 @@ android {
         return null
     }
 
-    val releaseStoreFile = cfg("CALENDARIUM_STORE_FILE", "storeFile")
+    val releaseStoreFile = cfg("FOSCAL_STORE_FILE", "storeFile")
 
     signingConfigs {
         create("release") {
             if (releaseStoreFile != null) {
                 storeFile = file(releaseStoreFile)
-                storePassword = cfg("CALENDARIUM_STORE_PASSWORD", "storePassword")
-                keyAlias = cfg("CALENDARIUM_KEY_ALIAS", "keyAlias")
-                keyPassword = cfg("CALENDARIUM_KEY_PASSWORD", "keyPassword")
+                storePassword = cfg("FOSCAL_STORE_PASSWORD", "storePassword")
+                keyAlias = cfg("FOSCAL_KEY_ALIAS", "keyAlias")
+                keyPassword = cfg("FOSCAL_KEY_PASSWORD", "keyPassword")
             }
         }
     }

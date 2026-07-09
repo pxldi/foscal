@@ -1,4 +1,4 @@
-# Calendarium
+# Foscal
 
 A free, open-source Android calendar app with a modern, Material 3 / Material You
 design. Built for people who want a beautiful, fast, privacy-respecting calendar
@@ -117,18 +117,18 @@ Install on a connected device:
 
 ## Syncing with Nextcloud / ownCloud
 
-Calendarium itself is a calendar *client* and intentionally does not ship its
+Foscal itself is a calendar *client* and intentionally does not ship its
 own CalDAV engine. To sync with a CalDAV server, install
 [DAVx⁵](https://www.davx5.com) (free, FOSS, available on
 [F-Droid](https://f-droid.org/packages/at.bitfire.davdroid)) and add your
 account there. DAVx⁵ will push/pull events into the Android Calendar Provider
-and Calendarium will pick them up automatically. The onboarding flow inside
-Calendarium will hand off to DAVx⁵ if it is installed, or guide you to install
+and Foscal will pick them up automatically. The onboarding flow inside
+Foscal will hand off to DAVx⁵ if it is installed, or guide you to install
 it otherwise.
 
 ## License
 
-Copyright (C) the Calendarium authors.
+Copyright (C) the Foscal authors.
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software

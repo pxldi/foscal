@@ -21,13 +21,13 @@
     <uses-feature android:name="android.hardware.alarm" android:required="false" />
 
     <application
-        android:name=".CalendariumApp"
+        android:name=".FoscalApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Calendarium"
+        android:theme="@style/Theme.Foscal"
         tools:targetApi="31">
 
         <activity
@@ -35,7 +35,7 @@
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.Calendarium">
+            android:theme="@style/Theme.Foscal">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
