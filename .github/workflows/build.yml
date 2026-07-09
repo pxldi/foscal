@@ -42,15 +42,15 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-            echo "CALENDARIUM_STORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "FOSCAL_STORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
           fi
 
       - name: Assemble release
         run: ./gradlew :app:assembleRelease --no-daemon
         env:
-          CALENDARIUM_STORE_PASSWORD: ${{ secrets.CALENDARIUM_STORE_PASSWORD }}
-          CALENDARIUM_KEY_ALIAS: ${{ secrets.CALENDARIUM_KEY_ALIAS }}
-          CALENDARIUM_KEY_PASSWORD: ${{ secrets.CALENDARIUM_KEY_PASSWORD }}
+          FOSCAL_STORE_PASSWORD: ${{ secrets.CALENDARIUM_STORE_PASSWORD }}
+          FOSCAL_KEY_ALIAS: ${{ secrets.CALENDARIUM_KEY_ALIAS }}
+          FOSCAL_KEY_PASSWORD: ${{ secrets.CALENDARIUM_KEY_PASSWORD }}
 
       - name: Lint
         run: ./gradlew lint --no-daemon
