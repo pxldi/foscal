@@ -1,0 +1,274 @@
+package app.foscal.ui.search
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.core.model.Event
+import app.foscal.ui.util.Dates
+import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.timeFormatter
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchRoute(
+    onBack: () -> Unit,
+    onOpenEventDetail: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    viewModel: SearchViewModel = hiltViewModel(),
+) {
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val results by viewModel.results.collectAsStateWithLifecycle()
+    val zone = viewModel.zone
+    val todayFlow = remember(zone) { Dates.todayFlow(zone) }
+    val today by todayFlow.collectAsStateWithLifecycle(initialValue = LocalDate.now(zone))
+    val listState = rememberLazyListState()
+    var positionedQuery by remember { mutableStateOf("") }
+    var olderRequestedAt by remember { mutableStateOf<Long?>(null) }
+    var newerRequestedAt by remember { mutableStateOf<Long?>(null) }
+
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(query) {
+        positionedQuery = ""
+        olderRequestedAt = null
+        newerRequestedAt = null
+    }
+    LaunchedEffect(query, results) {
+        val q = query.trim()
+        if (q.isNotEmpty() && positionedQuery != q && results.isNotEmpty()) {
+            positionedQuery = q
+            val now = java.time.Instant.now()
+            val index = results.indexOfFirst { !it.start.isBefore(now) }
+                .takeIf { it >= 0 } ?: results.lastIndex
+            listState.scrollToItem(index.coerceAtLeast(0))
+        }
+    }
+    LaunchedEffect(listState, results.size, query) {
+        snapshotFlow {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            val first = visible.firstOrNull()?.index ?: -1
+            val last = visible.lastOrNull()?.index ?: -1
+            Triple(first, last, listState.isScrollInProgress)
+        }.distinctUntilChanged().collect { (first, last, isScrolling) ->
+            if (query.isBlank() || results.isEmpty()) return@collect
+            if (!isScrolling) return@collect
+            val firstStart = results.first().start.toEpochMilli()
+            val lastStart = results.last().start.toEpochMilli()
+            if (first in 0..2 && olderRequestedAt != firstStart) {
+                olderRequestedAt = firstStart
+                viewModel.loadOlder()
+            }
+            if (last >= results.lastIndex - 2 && newerRequestedAt != lastStart) {
+                newerRequestedAt = lastStart
+                viewModel.loadNewer()
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                title = {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = viewModel::onQueryChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        placeholder = { Text("Search events") },
+                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.onQueryChange("") }) {
+                                    Icon(Icons.Outlined.Clear, contentDescription = "Clear")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Search,
+                        ),
+                        shape = RoundedCornerShape(28.dp),
+                    )
+                },
+            )
+        },
+    ) { padding ->
+        val q = query.trim()
+        when {
+            q.isEmpty() -> EmptyState("Search by title, location, or notes.", padding)
+            results.isEmpty() -> EmptyState("No matching events.", padding)
+            else -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                state = listState,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 12.dp,
+                    vertical = 8.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(results, key = { it.id to it.start.toEpochMilli() }) { event ->
+                    SearchResultRow(
+                        event = event,
+                        isToday = event.startLocalDate(zone) == today,
+                        today = today,
+                        zone = zone,
+                        onClick = {
+                            keyboard?.hide()
+                            onOpenEventDetail(event.id, event.start.toEpochMilli())
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyState(message: String, padding: androidx.compose.foundation.layout.PaddingValues) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SearchResultRow(
+    event: Event,
+    isToday: Boolean,
+    today: LocalDate,
+    zone: java.time.ZoneId,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 4.dp, height = 36.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color(event.color)),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                event.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val subtitle = buildSubtitle(event, zone, isToday, today, LocalUse24HourClock.current)
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private fun buildSubtitle(
+    event: Event,
+    zone: java.time.ZoneId,
+    isToday: Boolean,
+    today: LocalDate,
+    is24Hour: Boolean,
+): String {
+    val parts = mutableListOf<String>()
+    val date = event.startLocalDate(zone)
+    val dateText = if (isToday) {
+        "Today"
+    } else {
+        date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())) +
+            if (date.year != today.year) " ${date.year}" else ""
+    }
+    parts += if (event.allDay) {
+        "All day · $dateText"
+    } else {
+        val time = Dates.instantToLocal(event.start, zone).toLocalTime().format(timeFormatter(is24Hour))
+        "$dateText · $time"
+    }
+    if (!event.location.isNullOrBlank()) parts += event.location!!
+    return parts.joinToString(" · ")
+}

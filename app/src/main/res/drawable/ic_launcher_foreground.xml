@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Calendarium mark: a minimal calendar showing "31", set in Bricolage Grotesque
+  Foscal mark: a minimal calendar showing "31", set in Bricolage Grotesque
   ExtraBold (the app's display face). Glyphs are baked to outlines since vector
   drawables can't embed fonts. Blue tile + squircle come from the background layer.
 -->

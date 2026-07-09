@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "app.calendarium.core.data"
+    namespace = "app.foscal.core.data"
     compileSdk = 35
 
     defaultConfig {

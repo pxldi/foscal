@@ -1,0 +1,137 @@
+package app.foscal.ui.week
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.foscal.core.data.CalendarRepository
+import app.foscal.core.data.Preferences
+import app.foscal.core.model.Event
+import app.foscal.core.model.EventInput
+import app.foscal.core.model.Frequency
+import app.foscal.ui.common.TimelineDay
+import app.foscal.ui.util.Dates
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import javax.inject.Inject
+
+data class WeekUiState(
+    val weekStart: LocalDate,
+    val days: List<TimelineDay> = emptyList(),
+    val hasVisibleCalendars: Boolean = true,
+    val today: LocalDate = LocalDate.now(),
+)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+@HiltViewModel
+class WeekViewModel @Inject constructor(
+    private val repository: CalendarRepository,
+    private val prefs: Preferences,
+) : ViewModel() {
+
+    private val zone: ZoneId = ZoneId.systemDefault()
+    private val _weekStart = MutableStateFlow(startOfWeek(LocalDate.now(zone)))
+    private val today = Dates.todayFlow(zone)
+
+    private val calendarIds = combine(
+        repository.observeCalendars(),
+        prefs.hiddenCalendarIds,
+    ) { all, hidden ->
+        all.asSequence()
+            .filter { it.visible && it.id.toString() !in hidden }
+            .map { it.id }
+            .toSet()
+    }
+
+    private val weekBounds = _weekStart.map { start ->
+        // Look back far enough that multi-day events which started before this week but are
+        // still running get returned by the provider; pad the end for UTC all-day edge cases.
+        val from = start.minusDays(31).atStartOfDay(zone).toInstant()
+        val to = start.plusDays(8).atStartOfDay(zone).toInstant()
+        from to to
+    }
+
+    private val events = combine(calendarIds, weekBounds) { ids, range -> ids to range }
+        .flatMapLatest { (ids, range) ->
+            repository.observeEvents(ids, range.first, range.second)
+        }
+
+    val state: StateFlow<WeekUiState> = combine(
+        _weekStart,
+        events,
+        calendarIds,
+        today,
+    ) { start, evts, ids, currentDate ->
+        val byDate = evts
+            .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
+            .groupBy({ it.first }, { it.second })
+        val days = (0 until 7).map { offset ->
+            val date = start.plusDays(offset.toLong())
+            TimelineDay(date, byDate[date].orEmpty().sortedBy { it.start })
+        }
+        WeekUiState(
+            weekStart = start,
+            days = days,
+            hasVisibleCalendars = ids.isNotEmpty(),
+            today = currentDate,
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        WeekUiState(weekStart = startOfWeek(LocalDate.now(zone)), today = LocalDate.now(zone)),
+    )
+
+    fun nextWeek() {
+        _weekStart.value = _weekStart.value.plusWeeks(1)
+    }
+
+    fun previousWeek() {
+        _weekStart.value = _weekStart.value.minusWeeks(1)
+    }
+
+    fun goToThisWeek() {
+        _weekStart.value = startOfWeek(LocalDate.now(zone))
+    }
+
+    fun moveEvent(event: Event, newStartMillis: Long, newEndMillis: Long) {
+        if (event.allDay) return
+        viewModelScope.launch {
+            val reminder = repository.getReminderMinutes(event.id).minOrNull()
+            val input = EventInput(
+                calendarId = event.calendarId,
+                title = event.title,
+                location = event.location,
+                description = event.description,
+                start = Instant.ofEpochMilli(newStartMillis),
+                end = Instant.ofEpochMilli(newEndMillis),
+                allDay = false,
+                timezone = event.timezone ?: zone.id,
+                frequency = Frequency.NONE,
+                rrule = null,
+                reminderMinutesBefore = reminder,
+            )
+            if (event.isRecurring) {
+                repository.updateEventInstance(event.id, event.start.toEpochMilli(), input)
+            } else {
+                repository.updateEvent(event.id, input)
+            }
+        }
+    }
+
+    companion object {
+        fun startOfWeek(date: LocalDate, firstDay: DayOfWeek = DayOfWeek.MONDAY): LocalDate {
+            val diff = (date.dayOfWeek.value - firstDay.value + 7) % 7
+            return date.minusDays(diff.toLong())
+        }
+    }
+}

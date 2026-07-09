@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Calendarium"
+rootProject.name = "Foscal"
 
 include(":app")
 include(":core:core-model")
