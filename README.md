@@ -1,4 +1,8 @@
-# Foscal
+<p align="center">
+  <img src="docs/foscal-icon.png" width="128" height="128" alt="Foscal app icon" />
+</p>
+
+<h1 align="center">Foscal</h1>
 
 A free, open-source Android calendar app with a modern, Material 3 / Material You
 design. Built for people who want a beautiful, fast, privacy-respecting calendar
