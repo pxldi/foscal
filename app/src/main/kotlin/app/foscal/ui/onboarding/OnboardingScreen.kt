@@ -48,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -536,26 +535,17 @@ private fun FoscalWordmark() {
 }
 
 /**
- * The Foscal glyph: a minimal calendar showing "31" in Bricolage Grotesque on a
- * brand-blue squircle. Reuses the launcher foreground drawable over the same blue field
- * so the in-app mark and the home-screen icon stay pixel-identical.
+ * The Foscal glyph: the chambered-ammonite mark on a brand-blue squircle. Renders the
+ * self-contained badge drawable so the in-app mark and the home-screen launcher icon
+ * stay pixel-identical.
  */
 @Composable
 private fun FoscalMark(modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(percent = 26))
-            .background(
-                Brush.verticalGradient(listOf(Color(0xFF3B86EE), Color(0xFF1A73E8))),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
+    Image(
+        painter = painterResource(R.drawable.ic_foscal_badge),
+        contentDescription = null,
+        modifier = modifier,
+    )
 }
 
 @Composable

@@ -1,5 +1,6 @@
 package app.foscal.ui.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,12 +42,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.BuildConfig
+import app.foscal.R
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.ThemeMode
+import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.ui.calendars.CalendarsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -81,6 +87,7 @@ fun SettingsScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item { SettingsHeader() }
             item {
                 Card(
                     modifier = Modifier
@@ -189,6 +196,35 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsHeader() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_foscal_badge),
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+        )
+        Text(
+            "Foscal",
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = BricolageFamily),
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        Text(
+            "Version ${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
