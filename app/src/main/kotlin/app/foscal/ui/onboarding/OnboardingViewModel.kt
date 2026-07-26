@@ -124,7 +124,7 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val color = CalendarColors.pick(0)
-                val id = repository.createLocalCalendar(name = "My calendar", color = color)
+                val id = repository.ensureLocalCalendar(name = "My calendar", color = color)
                 if (id == null) {
                     _internal.value = _internal.value.copy(
                         completing = false,

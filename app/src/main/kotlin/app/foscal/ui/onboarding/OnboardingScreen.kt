@@ -24,6 +24,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DevicesOther
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Notifications
@@ -396,7 +397,7 @@ private fun AccentCard(
                     modifier = Modifier.size(28.dp),
                 )
                 Text(
-                    "Main color",
+                    "Accent color",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -406,6 +407,7 @@ private fun AccentCard(
                 customColor = customColor,
                 onSelectPreset = onSelectPreset,
                 onPickCustom = onPickCustom,
+                label = null,
             )
         }
     }
@@ -435,7 +437,7 @@ private fun ThemeCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(
-                    Icons.Outlined.Palette,
+                    Icons.Outlined.Contrast,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp),

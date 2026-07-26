@@ -43,6 +43,8 @@ fun AccentPicker(
     onSelectPreset: (AccentColor) -> Unit,
     onPickCustom: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    // Null where the surrounding card already names the setting, so it isn't labelled twice.
+    label: String? = "Accent color",
 ) {
     val dark = LocalIsDarkTheme.current
     var showPicker by remember { mutableStateOf(false) }
@@ -52,7 +54,7 @@ fun AccentPicker(
         AccentColor.FOREST to "Forest",
     )
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Accent color", style = MaterialTheme.typography.bodyMedium)
+        if (label != null) Text(label, style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             presets.forEach { (accent, label) ->
                 val tokens = accent.tokens()

@@ -75,7 +75,7 @@ class FakeCalendarRepository(
         to: Instant,
     ): Flow<List<Event>> = MutableStateFlow(events.filter { it.calendarId in calendarIds })
 
-    override suspend fun createLocalCalendar(name: String, color: Int): Long? = 1L
+    override suspend fun ensureLocalCalendar(name: String, color: Int): Long? = 1L
 
     override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) = Unit
 

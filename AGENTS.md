@@ -53,10 +53,11 @@ changes. Do not commit code that does not build or that fails lint.
 
 ## Testing on the emulator
 
-A headless AVD named `foscal_test` is available for UI verification:
+A headless AVD named `calendarium_test` (predates the rename; `emulator -list-avds` is the
+authority if it is missing) is available for UI verification:
 
 ```bash
-emulator -avd foscal_test -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect &
+emulator -avd calendarium_test -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect &
 # wait until: adb shell getprop sys.boot_completed == 1
 ```
 
@@ -165,6 +166,22 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   Vertical swipes on the month grid are aliases for month navigation (up =
   next month, down = previous month) and use dominant-axis drag detection so
   diagonal gestures do not trigger both horizontal and vertical navigation.
+- **Alarm keys must include the occurrence start.** Every instance of a recurring series shares
+  one `Events._ID`, so a PendingIntent request code (or notification id) keyed on
+  `(eventId, minutes)` alone makes each occurrence's `FLAG_UPDATE_CURRENT` alarm overwrite the
+  previous one and only the last occurrence in the horizon ever fires. Use
+  `AlarmReminderScheduler.alarmKey(eventId, startMillis, minutesBefore)` for both.
+- **Alarm cancellation is driven by a persisted registry, not by the new reminder list.**
+  `reschedule` receives only the reminders that still exist, so deriving what to cancel from it
+  strands alarms for deleted events, removed reminders, moved occurrences, and any offset outside
+  a hardcoded preset list. `AlarmReminderScheduler` records the request codes it scheduled in
+  SharedPreferences and cancels exactly those next time.
+- **`ensureLocalCalendar` is find-or-create, deliberately.** The Calendar Provider outlives the
+  app's own data, so a plain insert on every onboarding run adds a duplicate "My calendar" after
+  each data clear or reinstall and strands the user's events in the first one.
+- **Timeline headers must use `TimelineGutterWidth` / `TimelineEndInset`.** Any weekday strip drawn
+  above a `TimelineLayout` shares those two values or its columns drift out of alignment with the
+  grid columns below; the error accumulates across the week and shows up on the last day.
 - **Reminders are all-or-nothing.** The provider has no partial-update path for
   `Reminders`, so `updateEvent` deletes every row for the event and reinserts from
   `EventInput.reminderMinutes`. That list must therefore always be the *complete* set —

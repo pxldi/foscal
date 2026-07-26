@@ -50,6 +50,50 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.floor
 
+/**
+ * Width of the hour-label gutter and the inset at the far edge of the grid. Any header rendered
+ * above a [TimelineLayout] must use the same two values, or its weekday columns drift out of
+ * alignment with the grid columns underneath — the drift accumulates across the week and is most
+ * visible on the last day.
+ */
+val TimelineGutterWidth = 54.dp
+val TimelineEndInset = 4.dp
+
+/** Grid hour to open on when no timed event and no "now" marker gives a better anchor. */
+private const val DEFAULT_ANCHOR_HOUR = 8
+
+/** Context kept above the anchor so the marker or first event isn't flush against the top edge. */
+private const val ANCHOR_LEAD_IN_HOURS = 1
+
+/**
+ * Hour the grid should be scrolled to for [days]: the current hour when today is on screen,
+ * otherwise the first timed event of the shown days, otherwise [DEFAULT_ANCHOR_HOUR].
+ *
+ * [days] must already be filtered to timed events — all-day events live in their own header and
+ * carry no meaningful hour.
+ */
+internal fun anchorHour(
+    days: List<TimelineDay>,
+    today: LocalDate,
+    now: Instant,
+    zone: ZoneId,
+): Int {
+    val focus = if (days.any { it.date == today }) {
+        now.atZone(zone).hour
+    } else {
+        val shownDates = days.map { it.date }.toSet()
+        days.asSequence()
+            .flatMap { it.events }
+            .map { it.start.atZone(zone) }
+            // A multi-day event starting before this view begins would otherwise drag the anchor
+            // back to its original start hour on an unrelated day.
+            .filter { it.toLocalDate() in shownDates }
+            .minOfOrNull { it.hour }
+            ?: DEFAULT_ANCHOR_HOUR
+    }
+    return (focus - ANCHOR_LEAD_IN_HOURS).coerceIn(0, 23)
+}
+
 data class TimelineDay(
     val date: LocalDate,
     val events: List<Event>,
@@ -69,7 +113,9 @@ fun TimelineLayout(
     modifier: Modifier = Modifier,
     hourHeight: Dp = 60.dp,
     compact: Boolean = false,
-    now: Instant = Instant.now(),
+    // Remembered, not a bare Instant.now(): as a default argument it would be re-evaluated on
+    // every recomposition, restarting the marker ticker below before its delay ever elapsed.
+    now: Instant = remember { Instant.now() },
     zone: ZoneId = ZoneId.systemDefault(),
     blockCornerRadius: Dp = if (compact) 5.dp else 7.dp,
     accentStripe: Boolean = !compact,
@@ -106,20 +152,19 @@ fun TimelineLayout(
     var selection by remember { mutableStateOf<TimeSelection?>(null) }
     var eventDrag by remember { mutableStateOf<EventDrag?>(null) }
 
-    var initialScrolled = remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!initialScrolled.value) {
-            initialScrolled.value = true
-            val targetPx = with(density) { (hourHeight * 6).toPx() }.toInt()
-            scrollState.scrollTo(targetPx.coerceAtLeast(0))
-        }
+    // Open on the part of the day the user cares about. A fixed early-morning offset means that
+    // opening the app in the afternoon shows an empty grid with the next event scrolled off below.
+    val anchorHour = anchorHour(timedDays, today, now, zone)
+    LaunchedEffect(anchorHour) {
+        val targetPx = with(density) { (hourHeight * anchorHour).toPx() }.toInt()
+        scrollState.scrollTo(targetPx.coerceAtLeast(0))
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (allDayEvents.isNotEmpty()) {
             AllDayHeader(days = days, onEventClick = onEventClick)
             HorizontalDivider(
-                modifier = Modifier.padding(start = 54.dp),
+                modifier = Modifier.padding(start = TimelineGutterWidth, end = TimelineEndInset),
                 color = gridColor,
                 thickness = 0.5.dp,
             )
@@ -128,8 +173,12 @@ fun TimelineLayout(
 
         Column(modifier = Modifier.verticalScroll(scrollState)) {
             Box {
-                Row(modifier = Modifier.height(totalHeight)) {
-                    Column(Modifier.width(54.dp)) {
+                Row(
+                    modifier = Modifier
+                        .height(totalHeight)
+                        .padding(end = TimelineEndInset),
+                ) {
+                    Column(Modifier.width(TimelineGutterWidth)) {
                         for (h in 0..23) {
                             Box(
                                 Modifier
@@ -384,9 +433,9 @@ private fun AllDayHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(top = 4.dp, bottom = 4.dp, end = TimelineEndInset),
     ) {
-        Spacer(Modifier.width(54.dp))
+        Spacer(Modifier.width(TimelineGutterWidth))
         BoxWithConstraints(Modifier.weight(1f)) {
             val colWidth = maxWidth / days.size.coerceAtLeast(1)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -499,7 +548,9 @@ private fun EventBlock(
     val timeFmt = remember(is24Hour) { timeFormatter(is24Hour) }
     val showTime = !compact && heightDp >= 36.dp
     val textPadding = if (compact) {
-        Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp)
+        // Week columns are only ~48dp wide on a phone. Every dp of padding here costs a character,
+        // and once a word no longer fits the line the layout breaks it mid-word ("plannin/g").
+        Modifier.fillMaxSize().padding(horizontal = 2.dp, vertical = 2.dp)
     } else {
         Modifier.fillMaxSize().padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp)
     }

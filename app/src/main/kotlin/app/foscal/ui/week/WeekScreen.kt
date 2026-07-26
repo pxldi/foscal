@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.ui.theme.Motion
+import app.foscal.ui.common.TimelineEndInset
+import app.foscal.ui.common.TimelineGutterWidth
 import app.foscal.ui.common.TimelineLayout
 import app.foscal.ui.util.currentLocale
 import java.time.LocalDate
@@ -156,8 +158,12 @@ private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 52.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(
+                start = TimelineGutterWidth,
+                end = TimelineEndInset,
+                top = 4.dp,
+                bottom = 4.dp,
+            ),
     ) {
         val locale = currentLocale()
         (0 until 7).forEach { offset ->

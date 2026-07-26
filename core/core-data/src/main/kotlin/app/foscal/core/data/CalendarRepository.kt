@@ -73,8 +73,13 @@ interface CalendarRepository {
 
     fun observeEvents(calendarIds: Set<Long>, from: Instant, to: Instant): Flow<List<Event>>
 
-    /** Creates a fully local (offline) calendar that only this device holds. */
-    suspend fun createLocalCalendar(name: String, color: Int): Long?
+    /**
+     * Returns this device's local (offline) calendar, creating it if it does not exist yet.
+     * Idempotent: the Calendar Provider outlives the app's own data, so re-running onboarding
+     * after a data clear or reinstall must adopt the existing calendar rather than add a second
+     * one and strand the user's events in the first.
+     */
+    suspend fun ensureLocalCalendar(name: String, color: Int): Long?
 
     suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean)
 
@@ -288,8 +293,9 @@ class CalendarContractRepository @Inject constructor(
             }
         }.flowOn(Dispatchers.IO)
 
-    override suspend fun createLocalCalendar(name: String, color: Int): Long? =
+    override suspend fun ensureLocalCalendar(name: String, color: Int): Long? =
         withContext(Dispatchers.IO) {
+            existingLocalCalendarId()?.let { return@withContext it }
             val values = ContentValues().apply {
                 put(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
                 put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
@@ -309,6 +315,16 @@ class CalendarContractRepository @Inject constructor(
                 .build()
             safeInsert(uri, values)?.let { ContentUris.parseId(it) }
         }
+
+    /** Oldest calendar on our own local account, so repeated calls always resolve to the same one. */
+    private fun existingLocalCalendarId(): Long? = safeQuery(
+        CalendarContract.Calendars.CONTENT_URI,
+        arrayOf(CalendarContract.Calendars._ID),
+        "${CalendarContract.Calendars.ACCOUNT_TYPE} = ? AND " +
+            "${CalendarContract.Calendars.ACCOUNT_NAME} = ?",
+        arrayOf(CalendarContract.ACCOUNT_TYPE_LOCAL, LOCAL_ACCOUNT_NAME),
+        "${CalendarContract.Calendars._ID} ASC",
+    )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
 
     override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) {
         withContext(Dispatchers.IO) {
