@@ -2,7 +2,6 @@ package app.foscal.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.foscal.core.model.AccentColor
+import app.foscal.core.ui.theme.LocalIsDarkTheme
 import app.foscal.core.ui.theme.tokens
 
 /**
@@ -44,7 +44,7 @@ fun AccentPicker(
     onPickCustom: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = LocalIsDarkTheme.current
     var showPicker by remember { mutableStateOf(false) }
     val presets = listOf(
         AccentColor.COBALT to "Cobalt",

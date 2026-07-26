@@ -14,7 +14,7 @@ import javax.inject.Singleton
  * [android.appwidget.AppWidgetProvider] update period).
  */
 @Singleton
-class WidgetRefresher @Inject constructor(@ApplicationContext private val context: Context) {
+class WidgetRefresher @Inject constructor(@param:ApplicationContext private val context: Context) {
 
     fun refresh() {
         val manager = AppWidgetManager.getInstance(context) ?: return

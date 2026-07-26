@@ -18,6 +18,8 @@ import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventEditorViewModelTest {
@@ -180,6 +182,114 @@ class EventEditorViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("Room 3B", "Cafeteria"), vm.state.value.recentLocations)
+    }
+
+    @Test
+    fun `editing an event preserves every reminder it already had`() = runTest(dispatcher) {
+        // An event synced from CalDAV with three alarms. Renaming it must not drop two of them:
+        // updateEvent rewrites the whole reminder set, so the input has to carry all of them.
+        repo = FakeCalendarRepository(
+            calendars = listOf(calendar),
+            events = listOf(recurring.copy(rrule = null)),
+            reminderMinutes = listOf(60, 10, 1440),
+        )
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+
+        assertEquals(listOf(10, 60, 1440), vm.state.value.reminderMinutes)
+
+        vm.updateTitle("Renamed")
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(FakeCalendarRepository.Op.UPDATE, repo.lastOp)
+        assertEquals(listOf(10, 60, 1440), repo.lastWritten?.reminderMinutes)
+    }
+
+    @Test
+    fun `toggleReminder adds removes and clears`() = runTest(dispatcher) {
+        val vm = newEventVm()
+        advanceUntilIdle()
+        assertEquals(listOf(15), vm.state.value.reminderMinutes)
+
+        vm.toggleReminder(60)
+        assertEquals(listOf(15, 60), vm.state.value.reminderMinutes)
+
+        vm.toggleReminder(15)
+        assertEquals(listOf(60), vm.state.value.reminderMinutes)
+
+        vm.toggleReminder(null)
+        assertEquals(emptyList<Int>(), vm.state.value.reminderMinutes)
+
+        vm.updateTitle("No alarms")
+        vm.save()
+        advanceUntilIdle()
+        assertEquals(emptyList<Int>(), repo.lastWritten?.reminderMinutes)
+    }
+
+    @Test
+    fun `editing keeps the event's original timezone instead of the device zone`() =
+        runTest(dispatcher) {
+            // Authored in New York; edited on a device set to some other zone. Re-anchoring it to
+            // the device zone would shift the event for every other client on the calendar.
+            repo = FakeCalendarRepository(
+                calendars = listOf(calendar),
+                events = listOf(recurring.copy(rrule = null, timezone = "America/New_York")),
+            )
+            val vm = recurringEditVm()
+            advanceUntilIdle()
+
+            vm.updateTitle("Renamed")
+            vm.save()
+            advanceUntilIdle()
+
+            assertEquals("America/New_York", repo.lastWritten?.timezone)
+        }
+
+    @Test
+    fun `an unparseable stored timezone falls back to the device zone`() = runTest(dispatcher) {
+        repo = FakeCalendarRepository(
+            calendars = listOf(calendar),
+            events = listOf(recurring.copy(rrule = null, timezone = "Not/AZone")),
+        )
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+
+        vm.updateTitle("Renamed")
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(ZoneId.systemDefault().id, repo.lastWritten?.timezone)
+    }
+
+    @Test
+    fun `an all-day event is stored in UTC regardless of its original zone`() = runTest(dispatcher) {
+        repo = FakeCalendarRepository(
+            calendars = listOf(calendar),
+            events = listOf(
+                recurring.copy(rrule = null, allDay = true, timezone = "America/New_York"),
+            ),
+        )
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+
+        vm.updateTitle("Renamed")
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(ZoneOffset.UTC.id, repo.lastWritten?.timezone)
+    }
+
+    @Test
+    fun `a new event is authored in the device zone`() = runTest(dispatcher) {
+        val vm = newEventVm()
+        advanceUntilIdle()
+
+        vm.updateTitle("Lunch")
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(ZoneId.systemDefault().id, repo.lastWritten?.timezone)
     }
 
     @Test

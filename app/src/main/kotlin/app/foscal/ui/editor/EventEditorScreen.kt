@@ -38,6 +38,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
@@ -65,18 +66,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Frequency
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import java.util.Locale
 
 private val rowPadding = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
 
@@ -206,7 +207,7 @@ private fun EditorForm(
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(),
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                     )
                     ExposedDropdownMenu(
                         expanded = expanded,
@@ -287,8 +288,8 @@ private fun EditorForm(
         // Reminder
         Section {
             ReminderRow(
-                selected = state.reminderMinutesBefore,
-                onSelect = viewModel::updateReminder,
+                selected = state.reminderMinutes,
+                onToggle = viewModel::toggleReminder,
                 modifier = rowPadding.fillMaxWidth(),
             )
         }
@@ -318,7 +319,7 @@ private fun EditorForm(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(),
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                     label = { Text("Location") },
                     singleLine = true,
                     trailingIcon = if (suggestions.isNotEmpty()) {
@@ -490,7 +491,7 @@ private fun DateTimeRow(
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         Text(
-            date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+            date.format(rememberDateFormatter("EEE, MMM d")),
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { showDatePicker = true }
@@ -572,37 +573,40 @@ private fun ChipRow(
     }
 }
 
+private val ReminderPresets = listOf(0, 5, 15, 30, 60, 1440)
+
+internal fun reminderLabel(minutes: Int): String = when {
+    minutes == 0 -> "At start"
+    minutes % 1440 == 0 -> "${minutes / 1440} day".pluralize(minutes / 1440)
+    minutes % 60 == 0 -> "${minutes / 60} hour".pluralize(minutes / 60)
+    else -> "$minutes min"
+}
+
+private fun String.pluralize(count: Int): String = if (count == 1) this else "${this}s"
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ReminderRow(
-    selected: Int?,
-    onSelect: (Int?) -> Unit,
+    selected: List<Int>,
+    onToggle: (Int?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val options = listOf(
-        null to "None",
-        0 to "At start",
-        5 to "5 min",
-        15 to "15 min",
-        30 to "30 min",
-        60 to "1 hour",
-        1440 to "1 day",
-    )
+    // Show the presets plus any value the event already carries (a 10-minute alarm set in another
+    // app must stay togglable here, or saving would silently drop it).
+    val options = remember(selected) { (ReminderPresets + selected).distinct().sorted() }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Reminder", style = MaterialTheme.typography.bodyLarge)
+        Text("Reminders", style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            options.forEach { (minutes, label) ->
-                AssistChip(
-                    onClick = { onSelect(minutes) },
-                    label = { Text(label) },
-                    colors = if (selected == minutes) {
-                        AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    } else {
-                        AssistChipDefaults.assistChipColors()
-                    },
+            FilterChip(
+                selected = selected.isEmpty(),
+                onClick = { onToggle(null) },
+                label = { Text("None") },
+            )
+            options.forEach { minutes ->
+                FilterChip(
+                    selected = minutes in selected,
+                    onClick = { onToggle(minutes) },
+                    label = { Text(reminderLabel(minutes)) },
                 )
             }
         }
@@ -755,8 +759,7 @@ private fun EndDateRow(date: LocalDate?, onPick: (LocalDate) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Date", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Text(
-            date?.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.getDefault()))
-                ?: "Pick date",
+            date?.format(rememberDateFormatter("EEE, MMM d, yyyy")) ?: "Pick date",
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { showPicker = true }
@@ -780,6 +783,7 @@ private fun EndDateRow(date: LocalDate?, onPick: (LocalDate) -> Unit) {
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ByWeekdayRow(byWeekday: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
+    val locale = currentLocale()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("On", style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -791,7 +795,7 @@ private fun ByWeekdayRow(byWeekday: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Uni
                     selected = day in byWeekday,
                     onClick = { onToggle(day) },
                     label = {
-                        Text(day.getDisplayName(TextStyle.NARROW, Locale.getDefault()))
+                        Text(day.getDisplayName(TextStyle.NARROW, locale))
                     },
                 )
             }

@@ -8,6 +8,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +63,14 @@ private fun darkColorsFor(accent: AccentTokens) = darkColorScheme(
     error = Color(0xFFFF6B66),
 )
 
+/**
+ * Whether the app is currently rendering dark. Reads the resolved theme — which the user can force
+ * to Light or Dark in Settings — where [isSystemInDarkTheme] would only ever report the OS setting
+ * and so disagree with the rest of the UI. Anything outside this file that needs to branch on
+ * light/dark must read this, never [isSystemInDarkTheme].
+ */
+val LocalIsDarkTheme = staticCompositionLocalOf { false }
+
 @Composable
 fun FoscalTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -81,11 +91,13 @@ fun FoscalTheme(
         darkTheme -> darkColorsFor(tokens)
         else -> lightColorsFor(tokens)
     }
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = FoscalTypography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = FoscalTypography,
+            content = content,
+        )
+    }
 }
 
 /** Maps a persisted [AccentColor] preset to its light/dark color tokens. */
@@ -114,5 +126,5 @@ fun customAccentTokens(seed: Color): AccentTokens = AccentTokens(
 
 /** Weekend day-of-week label color, adjusted so the gold stays legible on the dark surface. */
 @Composable
-fun weekendLabelColor(darkTheme: Boolean = isSystemInDarkTheme()): Color =
+fun weekendLabelColor(darkTheme: Boolean = LocalIsDarkTheme.current): Color =
     if (darkTheme) WeekendGoldDark else WeekendGoldLight

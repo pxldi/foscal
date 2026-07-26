@@ -19,7 +19,7 @@ private val Context.dataStore by preferencesDataStore(name = "foscal_prefs")
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : Preferences {
 
     override val onboardingCompleted: Flow<Boolean> =

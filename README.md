@@ -4,8 +4,7 @@
 
 <h1 align="center">Foscal</h1>
 
-A free, open-source Android calendar app with a modern, Material 3 / Material You
-design. Built for people who want a beautiful, fast, privacy-respecting calendar
+A free, open-source Android calendar app with a modern Material 3 design. Built for people who want a beautiful, fast, privacy-respecting calendar
 that works both **fully offline** (local calendars) and **online** with any
 CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 [DAVx⁵](https://www.davx5.com).
@@ -16,7 +15,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 ## Design goals
 
-- **Beautiful and modern.** Jetpack Compose + Material 3 with dynamic color.
+- **Beautiful and modern.** Jetpack Compose + Material 3 with a custom, user-selectable
+  accent palette.
 - **Works offline.** Create and use local calendars without any account or
   network.
 - **Open sync.** Uses the Android system Calendar Provider, so any installed
@@ -47,7 +47,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Theme & clock** — force **System / Light / Dark** and toggle **12- / 24-hour
   time**; both apply live across every screen and persist.
 - **Event editor** — create, edit, and delete events with title, calendar,
-  all-day toggle, start/end date-time pickers, location, notes, and reminder.
+  all-day toggle, start/end date-time pickers, location, notes, and any number of
+  reminders. Events keep the time zone they were authored in, so editing one that
+  came from CalDAV does not shift it for other clients.
 - **Recurring events** — daily / weekly / monthly / yearly, with a custom
   editor for interval, end date / occurrence count, and by-weekday
   selection. Editing or deleting a repeating event prompts for **this
@@ -71,7 +73,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   the UI reacts the instant it is granted; no provider access happens before.
   The final step lets users choose theme, accent color, reminders, and opt-in
   map picking before entering the main calendar.
-- Material 3 dynamic color (Material You), edge-to-edge, light & dark themes.
+- Material 3, edge-to-edge, light & dark themes. The color scheme is Foscal's own
+  accent system (Cobalt / Violet / Forest / custom) rather than wallpaper-derived
+  dynamic color — see [Roadmap](#roadmap).
 
 ## Roadmap
 
@@ -81,6 +85,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Later / future goals**
 
+- Opt-in Material You dynamic color (`FoscalTheme` already accepts it; needs a
+  Settings toggle).
 - Richer event detail: map preview, guests/attendees, join-video-call.
 - More unit/UI test coverage (repository, more view models, widget factory).
 - Play Store / F-Droid release: signing config, screenshots, store listing.
@@ -92,7 +98,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - Single-activity, multi-module Gradle project
 - Hilt for dependency injection and DataStore for preferences
 - Reads/writes `android.provider.CalendarContract`
-- minSdk 26, targetSdk 35
+- minSdk 26, targetSdk 36, compileSdk 37
 
 ## Project layout
 
@@ -106,7 +112,7 @@ core/
 
 ## Build
 
-Requires JDK 17 and the Android SDK (platform 35, build-tools 35.0.0).
+Requires JDK 17 and the Android SDK (platform 37.1, build-tools 37.0.0).
 
 ```bash
 ./gradlew :app:assembleDebug

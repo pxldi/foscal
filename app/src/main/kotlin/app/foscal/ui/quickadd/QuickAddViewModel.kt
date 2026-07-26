@@ -82,7 +82,7 @@ class QuickAddViewModel @Inject constructor(
                     timezone = if (parsed.allDay) ZoneOffset.UTC.id else zone.id,
                     frequency = Frequency.NONE,
                     rrule = null,
-                    reminderMinutesBefore = prefs.defaultReminderMinutes.first() ?: 15,
+                    reminderMinutes = listOf(prefs.defaultReminderMinutes.first() ?: 15),
                 ),
             )
             mutate { it.copy(saving = false, finished = true) }

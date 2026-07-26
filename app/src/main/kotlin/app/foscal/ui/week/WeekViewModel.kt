@@ -106,7 +106,9 @@ class WeekViewModel @Inject constructor(
     fun moveEvent(event: Event, newStartMillis: Long, newEndMillis: Long) {
         if (event.allDay) return
         viewModelScope.launch {
-            val reminder = repository.getReminderMinutes(event.id).minOrNull()
+            // Carry every reminder across the move; updateEvent rewrites the whole set, so
+            // dropping to just the earliest one here would delete the rest.
+            val reminders = repository.getReminderMinutes(event.id).distinct().sorted()
             val input = EventInput(
                 calendarId = event.calendarId,
                 title = event.title,
@@ -118,7 +120,7 @@ class WeekViewModel @Inject constructor(
                 timezone = event.timezone ?: zone.id,
                 frequency = Frequency.NONE,
                 rrule = null,
-                reminderMinutesBefore = reminder,
+                reminderMinutes = reminders,
             )
             if (event.isRecurring) {
                 repository.updateEventInstance(event.id, event.start.toEpochMilli(), input)

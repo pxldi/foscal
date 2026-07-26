@@ -60,7 +60,14 @@ data class EditorUiState(
     // the original CalDAV RRULE is preserved verbatim on save; once true we rebuild from the controls.
     val recurrenceDirty: Boolean = false,
     val showCustomRecurrence: Boolean = false,
-    val reminderMinutesBefore: Int? = 15,
+    /** Every reminder on the event, in minutes before start; sorted, empty when there are none. */
+    val reminderMinutes: List<Int> = listOf(15),
+    /**
+     * The `EVENT_TIMEZONE` of the event being edited, or null for a new one. Preserved on save so
+     * editing an event authored in another zone (CalDAV, travel) does not re-anchor it to the
+     * device zone and shift it for every other client.
+     */
+    val originalTimezone: String? = null,
     val saving: Boolean = false,
     val finished: Boolean = false,
     val scopePrompt: RecurrenceScopePrompt? = null,
@@ -138,7 +145,8 @@ class EventEditorViewModel @Inject constructor(
                         // Expand the custom panel when the loaded rule actually uses the extra knobs
                         // so the user sees the real interval/end/by-weekday rather than a bare chip.
                         showCustomRecurrence = spec.isCustom,
-                        reminderMinutesBefore = reminders.minOrNull(),
+                        reminderMinutes = reminders.distinct().sorted(),
+                        originalTimezone = event.timezone,
                     )
                     return@launch
                 }
@@ -160,7 +168,7 @@ class EventEditorViewModel @Inject constructor(
                 endTime = defaultEnd.toLocalTime(),
                 recentLocations = recentLocations,
                 mapsEnabled = mapsEnabled,
-                reminderMinutesBefore = defaultReminder,
+                reminderMinutes = listOf(defaultReminder),
             )
         }
     }
@@ -208,7 +216,19 @@ class EventEditorViewModel @Inject constructor(
         it.copy(byWeekday = next, recurrenceDirty = true)
     }
     fun toggleCustomRecurrence() = mutate { it.copy(showCustomRecurrence = !it.showCustomRecurrence) }
-    fun updateReminder(minutes: Int?) = mutate { it.copy(reminderMinutesBefore = minutes) }
+    /** Adds or removes one reminder. Passing null clears them all ("None"). */
+    fun toggleReminder(minutes: Int?) = mutate { current ->
+        if (minutes == null) {
+            current.copy(reminderMinutes = emptyList())
+        } else {
+            val next = if (minutes in current.reminderMinutes) {
+                current.reminderMinutes - minutes
+            } else {
+                current.reminderMinutes + minutes
+            }
+            current.copy(reminderMinutes = next.sorted())
+        }
+    }
     fun selectCalendar(id: Long) = mutate { it.copy(selectedCalendarId = id) }
 
     fun save() {
@@ -281,10 +301,17 @@ class EventEditorViewModel @Inject constructor(
                 start = startInstant,
                 end = endInstant,
                 allDay = current.allDay,
-                timezone = if (current.allDay) ZoneOffset.UTC.id else zone.id,
+                // Keep the event anchored to the zone it was authored in. Rewriting it to the
+                // device zone preserves the instant the user picked but re-anchors future
+                // occurrences and shifts the event for every other client on the same CalDAV
+                // calendar. New events (and all-day events, which are UTC by contract) fall back.
+                timezone = when {
+                    current.allDay -> ZoneOffset.UTC.id
+                    else -> current.originalTimezone?.takeIf { it.isValidZoneId() } ?: zone.id
+                },
                 frequency = current.frequency,
                 rrule = rrule,
-                reminderMinutesBefore = current.reminderMinutesBefore,
+                reminderMinutes = current.reminderMinutes,
             )
             when {
                 !current.isEditing -> repository.createEvent(input)
@@ -330,3 +357,7 @@ class EventEditorViewModel @Inject constructor(
         _state.value = transform(_state.value)
     }
 }
+
+/** The provider will reject an unparseable EVENT_TIMEZONE, so a junk value must not be echoed back. */
+private fun String.isValidZoneId(): Boolean =
+    isNotBlank() && runCatching { ZoneId.of(this) }.isSuccess

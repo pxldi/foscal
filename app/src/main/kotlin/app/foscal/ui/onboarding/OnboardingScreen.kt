@@ -61,7 +61,7 @@ import app.foscal.core.model.AccentColor
 import app.foscal.core.model.ThemeMode
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.ui.settings.AccentPicker
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 

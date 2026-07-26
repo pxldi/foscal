@@ -72,20 +72,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.foscal.core.ui.theme.BricolageFamily
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.time.YearMonth
 import java.time.format.TextStyle
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -252,7 +252,7 @@ fun MonthRoute(
 
 @Composable
 private fun MonthTitle(month: YearMonth, onClick: () -> Unit) {
-    val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val monthName = month.month.getDisplayName(TextStyle.FULL, currentLocale())
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -282,6 +282,7 @@ private fun MonthJumpDialog(
 ) {
     var year by remember(initialMonth) { mutableStateOf(initialMonth.year) }
     val monthRows = remember { java.time.Month.entries.chunked(3) }
+    val locale = currentLocale()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -332,7 +333,7 @@ private fun MonthJumpDialog(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
-                                        month.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                                        month.getDisplayName(TextStyle.SHORT, locale),
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                                     )
@@ -459,9 +460,7 @@ private fun DayPreviewPanel(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = date.format(
-                                DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()),
-                            ),
+                            text = date.format(rememberDateFormatter("EEE, MMM d")),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,

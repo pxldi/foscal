@@ -27,5 +27,11 @@ data class EventInput(
      * When null, a simple rule is derived from [frequency].
      */
     val rrule: String? = null,
-    val reminderMinutesBefore: Int? = 15,
+    /**
+     * Every reminder on the event, in minutes before its start. Written verbatim, so an event that
+     * arrived from CalDAV with several alarms keeps all of them across an unrelated edit — the
+     * provider has no partial-update path for reminders, so a caller that supplies only one would
+     * silently drop the rest. Empty means no reminders.
+     */
+    val reminderMinutes: List<Int> = listOf(15),
 )

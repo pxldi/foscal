@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -37,17 +38,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.QuickAddParser
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,7 +143,7 @@ private fun QuickAddForm(
 private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
     val zone = ZoneId.systemDefault()
     val date = parsed.date ?: LocalDate.now()
-    val dateText = date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()))
+    val dateText = date.format(rememberDateFormatter("EEE, MMM d"))
     val timeText = if (parsed.allDay) {
         "All day"
     } else {
@@ -206,7 +206,7 @@ private fun CalendarPicker(
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(),
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
         )
         ExposedDropdownMenu(
             expanded = expanded,

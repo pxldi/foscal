@@ -122,7 +122,7 @@ interface CalendarRepository {
 
 @Singleton
 class CalendarContractRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val permission: CalendarPermissionState,
 ) : CalendarRepository {
 
@@ -323,7 +323,7 @@ class CalendarContractRepository @Inject constructor(
         val values = eventToContentValues(input)
         val newId = safeInsert(CalendarContract.Events.CONTENT_URI, values)
             ?.let { ContentUris.parseId(it) } ?: return@withContext null
-        setReminder(newId, input.reminderMinutesBefore)
+        setReminders(newId, input.reminderMinutes)
         // AOSP links a recurrence exception to its master through the master's _sync_id. Events on
         // local calendars have no sync adapter to assign one, so we mint it ourselves — without it,
         // inserting an exception silently wipes the rest of the series. CalDAV calendars are left
@@ -380,7 +380,7 @@ class CalendarContractRepository @Inject constructor(
                     "${CalendarContract.Reminders.EVENT_ID} = ?",
                     arrayOf(eventId.toString()),
                 )
-                setReminder(eventId, input.reminderMinutesBefore)
+                setReminders(eventId, input.reminderMinutes)
                 true
             } else {
                 false
@@ -420,7 +420,7 @@ class CalendarContractRepository @Inject constructor(
         )
         val result = safeInsert(uri, values) ?: return@withContext false
         val newId = ContentUris.parseId(result)
-        if (newId > 0) setReminder(newId, input.reminderMinutesBefore)
+        if (newId > 0) setReminders(newId, input.reminderMinutes)
         true
     }
 
@@ -623,14 +623,15 @@ class CalendarContractRepository @Inject constructor(
         }
     }
 
-    private fun setReminder(eventId: Long, minutesBefore: Int?) {
-        if (minutesBefore == null) return
-        val values = ContentValues().apply {
-            put(CalendarContract.Reminders.EVENT_ID, eventId)
-            put(CalendarContract.Reminders.MINUTES, minutesBefore)
-            put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+    private fun setReminders(eventId: Long, minutesBefore: List<Int>) {
+        minutesBefore.distinct().forEach { minutes ->
+            val values = ContentValues().apply {
+                put(CalendarContract.Reminders.EVENT_ID, eventId)
+                put(CalendarContract.Reminders.MINUTES, minutes)
+                put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+            }
+            safeInsert(CalendarContract.Reminders.CONTENT_URI, values)
         }
-        safeInsert(CalendarContract.Reminders.CONTENT_URI, values)
     }
 
     private fun eventToContentValues(input: EventInput): ContentValues = ContentValues().apply {

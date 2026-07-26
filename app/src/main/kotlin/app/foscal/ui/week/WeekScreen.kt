@@ -37,10 +37,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.common.TimelineLayout
+import app.foscal.ui.util.currentLocale
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -67,7 +68,7 @@ fun WeekRoute(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            formatWeekRange(state.weekStart, weekEnd),
+                            formatWeekRange(state.weekStart, weekEnd, currentLocale()),
                             fontWeight = FontWeight.SemiBold,
                         )
                         TextButton(onClick = { viewModel.goToThisWeek() }) {
@@ -158,6 +159,7 @@ private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
             .padding(start = 52.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        val locale = currentLocale()
         (0 until 7).forEach { offset ->
             val date = weekStart.plusDays(offset.toLong())
             val isToday = date == today
@@ -167,10 +169,7 @@ private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
-                    date.dayOfWeek.getDisplayName(
-                        java.time.format.TextStyle.NARROW,
-                        Locale.getDefault(),
-                    ),
+                    date.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, locale),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -195,11 +194,12 @@ private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
     }
 }
 
-private fun formatWeekRange(start: LocalDate, end: LocalDate): String {
+private fun formatWeekRange(start: LocalDate, end: LocalDate, locale: Locale): String {
     val sameMonth = start.month == end.month
-    val f = DateTimeFormatter.ofPattern("MMM d", Locale.getDefault())
+    val f = DateTimeFormatter.ofPattern("MMM d", locale)
     return if (sameMonth) {
-        "${start.month.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault())} ${start.dayOfMonth} – ${end.dayOfMonth}"
+        val month = start.month.getDisplayName(java.time.format.TextStyle.SHORT, locale)
+        "$month ${start.dayOfMonth} – ${end.dayOfMonth}"
     } else {
         "${start.format(f)} – ${end.format(f)}"
     }

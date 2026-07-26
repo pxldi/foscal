@@ -28,10 +28,15 @@ class FakeCalendarRepository(
     var lastCreated: EventInput? = null
         private set
 
+    /** The [EventInput] handed to the most recent write, whichever path it took. */
+    var lastWritten: EventInput? = null
+        private set
+
     fun reset() {
         lastOp = null
         lastRebaseCount = null
         lastCreated = null
+        lastWritten = null
     }
 
     override fun getCalendarUri(calendarId: Long): Uri = Uri.EMPTY
@@ -77,11 +82,13 @@ class FakeCalendarRepository(
     override suspend fun createEvent(input: EventInput): Long? {
         lastOp = Op.CREATE
         lastCreated = input
+        lastWritten = input
         return 1L
     }
 
     override suspend fun updateEvent(eventId: Long, input: EventInput): Boolean {
         lastOp = Op.UPDATE
+        lastWritten = input
         return true
     }
 
@@ -96,6 +103,7 @@ class FakeCalendarRepository(
         input: EventInput,
     ): Boolean {
         lastOp = Op.UPDATE_INSTANCE
+        lastWritten = input
         return true
     }
 
@@ -108,6 +116,7 @@ class FakeCalendarRepository(
         lastOp = Op.UPDATE_FOLLOWING
         lastRebaseCount = rebaseCount
         lastCreated = input
+        lastWritten = input
         return true
     }
 

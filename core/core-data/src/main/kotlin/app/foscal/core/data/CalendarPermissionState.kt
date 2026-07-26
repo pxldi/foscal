@@ -23,7 +23,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class CalendarPermissionState @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) {
     private val _granted = MutableStateFlow(hasPermission())
     val granted: StateFlow<Boolean> = _granted.asStateFlow()

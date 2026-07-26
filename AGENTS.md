@@ -29,6 +29,25 @@ export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME
   so formatting follows the official Kotlin conventions; no ktlint/detekt is
   wired up yet.
 
+## Build configuration
+
+AGP 9 with **built-in Kotlin support**. Consequences worth knowing before editing a
+`build.gradle.kts`:
+
+- **Do not apply `org.jetbrains.kotlin.android`** in `:app`, `:core:core-ui`, or
+  `:core:core-data`. AGP supplies Kotlin itself and the plugin is incompatible with the
+  new DSL; applying it fails the build outright. `:core:core-model` is a plain JVM module
+  and still uses `kotlin-jvm`. The Compose compiler plugin *is* still applied separately.
+- **`jvmTarget` lives in `android { kotlin { compilerOptions { … } } }`.** The old
+  top-level `kotlinOptions { }` block is gone.
+- **`compileSdk` is 37, `targetSdk` is 36.** They are deliberately different: the newest
+  androidx libraries require compiling against 37, while 36 is what the app has actually
+  been tested against for runtime behavior. Bumping `targetSdk` opts into Android 17
+  behavior changes and must be a deliberate, separately verified change.
+- **`lint` is part of the definition of done and currently passes with zero errors.**
+  Newer AGP lint checks are strict; in particular `NonObservableLocale` will reject any
+  `Locale.getDefault()` read inside a composable (see the locale note below).
+
 Always run `./gradlew assembleDebug` and `./gradlew lint` after non-trivial
 changes. Do not commit code that does not build or that fails lint.
 
@@ -83,6 +102,18 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   Never hardcode the accent — read `colorScheme.primary`.
 - **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
   never a hardcoded value.
+- **Locale** — in composables read `currentLocale()` (`ui/util/Locales.kt`) or
+  `rememberDateFormatter(pattern)`, never `Locale.getDefault()`: the latter is a
+  process-global read, so the UI keeps stale month/weekday names after a language change,
+  and AGP lint fails the build on it (`NonObservableLocale`). Non-composable label helpers
+  take a `Locale` parameter threaded from the call site. Note that the `Dates` object's
+  top-level `DateTimeFormatter` vals are still locale-frozen at class-init — do not add
+  more of those.
+- **Light/dark branching** — read `LocalIsDarkTheme.current` (provided by `FoscalTheme`),
+  never `isSystemInDarkTheme()`. The latter reports only the OS setting, so it disagrees
+  with the rest of the UI whenever the user has forced Light or Dark in Settings. The only
+  legitimate callers of `isSystemInDarkTheme()` are `MainActivity`, where `ThemeMode.SYSTEM`
+  is resolved into the `darkTheme` argument, and that parameter's own default.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
   and the in-app onboarding hero (`OnboardingScreen.FoscalMark`). Keep them
   in sync if you change one.
@@ -134,6 +165,18 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   Vertical swipes on the month grid are aliases for month navigation (up =
   next month, down = previous month) and use dominant-axis drag detection so
   diagonal gestures do not trigger both horizontal and vertical navigation.
+- **Reminders are all-or-nothing.** The provider has no partial-update path for
+  `Reminders`, so `updateEvent` deletes every row for the event and reinserts from
+  `EventInput.reminderMinutes`. That list must therefore always be the *complete* set —
+  any caller that passes a single value (or `minOrNull()`) silently destroys the other
+  alarms, including ones DAVx⁵ synced down. The editor renders a chip per preset plus one
+  per already-present value so nothing it can't display gets dropped on save.
+- **Never re-anchor an event's time zone.** `EventInput.timezone` must carry the edited
+  event's original `EVENT_TIMEZONE`; the editor keeps it in
+  `EditorUiState.originalTimezone`. Rewriting it to the device zone preserves the chosen
+  instant locally but re-anchors recurrence expansion and shifts the event for every other
+  client on the same CalDAV calendar. Only new events (and all-day events, which are UTC by
+  contract) may use the device zone. Unparseable stored zones fall back to it.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.

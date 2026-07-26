@@ -59,6 +59,29 @@ class WeekViewModelTest {
         }
 
     @Test
+    fun `drag-to-move keeps every reminder and the event's timezone`() = runTest(dispatcher) {
+        val monday = WeekViewModel.startOfWeek(today)
+        val event = timedEvent(1, at(monday, 9), at(monday, 10), title = "Mon")
+            .copy(timezone = "America/New_York")
+        val repo = FakeCalendarRepository(
+            calendars = listOf(testCalendar()),
+            events = listOf(event),
+            reminderMinutes = listOf(30, 5),
+        )
+        val vm = WeekViewModel(repo, FakePreferences())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        val newStart = at(monday, 11).toEpochMilli()
+        vm.moveEvent(event, newStart, at(monday, 12).toEpochMilli())
+        advanceUntilIdle()
+
+        assertEquals(FakeCalendarRepository.Op.UPDATE, repo.lastOp)
+        assertEquals(listOf(5, 30), repo.lastWritten?.reminderMinutes)
+        assertEquals("America/New_York", repo.lastWritten?.timezone)
+    }
+
+    @Test
     fun `week navigation moves by whole weeks and back to this week`() = runTest(dispatcher) {
         val vm = WeekViewModel(FakeCalendarRepository(calendars = listOf(testCalendar())), FakePreferences())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
