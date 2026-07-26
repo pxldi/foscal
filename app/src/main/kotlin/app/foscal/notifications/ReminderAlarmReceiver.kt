@@ -2,8 +2,11 @@ package app.foscal.notifications
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.provider.CalendarContract.Events
+import android.provider.CalendarContract.Instances
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.foscal.MainActivity
@@ -55,18 +58,19 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         location: String,
         minutes: Int,
     ) {
-        if (!eventExists(context, eventId)) return
+        if (!occurrenceExists(context, eventId, whenMillis)) return
 
-        val contentText = buildString {
-            if (minutes > 0) append("In ${formatMinutes(minutes)} · ")
-            if (whenMillis > 0L) {
-                val zdt = Instant.ofEpochMilli(whenMillis).atZone(ZoneId.systemDefault())
-                val pattern =
-                    if (use24HourClock(context)) "EEE, MMM d · HH:mm" else "EEE, MMM d · h:mm a"
-                append(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(zdt))
-            }
-            if (location.isNotBlank()) append(" · $location")
+        val absolute = whenMillis.takeIf { it > 0L }?.let {
+            val zdt = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
+            val pattern =
+                if (use24HourClock(context)) "EEE, MMM d · HH:mm" else "EEE, MMM d · h:mm a"
+            DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(zdt)
         }
+        val contentText = listOfNotNull(
+            leadLabel(whenMillis, System.currentTimeMillis()),
+            absolute,
+            location.takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
 
         // Every occurrence of a recurring series shares an event id, so the notification id and the
         // tap intent's request code must include the occurrence start or two upcoming occurrences
@@ -103,23 +107,51 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
     }
 
+    /**
+     * Whether the specific occurrence this alarm was scheduled for is still on the calendar.
+     *
+     * Checking only that the event row survives is not enough for a recurring series: deleting or
+     * moving one occurrence leaves the master untouched, so the stale alarm still notified about a
+     * meeting that no longer happens at that time. The Instances table is the expansion the rest of
+     * the app reads, so it is also the one that knows an occurrence was cancelled. Any failure to
+     * ask (permission revoked, provider error) falls back to notifying — a spurious reminder is a
+     * far smaller harm than a silently dropped one.
+     */
+    private fun occurrenceExists(context: Context, eventId: Long, startMillis: Long): Boolean {
+        if (startMillis <= 0L) return eventExists(context, eventId)
+        val builder = Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, startMillis)
+        ContentUris.appendId(builder, startMillis + 1)
+        return try {
+            context.contentResolver.query(
+                builder.build(),
+                arrayOf(Instances.BEGIN),
+                "${Instances.EVENT_ID} = ?",
+                arrayOf(eventId.toString()),
+                null,
+            )?.use { c ->
+                var found = false
+                while (!found && c.moveToNext()) found = c.getLong(0) == startMillis
+                found
+            } ?: true
+        } catch (_: SecurityException) {
+            true
+        } catch (_: IllegalArgumentException) {
+            true
+        }
+    }
+
     private fun eventExists(context: Context, eventId: Long): Boolean = try {
         context.contentResolver.query(
-            android.provider.CalendarContract.Events.CONTENT_URI,
-            arrayOf(android.provider.CalendarContract.Events._ID),
-            "${android.provider.CalendarContract.Events._ID} = ?",
+            Events.CONTENT_URI,
+            arrayOf(Events._ID),
+            "${Events._ID} = ?",
             arrayOf(eventId.toString()),
             null,
         )?.use { it.moveToFirst() } == true
     } catch (_: SecurityException) {
         // Calendar permission revoked; skip the existence check and still notify.
         true
-    }
-
-    private fun formatMinutes(minutes: Int): String = when {
-        minutes < 60 -> "${minutes}m"
-        minutes < 1440 -> "${minutes / 60}h"
-        else -> "${minutes / 1440}d"
     }
 
     private suspend fun use24HourClock(context: Context): Boolean =

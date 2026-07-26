@@ -107,9 +107,10 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `rememberDateFormatter(pattern)`, never `Locale.getDefault()`: the latter is a
   process-global read, so the UI keeps stale month/weekday names after a language change,
   and AGP lint fails the build on it (`NonObservableLocale`). Non-composable label helpers
-  take a `Locale` parameter threaded from the call site. Note that the `Dates` object's
-  top-level `DateTimeFormatter` vals are still locale-frozen at class-init — do not add
-  more of those.
+  take a `Locale` parameter threaded from the call site — `Dates.weekStartLabels(locale)` is the
+  pattern. `Dates` no longer holds any top-level `DateTimeFormatter` vals: those were frozen at
+  class-init and lint cannot see through them, so build formatters with `rememberDateFormatter`
+  at the composable that needs one instead of adding a shared val back.
 - **Light/dark branching** — read `LocalIsDarkTheme.current` (provided by `FoscalTheme`),
   never `isSystemInDarkTheme()`. The latter reports only the OS setting, so it disagrees
   with the rest of the UI whenever the user has forced Light or Dark in Settings. The only
@@ -171,6 +172,22 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `(eventId, minutes)` alone makes each occurrence's `FLAG_UPDATE_CURRENT` alarm overwrite the
   previous one and only the last occurrence in the horizon ever fires. Use
   `AlarmReminderScheduler.alarmKey(eventId, startMillis, minutesBefore)` for both.
+- **Never schedule reminders with `setAlarmClock`.** It looks like the right API — highest priority,
+  doze-exempt — but it is for the device's *user-facing alarm clock*. It publishes every reminder as
+  the system "next alarm" (status bar, lock screen, Quick Settings), replacing the user's real alarm
+  with a calendar entry up to 30 days out, and its `AlarmClockInfo` carries a `showIntent` the system
+  launches when the user taps that chip. Passing the firing broadcast as that `showIntent` made a tap
+  post the reminder immediately, so an event still weeks away arrived as "In 10m".
+  `setExactAndAllowWhileIdle` gives the same delivery guarantees with none of that surface.
+- **A reminder notification must state its lead time from the moment it is posted**
+  (`leadLabel` in `ReminderText.kt`), never from the reminder's configured offset. The offset is a
+  claim about when the alarm was *meant* to fire; printing it directly makes the notification repeat
+  that claim no matter when it actually arrived, which hides both doze delays and misfires.
+- **Only `METHOD_DEFAULT` / `METHOD_ALERT` / `METHOD_ALARM` reminder rows become local alarms.**
+  A CalDAV server can attach EMAIL and SMS alarms and DAVx⁵ syncs them down verbatim; notifying for
+  those duplicates a message the server already sends. `readReminderMinutes(notifiableOnly = true)`
+  is the scheduling path; the editor still reads *every* row, since it must round-trip what it did
+  not display (see the all-or-nothing rule below).
 - **Alarm cancellation is driven by a persisted registry, not by the new reminder list.**
   `reschedule` receives only the reminders that still exist, so deriving what to cancel from it
   strands alarms for deleted events, removed reminders, moved occurrences, and any offset outside

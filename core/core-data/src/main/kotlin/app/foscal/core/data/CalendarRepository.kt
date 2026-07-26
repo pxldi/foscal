@@ -592,19 +592,32 @@ class CalendarContractRepository @Inject constructor(
     }
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> =
-        withContext(Dispatchers.IO) {
-            val out = mutableListOf<Int>()
-            safeQuery(
-                CalendarContract.Reminders.CONTENT_URI,
-                arrayOf(CalendarContract.Reminders.MINUTES),
-                "${CalendarContract.Reminders.EVENT_ID} = ?",
-                arrayOf(eventId.toString()),
-                null,
-            )?.use { c ->
-                while (c.moveToNext()) out += c.getInt(0)
+        withContext(Dispatchers.IO) { readReminderMinutes(eventId, notifiableOnly = false) }
+
+    /**
+     * Reminder offsets on [eventId], in minutes before start.
+     *
+     * [notifiableOnly] drops rows this app cannot honour. A CalDAV server can attach EMAIL and SMS
+     * alarms to an event and DAVx⁵ syncs them down verbatim; posting a local notification for one
+     * would duplicate a message the server already sends. METHOD_DEFAULT is included because the
+     * provider uses it for "whatever the calendar's default is", which for us is an alert.
+     */
+    private fun readReminderMinutes(eventId: Long, notifiableOnly: Boolean): List<Int> {
+        val out = mutableListOf<Int>()
+        safeQuery(
+            CalendarContract.Reminders.CONTENT_URI,
+            arrayOf(CalendarContract.Reminders.MINUTES, CalendarContract.Reminders.METHOD),
+            "${CalendarContract.Reminders.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                if (notifiableOnly && c.getInt(1) !in NOTIFIABLE_REMINDER_METHODS) continue
+                out += c.getInt(0)
             }
-            out
         }
+        return out
+    }
 
     override suspend fun getUpcomingReminders(
         from: Instant,
@@ -615,16 +628,7 @@ class CalendarContractRepository @Inject constructor(
         val events = getEvents(calendarIds, from, to)
         val now = System.currentTimeMillis()
         events.flatMap { event ->
-            val reminders = safeQuery(
-                CalendarContract.Reminders.CONTENT_URI,
-                arrayOf(CalendarContract.Reminders.MINUTES),
-                "${CalendarContract.Reminders.EVENT_ID} = ?",
-                arrayOf(event.id.toString()),
-                null,
-            )?.use { c ->
-                buildList { while (c.moveToNext()) add(c.getInt(0)) }
-            }.orEmpty()
-            reminders.mapNotNull { minutes ->
+            readReminderMinutes(event.id, notifiableOnly = true).distinct().mapNotNull { minutes ->
                 val trigger = event.start.toEpochMilli() - minutes * 60_000L
                 if (trigger <= now) return@mapNotNull null
                 ScheduledReminder(
@@ -776,5 +780,12 @@ class CalendarContractRepository @Inject constructor(
 
     companion object {
         private const val LOCAL_ACCOUNT_NAME = "Foscal"
+
+        /** Reminder methods Foscal delivers itself; EMAIL and SMS are the server's job. */
+        private val NOTIFIABLE_REMINDER_METHODS = setOf(
+            CalendarContract.Reminders.METHOD_DEFAULT,
+            CalendarContract.Reminders.METHOD_ALERT,
+            CalendarContract.Reminders.METHOD_ALARM,
+        )
     }
 }

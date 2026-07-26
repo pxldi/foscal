@@ -1,11 +1,13 @@
 package app.foscal.notifications
 
 import app.foscal.core.data.CalendarRepository
+import app.foscal.ui.util.Dates
 import app.foscal.widget.WidgetRefresher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
@@ -39,10 +41,19 @@ class ReminderSync @Inject constructor(
             // Observing calendars re-emits whenever the set of calendars changes *and* the
             // instant calendar permission is granted, so reminders self-schedule on first grant
             // and whenever a sync adapter adds a calendar — no app restart required.
-            repository.observeCalendars()
-                .flatMapLatest { calendars ->
-                    val ids = calendars.map { it.id }.toSet()
-                    repository.observeEvents(ids, horizonStart(), horizonEnd())
+            //
+            // The date ticker is the second trigger. Provider changes alone would leave a
+            // long-lived process scheduling against the horizon it computed at startup, so a device
+            // left running with a quiet calendar would stop arming alarms once the original 30-day
+            // window ran out. Re-syncing at each midnight walks the horizon forward with it.
+            combine(
+                repository.observeCalendars(),
+                Dates.todayFlow(),
+            ) { calendars, _ -> calendars.map { it.id }.toSet() }
+                .flatMapLatest { ids ->
+                    // The emissions are used only as a change signal; `sync()` re-reads the
+                    // reminders itself against a freshly computed horizon.
+                    repository.observeEvents(ids, Instant.now(), horizonEnd())
                 }
                 .debounce(2_000L)
                 .collect {
@@ -58,7 +69,6 @@ class ReminderSync @Inject constructor(
         scheduler.reschedule(reminders)
     }
 
-    private fun horizonStart(): Instant = Instant.now()
     private fun horizonEnd(): Instant =
         LocalDate.now().plusDays(HORIZON_DAYS).atStartOfDay(ZoneId.systemDefault()).toInstant()
 

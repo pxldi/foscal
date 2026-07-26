@@ -105,8 +105,8 @@ private fun kotlinx.coroutines.flow.Flow<YearMonth>.mapMonthToRange(
     zone: ZoneId,
 ): kotlinx.coroutines.flow.Flow<Pair<Instant, Instant>> =
     map { month ->
-        // Cover a wider window than the visible month so that adjacent pages in the
-        // HorizontalPager are populated as the user swipes (and to absorb grid spillover).
+        // Cover a wider window than the visible month so the neighbouring grids AnimatedContent
+        // slides in are already populated when the user swipes (and to absorb grid spillover).
         val start = month.minusMonths(2).atDay(1).atStartOfDay(zone).toInstant()
         val end = month.plusMonths(2).atEndOfMonth()
             .atTime(23, 59, 59).atZone(zone).toInstant()

@@ -57,7 +57,13 @@ class AlarmReminderScheduler @Inject constructor(
                 extras = reminder,
             ) ?: continue
             if (canExact) {
-                am.setAlarmClock(AlarmManager.AlarmClockInfo(triggerAt, pi), pi)
+                // Deliberately NOT setAlarmClock. That API is for the device's user-facing alarm
+                // clock: it publishes every reminder as the system "next alarm" (status bar, lock
+                // screen, Quick Settings), and its AlarmClockInfo carries a showIntent that the
+                // system launches when the user taps that chip. With our firing broadcast as the
+                // showIntent, tapping it posted the reminder immediately — a notification claiming
+                // an event was minutes away when it was still weeks out.
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
             } else {
                 // Exact-alarm permission is not held (rare for a calendar app, but the user can
                 // revoke it): still deliver, just without exact-to-the-minute guarantees, rather

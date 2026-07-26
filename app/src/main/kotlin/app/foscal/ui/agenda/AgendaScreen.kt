@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.ZoneId
@@ -186,7 +187,7 @@ private fun AgendaDayRow(
             },
         )
             Text(
-                text = day.date.format(Dates.fullWeekdayFormatter),
+                text = day.date.format(rememberDateFormatter("EEE")),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -610,7 +610,9 @@ private fun WeekHeader() {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
-        Dates.weekStartLabels().forEachIndexed { index, label ->
+        val locale = currentLocale()
+        val labels = remember(locale) { Dates.weekStartLabels(locale) }
+        labels.forEachIndexed { index, label ->
             Text(
                 label,
                 modifier = Modifier.weight(1f),
