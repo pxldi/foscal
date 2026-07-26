@@ -50,13 +50,15 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
-import app.foscal.location.openInMaps
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
+import app.foscal.location.openInMaps
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.timeFormatter
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -194,7 +196,7 @@ private fun DetailContent(
             )
         }
 
-        InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event, LocalUse24HourClock.current))
+        InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event, LocalUse24HourClock.current, currentLocale()))
         event.rrule?.takeIf { it.isNotBlank() }?.let {
             InfoCard(Icons.Outlined.Repeat, "Repeats", describeRecurrence(it))
         }
@@ -315,10 +317,10 @@ private fun describeRecurrence(rrule: String): String {
     }
 }
 
-private fun formatWhen(event: Event, is24Hour: Boolean): String {
+private fun formatWhen(event: Event, is24Hour: Boolean, locale: Locale): String {
     val zone = ZoneId.systemDefault()
-    val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")
-    val timeFmt = timeFormatter(is24Hour)
+    val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", locale)
+    val timeFmt = timeFormatter(is24Hour, locale)
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     return if (event.allDay) {

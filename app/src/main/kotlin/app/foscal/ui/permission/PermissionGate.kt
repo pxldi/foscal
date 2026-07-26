@@ -1,7 +1,5 @@
 package app.foscal.ui.permission
 
-import android.Manifest
-import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -17,38 +15,46 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.core.data.CalendarPermissionState
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 
+/**
+ * Gates [content] behind calendar access.
+ *
+ * The grant/deny answer comes from [CalendarPermissionState], not from a local flag: the
+ * repository gates every provider read on that same value, so a gate with its own copy can let
+ * [content] render while the repository still believes permission is missing and hands it empty
+ * lists. Refreshing the shared state from the permission result — rather than leaning on the
+ * activity's `onResume` happening to run first — is what keeps the two in step.
+ */
 @Composable
 fun PermissionGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
-    var granted by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_CALENDAR,
-            ) == PackageManager.PERMISSION_GRANTED,
-        )
+    val permissionState = remember(context) {
+        EntryPointAccessors
+            .fromApplication(context, PermissionGateEntryPoint::class.java)
+            .permissionState()
     }
+    val granted by permissionState.granted.collectAsStateWithLifecycle()
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { result ->
-        granted = result[Manifest.permission.READ_CALENDAR] == true
+    ) {
+        permissionState.refresh()
     }
 
     LaunchedEffect(Unit) {
-        if (!granted) {
-            launcher.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
-        }
+        if (!granted) launcher.launch(CalendarPermissionState.REQUIRED_PERMISSIONS)
     }
 
     if (granted) {
@@ -79,8 +85,14 @@ fun PermissionGate(content: @Composable () -> Unit) {
                 textAlign = TextAlign.Center,
             )
             Button(onClick = {
-                launcher.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
+                launcher.launch(CalendarPermissionState.REQUIRED_PERMISSIONS)
             }) { Text("Grant access") }
         }
     }
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+internal interface PermissionGateEntryPoint {
+    fun permissionState(): CalendarPermissionState
 }

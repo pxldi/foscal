@@ -46,10 +46,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -233,7 +235,7 @@ private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) 
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = buildEventSubtitle(event, date, LocalUse24HourClock.current)
+            val subtitle = buildEventSubtitle(event, date, LocalUse24HourClock.current, currentLocale())
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -245,13 +247,18 @@ private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) 
     }
 }
 
-private fun buildEventSubtitle(event: Event, date: LocalDate, is24Hour: Boolean): String {
+private fun buildEventSubtitle(
+    event: Event,
+    date: LocalDate,
+    is24Hour: Boolean,
+    locale: Locale,
+): String {
     val parts = mutableListOf<String>()
     if (event.allDay) {
         parts += "All day"
     } else {
         val zone = ZoneId.systemDefault()
-        val fmt = timeFormatter(is24Hour)
+        val fmt = timeFormatter(is24Hour, locale)
         val startT = Dates.instantToLocal(event.start).toLocalTime().format(fmt)
         val endT = Dates.instantToLocal(event.end).toLocalTime().format(fmt)
         // Use the model's inclusive last day so an event ending exactly at midnight is treated as

@@ -1,8 +1,21 @@
 package app.foscal.core.model
 
 import java.time.Instant
+import java.time.ZoneId
 
 enum class Frequency { NONE, DAILY, WEEKLY, MONTHLY, YEARLY }
+
+/**
+ * The zone to persist for an event that should stay anchored to [original].
+ *
+ * Never re-anchor a stored event to the device zone: doing so keeps the instant the user picked
+ * but shifts recurrence expansion for every other client on the same CalDAV calendar. The
+ * device zone is only correct when there is no original ([fallback]), or when the stored one is
+ * unparseable — the provider rejects a junk `EVENT_TIMEZONE` outright, which would lose the whole
+ * write.
+ */
+fun resolveEventTimezone(original: String?, fallback: ZoneId): String =
+    original?.takeIf { it.isNotBlank() && runCatching { ZoneId.of(it) }.isSuccess } ?: fallback.id
 
 /**
  * Editable form of an event, used when creating or updating via [CalendarRepository].

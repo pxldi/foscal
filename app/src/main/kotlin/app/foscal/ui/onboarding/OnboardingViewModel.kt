@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -49,14 +50,14 @@ class OnboardingViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            prefs.themeMode.collect { mode -> _internal.value = _internal.value.copy(themeMode = mode) }
+            prefs.themeMode.collect { mode -> _internal.update { it.copy(themeMode = mode) } }
         }
         viewModelScope.launch {
-            prefs.accentColor.collect { accent -> _internal.value = _internal.value.copy(accentColor = accent) }
+            prefs.accentColor.collect { accent -> _internal.update { it.copy(accentColor = accent) } }
         }
         viewModelScope.launch {
             prefs.accentCustomColor.collect { color ->
-                _internal.value = _internal.value.copy(accentCustomColor = color)
+                _internal.update { it.copy(accentCustomColor = color) }
             }
         }
     }
@@ -77,22 +78,22 @@ class OnboardingViewModel @Inject constructor(
 
     /** Opt into the OpenStreetMap location picker (the only networked feature). Off by default. */
     fun setMapsEnabled(enabled: Boolean) {
-        _internal.value = _internal.value.copy(mapsEnabled = enabled)
+        _internal.update { it.copy(mapsEnabled = enabled) }
         viewModelScope.launch { prefs.setOsmMapsEnabled(enabled) }
     }
 
     fun setThemeMode(mode: ThemeMode) {
-        _internal.value = _internal.value.copy(themeMode = mode)
+        _internal.update { it.copy(themeMode = mode) }
         viewModelScope.launch { prefs.setThemeMode(mode) }
     }
 
     fun setAccentColor(accent: AccentColor) {
-        _internal.value = _internal.value.copy(accentColor = accent)
+        _internal.update { it.copy(accentColor = accent) }
         viewModelScope.launch { prefs.setAccentColor(accent) }
     }
 
     fun setCustomAccentColor(color: Int) {
-        _internal.value = _internal.value.copy(accentColor = AccentColor.CUSTOM, accentCustomColor = color)
+        _internal.update { it.copy(accentColor = AccentColor.CUSTOM, accentCustomColor = color) }
         viewModelScope.launch {
             prefs.setAccentCustomColor(color)
             prefs.setAccentColor(AccentColor.CUSTOM)
@@ -120,52 +121,48 @@ class OnboardingViewModel @Inject constructor(
 
     fun useLocalOnly() {
         if (_internal.value.completing) return
-        _internal.value = _internal.value.copy(completing = true, error = null)
+        _internal.update { it.copy(completing = true, error = null) }
         viewModelScope.launch {
             try {
                 val color = CalendarColors.pick(0)
                 val id = repository.ensureLocalCalendar(name = "My calendar", color = color)
                 if (id == null) {
-                    _internal.value = _internal.value.copy(
-                        completing = false,
-                        error = "Couldn't create a calendar. Please grant calendar access and try again.",
-                    )
+                    _internal.update {
+                        it.copy(
+                            completing = false,
+                            error = "Couldn't create a calendar. Please grant calendar access and try again.",
+                        )
+                    }
                     return@launch
                 }
-                _internal.value = _internal.value.copy(
-                    completing = false,
-                    setupComplete = true,
-                )
+                _internal.update { it.copy(completing = false, setupComplete = true) }
             } catch (t: Throwable) {
-                _internal.value = _internal.value.copy(completing = false, error = t.message)
+                _internal.update { it.copy(completing = false, error = t.message) }
             }
         }
     }
 
     fun useExisting() {
         if (_internal.value.completing) return
-        _internal.value = _internal.value.copy(completing = true, error = null)
+        _internal.update { it.copy(completing = true, error = null) }
         viewModelScope.launch {
-            _internal.value = _internal.value.copy(
-                completing = false,
-                setupComplete = true,
-            )
+            _internal.update { it.copy(completing = false, setupComplete = true) }
         }
     }
 
     fun finishAfterSync() {
-        _internal.value = _internal.value.copy(setupComplete = true)
+        _internal.update { it.copy(setupComplete = true) }
     }
 
     fun completeOnboarding() {
         if (_internal.value.completing) return
-        _internal.value = _internal.value.copy(completing = true, error = null)
+        _internal.update { it.copy(completing = true, error = null) }
         viewModelScope.launch { finishOnboarding() }
     }
 
     private suspend fun finishOnboarding() {
         prefs.setOnboardingCompleted()
-        _internal.value = _internal.value.copy(completing = false, finished = true)
+        _internal.update { it.copy(completing = false, finished = true) }
     }
 
     companion object {

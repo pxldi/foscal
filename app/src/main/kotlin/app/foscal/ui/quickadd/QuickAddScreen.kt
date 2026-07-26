@@ -43,7 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.QuickAddParser
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.rememberDateFormatter
-import app.foscal.ui.util.timeFormatter
+import app.foscal.ui.util.rememberTimeFormatter
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -148,7 +148,7 @@ private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
         "All day"
     } else {
         val t = parsed.time ?: defaultNextHour()
-        t.format(timeFormatter(LocalUse24HourClock.current))
+        t.format(rememberTimeFormatter())
     }
     val title = parsed.title.ifBlank { "(Untitled)" }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

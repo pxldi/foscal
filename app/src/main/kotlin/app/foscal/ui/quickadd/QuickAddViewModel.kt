@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -82,7 +83,7 @@ class QuickAddViewModel @Inject constructor(
                     timezone = if (parsed.allDay) ZoneOffset.UTC.id else zone.id,
                     frequency = Frequency.NONE,
                     rrule = null,
-                    reminderMinutes = listOf(prefs.defaultReminderMinutes.first() ?: 15),
+                    reminderMinutes = listOfNotNull(prefs.defaultReminderMinutes.first()),
                 ),
             )
             mutate { it.copy(saving = false, finished = true) }
@@ -102,7 +103,5 @@ class QuickAddViewModel @Inject constructor(
     private fun nextHour(): LocalTime =
         java.time.ZonedDateTime.now(zone).plusHours(1).withMinute(0).withSecond(0).withNano(0).toLocalTime()
 
-    private fun mutate(transform: (QuickAddUiState) -> QuickAddUiState) {
-        _state.value = transform(_state.value)
-    }
+    private fun mutate(transform: (QuickAddUiState) -> QuickAddUiState) = _state.update(transform)
 }

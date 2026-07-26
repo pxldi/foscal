@@ -12,8 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.ZoneId
 import javax.inject.Inject
 
 data class EventDetailUiState(
@@ -42,16 +40,10 @@ class EventDetailViewModel @Inject constructor(
     fun load(eventId: Long, instanceStartMillis: Long = 0L, showLoading: Boolean = true) {
         if (showLoading) _state.update { it.copy(loading = true, event = null, calendar = null) }
         viewModelScope.launch {
-            val zone = ZoneId.systemDefault()
-            val from = LocalDate.now().minusYears(2).atStartOfDay(zone).toInstant()
-            val to = LocalDate.now().plusYears(2).atStartOfDay(zone).toInstant()
             val calendars = repository.getCalendars()
-            val allIds = calendars.map { it.id }.toSet()
-            val matches = repository.getEvents(allIds, from, to).filter { it.id == eventId }
-            // Prefer the exact occurrence the user tapped; fall back to the first (e.g. when
-            // opened from a notification, which only carries the event id).
-            val event = matches.firstOrNull { it.start.toEpochMilli() == instanceStartMillis }
-                ?: matches.firstOrNull()
+            // Prefer the exact occurrence the user tapped; the repository falls back to the master
+            // row when there isn't one (e.g. opened from a notification, which carries only the id).
+            val event = repository.getEventOccurrence(eventId, instanceStartMillis)
             val cal = calendars.firstOrNull { it.id == event?.calendarId }
             _state.update { it.copy(loading = false, event = event, calendar = cal) }
         }

@@ -73,7 +73,7 @@ import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.rememberDateFormatter
-import app.foscal.ui.util.timeFormatter
+import app.foscal.ui.util.rememberTimeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -513,7 +513,7 @@ private fun DateTimeRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    time.format(timeFormatter(LocalUse24HourClock.current)),
+                    time.format(rememberTimeFormatter()),
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { showTimePicker = true }

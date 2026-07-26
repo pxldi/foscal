@@ -10,11 +10,13 @@ import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.RecurrenceRules
 import app.foscal.core.model.RecurrenceSpec
+import app.foscal.core.model.resolveEventTimezone
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
@@ -98,20 +100,15 @@ class EventEditorViewModel @Inject constructor(
     private fun load(eventId: Long, startArg: Long?, endArg: Long?, calArg: Long?) {
         viewModelScope.launch {
             val hidden = prefs.hiddenCalendarIds.first()
-            val defaultReminder = prefs.defaultReminderMinutes.first() ?: 15
-            val visible = repository.getCalendars()
-                .filter { it.visible && it.id.toString() !in hidden }
+            val defaultReminder = prefs.defaultReminderMinutes.first()
+            val calendars = repository.getCalendars()
+            val visible = calendars.filter { it.visible && it.id.toString() !in hidden }
             val recentLocations = repository.getRecentLocations()
             val mapsEnabled = prefs.osmMapsEnabled.first()
             if (eventId > 0L) {
-                val allIds = repository.getCalendars().map { it.id }.toSet()
-                val from = LocalDate.now().minusYears(2).atStartOfDay(zone).toInstant()
-                val to = LocalDate.now().plusYears(2).atStartOfDay(zone).toInstant()
-                val matches = repository.getEvents(allIds, from, to).filter { it.id == eventId }
                 // For a recurring event, many instances share the same id; startArg carries the
                 // begin time of the specific occurrence the user tapped so we edit the right one.
-                val event = startArg?.let { s -> matches.firstOrNull { it.start.toEpochMilli() == s } }
-                    ?: matches.firstOrNull()
+                val event = repository.getEventOccurrence(eventId, startArg ?: 0L)
                 val reminders = repository.getReminderMinutes(eventId)
                 if (event != null) {
                     val cal = event.calendarId
@@ -168,7 +165,7 @@ class EventEditorViewModel @Inject constructor(
                 endTime = defaultEnd.toLocalTime(),
                 recentLocations = recentLocations,
                 mapsEnabled = mapsEnabled,
-                reminderMinutes = listOf(defaultReminder),
+                reminderMinutes = listOfNotNull(defaultReminder),
             )
         }
     }
@@ -184,12 +181,10 @@ class EventEditorViewModel @Inject constructor(
     fun updateLocation(value: String) = mutate { it.copy(location = value) }
     fun updateDescription(value: String) = mutate { it.copy(description = value) }
     fun updateAllDay(value: Boolean) = mutate { it.copy(allDay = value) }
-    fun updateStartDate(date: LocalDate) = mutate {
-        it.copy(startDate = date, endDate = if (date.isAfter(it.endDate)) date else it.endDate)
-    }
-    fun updateStartTime(time: LocalTime) = mutate { it.copy(startTime = time) }
-    fun updateEndDate(date: LocalDate) = mutate { it.copy(endDate = date) }
-    fun updateEndTime(time: LocalTime) = mutate { it.copy(endTime = time) }
+    fun updateStartDate(date: LocalDate) = mutate { it.copy(startDate = date).dragEndToStart() }
+    fun updateStartTime(time: LocalTime) = mutate { it.copy(startTime = time).dragEndToStart() }
+    fun updateEndDate(date: LocalDate) = mutate { it.copy(endDate = date).dragStartToEnd() }
+    fun updateEndTime(time: LocalTime) = mutate { it.copy(endTime = time).dragStartToEnd() }
     fun updateFrequency(freq: Frequency) = mutate {
         it.copy(frequency = freq, recurrenceDirty = true)
     }
@@ -307,7 +302,7 @@ class EventEditorViewModel @Inject constructor(
                 // calendar. New events (and all-day events, which are UTC by contract) fall back.
                 timezone = when {
                     current.allDay -> ZoneOffset.UTC.id
-                    else -> current.originalTimezone?.takeIf { it.isValidZoneId() } ?: zone.id
+                    else -> resolveEventTimezone(current.originalTimezone, zone)
                 },
                 frequency = current.frequency,
                 rrule = rrule,
@@ -353,11 +348,25 @@ class EventEditorViewModel @Inject constructor(
         }
     }
 
-    private fun mutate(transform: (EditorUiState) -> EditorUiState) {
-        _state.value = transform(_state.value)
-    }
+    private fun mutate(transform: (EditorUiState) -> EditorUiState) = _state.update(transform)
 }
 
-/** The provider will reject an unparseable EVENT_TIMEZONE, so a junk value must not be echoed back. */
-private fun String.isValidZoneId(): Boolean =
-    isNotBlank() && runCatching { ZoneId.of(this) }.isSuccess
+/**
+ * Whether the state currently describes an event that ends before it begins. All-day events
+ * compare by date alone — their times are pinned to midnight and carry no meaning.
+ */
+private fun EditorUiState.isInverted(): Boolean =
+    if (allDay) endDate.isBefore(startDate)
+    else endDate.atTime(endTime).isBefore(startDate.atTime(startTime))
+
+/**
+ * Nothing downstream rejects an event that ends before it starts: the provider stores it, the
+ * timeline lays it out with a negative height, and `formatDuration` hands the recurring path a
+ * negative DURATION. So moving one endpoint past the other drags the other along instead of
+ * letting the pair go inverted.
+ */
+private fun EditorUiState.dragEndToStart(): EditorUiState =
+    if (isInverted()) copy(endDate = startDate, endTime = startTime) else this
+
+private fun EditorUiState.dragStartToEnd(): EditorUiState =
+    if (isInverted()) copy(startDate = endDate, startTime = endTime) else this

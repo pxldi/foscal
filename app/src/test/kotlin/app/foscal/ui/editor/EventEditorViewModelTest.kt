@@ -80,7 +80,7 @@ class EventEditorViewModelTest {
         return EventEditorViewModel(handle, repo, FakePreferences())
     }
 
-    private fun newEventVm(): EventEditorViewModel {
+    private fun newEventVm(prefs: FakePreferences = FakePreferences()): EventEditorViewModel {
         val handle = SavedStateHandle(
             mapOf(
                 "eventId" to "",
@@ -89,8 +89,66 @@ class EventEditorViewModelTest {
                 "end" to "",
             ),
         )
-        return EventEditorViewModel(handle, repo, FakePreferences())
+        return EventEditorViewModel(handle, repo, prefs)
     }
+
+    @Test
+    fun `a default reminder of None leaves a new event with no reminders`() = runTest(dispatcher) {
+        val vm = newEventVm(FakePreferences(defaultReminder = null))
+        advanceUntilIdle()
+
+        assertEquals(emptyList<Int>(), vm.state.value.reminderMinutes)
+
+        vm.updateTitle("Lunch")
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(emptyList<Int>(), repo.lastCreated?.reminderMinutes)
+    }
+
+    @Test
+    fun `moving the end before the start drags the start back with it`() = runTest(dispatcher) {
+        val vm = newEventVm()
+        advanceUntilIdle()
+        val startDate = vm.state.value.startDate
+
+        vm.updateEndDate(startDate.minusDays(3))
+
+        val state = vm.state.value
+        assertEquals(startDate.minusDays(3), state.startDate)
+        assertEquals(startDate.minusDays(3), state.endDate)
+    }
+
+    @Test
+    fun `moving the start past the end drags the end forward with it`() = runTest(dispatcher) {
+        val vm = newEventVm()
+        advanceUntilIdle()
+        val endDate = vm.state.value.endDate
+
+        vm.updateStartDate(endDate.plusDays(5))
+
+        val state = vm.state.value
+        assertEquals(endDate.plusDays(5), state.startDate)
+        assertEquals(endDate.plusDays(5), state.endDate)
+    }
+
+    @Test
+    fun `an end time earlier in the same day never survives as an inverted span`() =
+        runTest(dispatcher) {
+            val vm = newEventVm()
+            advanceUntilIdle()
+            val today = vm.state.value.startDate
+            vm.updateStartDate(today)
+            vm.updateEndDate(today)
+            vm.updateStartTime(java.time.LocalTime.of(14, 0))
+
+            vm.updateEndTime(java.time.LocalTime.of(9, 0))
+
+            val state = vm.state.value
+            val startAt = state.startDate.atTime(state.startTime)
+            val endAt = state.endDate.atTime(state.endTime)
+            assertEquals(false, endAt.isBefore(startAt))
+        }
 
     @Test
     fun `saving a new event creates it`() = runTest(dispatcher) {
@@ -102,6 +160,32 @@ class EventEditorViewModelTest {
         advanceUntilIdle()
 
         assertEquals(FakeCalendarRepository.Op.CREATE, repo.lastOp)
+    }
+
+    @Test
+    fun `an event years outside the old scan window still opens for editing`() = runTest(dispatcher) {
+        // The lookup used to scan a +-2-year window of instances, so anything beyond it silently
+        // fell through to the blank "new event" form and saving created a duplicate.
+        val farOff = Instant.parse("2031-03-04T08:00:00Z")
+        repo = FakeCalendarRepository(
+            calendars = listOf(calendar),
+            events = listOf(recurring.copy(id = 42, title = "Passport", start = farOff, end = farOff.plusSeconds(3_600L), rrule = null)),
+        )
+        val handle = SavedStateHandle(
+            mapOf(
+                "eventId" to "42",
+                "start" to farOff.toEpochMilli().toString(),
+                "calendarId" to "",
+                "end" to "",
+            ),
+        )
+        val vm = EventEditorViewModel(handle, repo, FakePreferences())
+        advanceUntilIdle()
+
+        val state = vm.state.value
+        assertEquals(true, state.isEditing)
+        assertEquals("Passport", state.title)
+        assertEquals(42L, state.eventId)
     }
 
     @Test

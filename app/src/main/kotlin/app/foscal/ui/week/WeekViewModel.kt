@@ -7,8 +7,10 @@ import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
+import app.foscal.core.model.resolveEventTimezone
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.util.Dates
+import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,15 +45,7 @@ class WeekViewModel @Inject constructor(
     private val _weekStart = MutableStateFlow(startOfWeek(LocalDate.now(zone)))
     private val today = Dates.todayFlow(zone)
 
-    private val calendarIds = combine(
-        repository.observeCalendars(),
-        prefs.hiddenCalendarIds,
-    ) { all, hidden ->
-        all.asSequence()
-            .filter { it.visible && it.id.toString() !in hidden }
-            .map { it.id }
-            .toSet()
-    }
+    private val calendarIds = visibleCalendarIds(repository, prefs)
 
     private val weekBounds = _weekStart.map { start ->
         // Look back far enough that multi-day events which started before this week but are
@@ -117,7 +111,7 @@ class WeekViewModel @Inject constructor(
                 start = Instant.ofEpochMilli(newStartMillis),
                 end = Instant.ofEpochMilli(newEndMillis),
                 allDay = false,
-                timezone = event.timezone ?: zone.id,
+                timezone = resolveEventTimezone(event.timezone, zone),
                 frequency = Frequency.NONE,
                 rrule = null,
                 reminderMinutes = reminders,

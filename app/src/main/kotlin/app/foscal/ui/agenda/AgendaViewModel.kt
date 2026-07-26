@@ -6,6 +6,7 @@ import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
 import app.foscal.ui.util.Dates
+import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -53,15 +54,7 @@ class AgendaViewModel @Inject constructor(
     private val today = Dates.todayFlow(zone)
     private val window = MutableStateFlow(AgendaWindow())
 
-    private val calendarIds = combine(
-        repository.observeCalendars(),
-        prefs.hiddenCalendarIds,
-    ) { all, hidden ->
-        all.asSequence()
-            .filter { it.visible && it.id.toString() !in hidden }
-            .map { it.id }
-            .toSet()
-    }
+    private val calendarIds = visibleCalendarIds(repository, prefs)
 
     private val bounds = combine(window, today) { range, currentDate ->
         // Read a little before the visible past window so long multi-day events already in

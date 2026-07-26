@@ -200,6 +200,14 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **Timeline headers must use `TimelineGutterWidth` / `TimelineEndInset`.** Any weekday strip drawn
   above a `TimelineLayout` shares those two values or its columns drift out of alignment with the
   grid columns below; the error accumulates across the week and shows up on the last day.
+- **A null `Preferences.defaultReminderMinutes` means "None", not "unset".** DataStore cannot hold
+  a null Int, so the stored sentinel is `-1`; the flow resolves an *absent* key to the built-in
+  15-minute default itself. A caller writing `?: 15` therefore re-adds the exact alarm the user
+  turned off in Settings. Use `listOfNotNull(...)` when building `EventInput.reminderMinutes`.
+- **A recurrence exception starts life with the master's reminders.** The provider seeds the new
+  exception row by copying the master's children, so `updateEventInstance` must clear reminders on
+  the new id before writing the editor's set — otherwise editing one occurrence leaves it holding
+  both copies and the alarm fires twice.
 - **Reminders are all-or-nothing.** The provider has no partial-update path for
   `Reminders`, so `updateEvent` deletes every row for the event and reinserts from
   `EventInput.reminderMinutes`. That list must therefore always be the *complete* set —

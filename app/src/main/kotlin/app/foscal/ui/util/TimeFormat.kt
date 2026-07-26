@@ -13,11 +13,18 @@ import java.util.Locale
  */
 val LocalUse24HourClock = staticCompositionLocalOf { true }
 
-/** Time-of-day formatter for the given clock preference. */
-fun timeFormatter(use24Hour: Boolean): DateTimeFormatter =
-    DateTimeFormatter.ofPattern(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault())
+/**
+ * Time-of-day formatter for the given clock preference.
+ *
+ * [locale] is a parameter rather than a `Locale.getDefault()` read for the same reason weekday
+ * labels take one: the default is captured once per process, so the 12-hour AM/PM marker kept the
+ * old language until the app was killed. Composable callers pass `currentLocale()`.
+ */
+fun timeFormatter(use24Hour: Boolean, locale: Locale): DateTimeFormatter =
+    DateTimeFormatter.ofPattern(if (use24Hour) "HH:mm" else "h:mm a", locale)
 
 /** Convenience for composable call sites: the formatter for the ambient clock preference. */
 @Composable
 @ReadOnlyComposable
-fun rememberTimeFormatter(): DateTimeFormatter = timeFormatter(LocalUse24HourClock.current)
+fun rememberTimeFormatter(): DateTimeFormatter =
+    timeFormatter(LocalUse24HourClock.current, currentLocale())

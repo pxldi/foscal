@@ -6,6 +6,7 @@ import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
 import app.foscal.ui.util.Dates
+import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,16 +42,7 @@ class MonthViewModel @Inject constructor(
     private val zone: ZoneId = ZoneId.systemDefault()
     private val today = Dates.todayFlow(zone)
 
-    private val calendarIds = combine(
-        repository.observeCalendars(),
-        prefs.hiddenCalendarIds,
-    ) { all, hidden ->
-        all.asSequence()
-            .filter { it.visible }
-            .filter { it.id.toString() !in hidden }
-            .map { it.id }
-            .toSet()
-    }
+    private val calendarIds = visibleCalendarIds(repository, prefs)
 
     private val monthBounds = _visibleMonth.mapMonthToRange(zone)
 

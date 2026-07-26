@@ -27,11 +27,17 @@ class BootReceiver : BroadcastReceiver() {
         val scheduler = entryPoint.scheduler()
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
-            val now = Instant.now()
-            val horizon = LocalDate.now().plusDays(30).atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val reminders = repository.getUpcomingReminders(now, horizon)
-            scheduler.reschedule(reminders)
-            pending.finish()
+            // finish() must run even if the provider read fails: an unfinished BroadcastReceiver
+            // result keeps the process alive until the system times it out and kills it.
+            try {
+                val now = Instant.now()
+                val horizon =
+                    LocalDate.now().plusDays(30).atStartOfDay(ZoneId.systemDefault()).toInstant()
+                val reminders = repository.getUpcomingReminders(now, horizon)
+                scheduler.reschedule(reminders)
+            } finally {
+                pending.finish()
+            }
         }
     }
 

@@ -51,6 +51,21 @@ interface CalendarRepository {
     suspend fun getEvents(calendarIds: Set<Long>, from: Instant, to: Instant): List<Event>
 
     /**
+     * One event by id: the occurrence beginning at [instanceStartMillis] when that is a real
+     * instance, otherwise the master row.
+     *
+     * Screens that open a single event (the editor, the detail screen) must not find it by scanning
+     * a date window: every instance of a recurring series shares an id, so the only way to pick the
+     * right one is the occurrence start the caller was given. Scanning also silently *fails* for
+     * anything outside the window — an event years out loaded as a blank "new event" form.
+     *
+     * Falling back to the master row is what makes the lookup total. It is also the right answer
+     * when there is no occurrence to ask for (opened from a notification, which carries only the
+     * id) and when the occurrence has since been moved or cancelled.
+     */
+    suspend fun getEventOccurrence(eventId: Long, instanceStartMillis: Long = 0L): Event?
+
+    /**
      * Full-text-ish search over event title/location/description across a wide window.
      * Recurring events collapse to a single result (the next upcoming occurrence, or the last
      * past one) so a frequent series doesn't flood the list.
@@ -278,7 +293,10 @@ class CalendarContractRepository @Inject constructor(
                 CalendarContract.Events.CONTENT_URI,
                 arrayOf(CalendarContract.Events.EVENT_LOCATION),
                 "${CalendarContract.Events.EVENT_LOCATION} IS NOT NULL AND " +
-                    "${CalendarContract.Events.EVENT_LOCATION} != ''",
+                    "${CalendarContract.Events.EVENT_LOCATION} != '' AND " +
+                    // Rows the user deleted linger until their sync adapter confirms the removal;
+                    // suggesting locations from them keeps offering places already thrown away.
+                    "${CalendarContract.Events.DELETED} != 1",
                 null,
                 "${CalendarContract.Events.DTSTART} DESC",
             )?.use { c ->
@@ -416,11 +434,7 @@ class CalendarContractRepository @Inject constructor(
             val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
             val rows = safeUpdate(uri, values, null, null)
             if (rows > 0) {
-                safeDelete(
-                    CalendarContract.Reminders.CONTENT_URI,
-                    "${CalendarContract.Reminders.EVENT_ID} = ?",
-                    arrayOf(eventId.toString()),
-                )
+                deleteReminders(eventId)
                 setReminders(eventId, input.reminderMinutes)
                 true
             } else {
@@ -461,7 +475,13 @@ class CalendarContractRepository @Inject constructor(
         )
         val result = safeInsert(uri, values) ?: return@withContext false
         val newId = ContentUris.parseId(result)
-        if (newId > 0) setReminders(newId, input.reminderMinutes)
+        if (newId > 0) {
+            // The provider seeds the exception row by copying the master's children, reminders
+            // included, so inserting the editor's set on top of that would leave the occurrence with
+            // both. Reminders are all-or-nothing: clear first, then write the complete set.
+            deleteReminders(newId)
+            setReminders(newId, input.reminderMinutes)
+        }
         true
     }
 
@@ -507,8 +527,7 @@ class CalendarContractRepository @Inject constructor(
             followingFrequency = input.frequency
             followingRrule = input.rrule
         }
-        createEvent(input.copy(frequency = followingFrequency, rrule = followingRrule))
-        true
+        createEvent(input.copy(frequency = followingFrequency, rrule = followingRrule)) != null
     }
 
     override suspend fun deleteEventFollowing(
@@ -672,21 +691,6 @@ class CalendarContractRepository @Inject constructor(
         calendarIds: Set<Long>,
     ): List<Event> = withContext(Dispatchers.IO) {
         if (calendarIds.isEmpty()) return@withContext emptyList()
-        val projection = arrayOf(
-            CalendarContract.Events._ID,
-            CalendarContract.Events.CALENDAR_ID,
-            CalendarContract.Events.TITLE,
-            CalendarContract.Events.EVENT_LOCATION,
-            CalendarContract.Events.DESCRIPTION,
-            CalendarContract.Events.DTSTART,
-            CalendarContract.Events.DTEND,
-            CalendarContract.Events.DURATION,
-            CalendarContract.Events.ALL_DAY,
-            CalendarContract.Events.EVENT_TIMEZONE,
-            CalendarContract.Events.DISPLAY_COLOR,
-            CalendarContract.Events.CALENDAR_COLOR,
-            CalendarContract.Events.RRULE,
-        )
         val placeholders = calendarIds.joinToString(",") { "?" }
         val selection = "${CalendarContract.Events.CALENDAR_ID} IN ($placeholders) AND " +
             "${CalendarContract.Events.DELETED} != 1 AND " +
@@ -694,43 +698,62 @@ class CalendarContractRepository @Inject constructor(
         val out = mutableListOf<Event>()
         safeQuery(
             CalendarContract.Events.CONTENT_URI,
-            projection,
+            EVENT_PROJECTION,
             selection,
             calendarIds.map { it.toString() }.toTypedArray(),
             "${CalendarContract.Events.DTSTART} ASC",
         )?.use { c ->
             while (c.moveToNext()) {
-                val title = c.getString(2).orEmpty()
-                if (title.isBlank()) continue
-                if (c.isNull(5)) continue
-                val start = c.getLong(5)
-                val allDay = c.getInt(8) == 1
-                val end = when {
-                    !c.isNull(6) -> c.getLong(6)
-                    else -> {
-                        val millis = c.getString(7)?.let { Ics.parseDuration(it) }
-                        start + (millis ?: if (allDay) 86_400_000L else 0L)
-                    }
-                }
-                val displayColor = c.getInt(10)
-                val calendarColor = c.getInt(11)
-                out += Event(
-                    id = c.getLong(0),
-                    calendarId = c.getLong(1),
-                    title = title,
-                    location = c.getString(3),
-                    description = c.getString(4),
-                    start = Instant.ofEpochMilli(start),
-                    end = Instant.ofEpochMilli(end),
-                    allDay = allDay,
-                    timezone = c.getString(9),
-                    color = if (displayColor != 0) displayColor else calendarColor,
-                    rrule = c.getString(12),
-                )
+                val event = c.readEventRow() ?: continue
+                if (event.title.isBlank()) continue
+                out += event
             }
         }
         out
     }
+
+    override suspend fun getEventOccurrence(
+        eventId: Long,
+        instanceStartMillis: Long,
+    ): Event? = withContext(Dispatchers.IO) {
+        if (eventId <= 0L) return@withContext null
+        instanceAt(eventId, instanceStartMillis) ?: masterEvent(eventId)
+    }
+
+    /**
+     * The occurrence of [eventId] that begins exactly at [instanceStartMillis].
+     *
+     * The window is a single millisecond wide: the Instances box is inclusive at its edges, so a
+     * wider one would also return the neighbouring occurrence of a frequent series.
+     */
+    private fun instanceAt(eventId: Long, instanceStartMillis: Long): Event? {
+        if (instanceStartMillis <= 0L) return null
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, instanceStartMillis)
+        ContentUris.appendId(builder, instanceStartMillis + 1)
+        return safeQuery(
+            builder.build(),
+            INSTANCE_PROJECTION,
+            "${CalendarContract.Instances.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val event = c.readInstanceRow()
+                if (event.start.toEpochMilli() == instanceStartMillis) return@use event
+            }
+            null
+        }
+    }
+
+    /** The master `Events` row for [eventId], read by id so it is found whatever its date. */
+    private fun masterEvent(eventId: Long): Event? = safeQuery(
+        CalendarContract.Events.CONTENT_URI,
+        EVENT_PROJECTION,
+        "${CalendarContract.Events._ID} = ? AND ${CalendarContract.Events.DELETED} != 1",
+        arrayOf(eventId.toString()),
+        null,
+    )?.use { c -> if (c.moveToFirst()) c.readEventRow() else null }
 
     override suspend fun getUpcomingReminders(
         from: Instant,
@@ -754,6 +777,14 @@ class CalendarContractRepository @Inject constructor(
                 )
             }
         }
+    }
+
+    private fun deleteReminders(eventId: Long) {
+        safeDelete(
+            CalendarContract.Reminders.CONTENT_URI,
+            "${CalendarContract.Reminders.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+        )
     }
 
     private fun setReminders(eventId: Long, minutesBefore: List<Int>) {
@@ -820,7 +851,111 @@ class CalendarContractRepository @Inject constructor(
         from: Instant,
         to: Instant,
     ): List<Event> {
-        val projection = arrayOf(
+        val placeholders = calendarIds.joinToString(",") { "?" }
+        val selection = "${CalendarContract.Instances.CALENDAR_ID} IN ($placeholders)"
+        val args = calendarIds.map { it.toString() }.toTypedArray()
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, from.toEpochMilli())
+        ContentUris.appendId(builder, to.toEpochMilli())
+        val out = mutableListOf<Event>()
+        safeQuery(
+            builder.build(),
+            INSTANCE_PROJECTION,
+            selection,
+            args,
+            "${CalendarContract.Instances.BEGIN} ASC",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val event = c.readInstanceRow()
+                if (event.title.isBlank()) continue
+                out += event
+            }
+        }
+        return out
+    }
+
+    /** Reads the [INSTANCE_PROJECTION] row at the cursor's current position. */
+    private fun android.database.Cursor.readInstanceRow(): Event {
+        val displayColor = getInt(9)
+        val calendarColor = getInt(10)
+        return Event(
+            id = getLong(0),
+            calendarId = getLong(1),
+            title = getString(2).orEmpty(),
+            location = getString(3),
+            description = getString(4),
+            start = Instant.ofEpochMilli(getLong(5)),
+            end = Instant.ofEpochMilli(getLong(6)),
+            allDay = getInt(7) == 1,
+            timezone = getString(8),
+            color = if (displayColor != 0) displayColor else calendarColor,
+            rrule = getString(11),
+        )
+    }
+
+    /**
+     * Reads the [EVENT_PROJECTION] row at the cursor's current position, or null if it carries no
+     * start at all (nothing downstream can place such a row on a calendar).
+     *
+     * For a recurring event the provider stores `DURATION` *instead of* DTEND, so the end has to be
+     * derived from it here — the Instances table is the only other place that expansion happens.
+     */
+    private fun android.database.Cursor.readEventRow(): Event? {
+        if (isNull(5)) return null
+        val start = getLong(5)
+        val allDay = getInt(8) == 1
+        val end = when {
+            !isNull(6) -> getLong(6)
+            else -> {
+                val millis = getString(7)?.let { Ics.parseDuration(it) }
+                start + (millis ?: if (allDay) 86_400_000L else 0L)
+            }
+        }
+        val displayColor = getInt(10)
+        val calendarColor = getInt(11)
+        return Event(
+            id = getLong(0),
+            calendarId = getLong(1),
+            title = getString(2).orEmpty(),
+            location = getString(3),
+            description = getString(4),
+            start = Instant.ofEpochMilli(start),
+            end = Instant.ofEpochMilli(end),
+            allDay = allDay,
+            timezone = getString(9),
+            color = if (displayColor != 0) displayColor else calendarColor,
+            rrule = getString(12),
+        )
+    }
+
+    private fun contentChanges(uri: Uri): Flow<Unit> = callbackFlow {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                trySend(Unit)
+            }
+        }
+        try {
+            resolver.registerContentObserver(uri, /* notifyForDescendants = */ true, observer)
+        } catch (_: SecurityException) {
+            // Permission was revoked between the gate check and here. Close rather than park
+            // forever: the flow can never emit, and a live-but-silent collector would keep the
+            // downstream flatMapLatest waiting on a signal that is not coming.
+            close()
+        }
+        awaitClose {
+            try {
+                resolver.unregisterContentObserver(observer)
+            } catch (_: SecurityException) {
+                // no-op
+            }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    companion object {
+        private const val LOCAL_ACCOUNT_NAME = "Foscal"
+
+        /** Column order both instance readers depend on; keep in sync with `readInstanceRow`. */
+        private val INSTANCE_PROJECTION = arrayOf(
             CalendarContract.Instances.EVENT_ID,
             CalendarContract.Instances.CALENDAR_ID,
             CalendarContract.Instances.TITLE,
@@ -834,65 +969,23 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Instances.CALENDAR_COLOR,
             CalendarContract.Instances.RRULE,
         )
-        val placeholders = calendarIds.joinToString(",") { "?" }
-        val selection = "${CalendarContract.Instances.CALENDAR_ID} IN ($placeholders)"
-        val args = calendarIds.map { it.toString() }.toTypedArray()
-        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
-        ContentUris.appendId(builder, from.toEpochMilli())
-        ContentUris.appendId(builder, to.toEpochMilli())
-        val out = mutableListOf<Event>()
-        safeQuery(
-            builder.build(),
-            projection,
-            selection,
-            args,
-            "${CalendarContract.Instances.BEGIN} ASC",
-        )?.use { c ->
-            while (c.moveToNext()) {
-                val title = c.getString(2).orEmpty()
-                if (title.isBlank()) continue
-                val displayColor = c.getInt(9)
-                val calendarColor = c.getInt(10)
-                out += Event(
-                    id = c.getLong(0),
-                    calendarId = c.getLong(1),
-                    title = title,
-                    location = c.getString(3),
-                    description = c.getString(4),
-                    start = Instant.ofEpochMilli(c.getLong(5)),
-                    end = Instant.ofEpochMilli(c.getLong(6)),
-                    allDay = c.getInt(7) == 1,
-                    timezone = c.getString(8),
-                    color = if (displayColor != 0) displayColor else calendarColor,
-                    rrule = c.getString(11),
-                )
-            }
-        }
-        return out
-    }
 
-    private fun contentChanges(uri: Uri): Flow<Unit> = callbackFlow {
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                trySend(Unit)
-            }
-        }
-        try {
-            resolver.registerContentObserver(uri, /* notifyForDescendants = */ true, observer)
-        } catch (_: SecurityException) {
-            // Permission was revoked between the gate check and here; emit nothing and close.
-        }
-        awaitClose {
-            try {
-                resolver.unregisterContentObserver(observer)
-            } catch (_: SecurityException) {
-                // no-op
-            }
-        }
-    }.flowOn(Dispatchers.IO)
-
-    companion object {
-        private const val LOCAL_ACCOUNT_NAME = "Foscal"
+        /** Column order the master-row reader depends on; keep in sync with `readEventRow`. */
+        private val EVENT_PROJECTION = arrayOf(
+            CalendarContract.Events._ID,
+            CalendarContract.Events.CALENDAR_ID,
+            CalendarContract.Events.TITLE,
+            CalendarContract.Events.EVENT_LOCATION,
+            CalendarContract.Events.DESCRIPTION,
+            CalendarContract.Events.DTSTART,
+            CalendarContract.Events.DTEND,
+            CalendarContract.Events.DURATION,
+            CalendarContract.Events.ALL_DAY,
+            CalendarContract.Events.EVENT_TIMEZONE,
+            CalendarContract.Events.DISPLAY_COLOR,
+            CalendarContract.Events.CALENDAR_COLOR,
+            CalendarContract.Events.RRULE,
+        )
 
         /** Reminder methods Foscal delivers itself; EMAIL and SMS are the server's job. */
         private val NOTIFIABLE_REMINDER_METHODS = setOf(

@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -234,7 +235,7 @@ private fun SearchResultRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = buildSubtitle(event, zone, isToday, today, LocalUse24HourClock.current)
+            val subtitle = buildSubtitle(event, zone, isToday, today, LocalUse24HourClock.current, currentLocale())
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
@@ -254,19 +255,20 @@ private fun buildSubtitle(
     isToday: Boolean,
     today: LocalDate,
     is24Hour: Boolean,
+    locale: Locale,
 ): String {
     val parts = mutableListOf<String>()
     val date = event.startLocalDate(zone)
     val dateText = if (isToday) {
         "Today"
     } else {
-        date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())) +
+        date.format(DateTimeFormatter.ofPattern("EEE, MMM d", locale)) +
             if (date.year != today.year) " ${date.year}" else ""
     }
     parts += if (event.allDay) {
         "All day · $dateText"
     } else {
-        val time = Dates.instantToLocal(event.start, zone).toLocalTime().format(timeFormatter(is24Hour))
+        val time = Dates.instantToLocal(event.start, zone).toLocalTime().format(timeFormatter(is24Hour, locale))
         "$dateText · $time"
     }
     if (!event.location.isNullOrBlank()) parts += event.location!!

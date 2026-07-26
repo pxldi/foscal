@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.Flow
 interface Preferences {
     val onboardingCompleted: Flow<Boolean>
     val hiddenCalendarIds: Flow<Set<String>>
+    /**
+     * Minutes before start to pre-fill on a new event, or null when the user picked "None".
+     *
+     * Null means *no reminder*, never "not configured yet" — the unset case already resolves to
+     * [DEFAULT_REMINDER_MINUTES] here. Callers that treat null as "fall back to 15" silently
+     * re-add the alarm the user turned off.
+     */
     val defaultReminderMinutes: Flow<Int?>
     val accentColor: Flow<AccentColor>
     /** ARGB seed color used when [accentColor] is [AccentColor.CUSTOM]. */
@@ -33,4 +40,9 @@ interface Preferences {
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setUse24HourClock(use24Hour: Boolean)
     suspend fun setOsmMapsEnabled(enabled: Boolean)
+
+    companion object {
+        /** Reminder offset a brand-new install pre-fills on events. */
+        const val DEFAULT_REMINDER_MINUTES = 15
+    }
 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import app.foscal.core.model.Event
 import app.foscal.ui.contrastColor
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.timeFormatter
 import java.time.Instant
 import java.time.LocalDate
@@ -148,7 +149,8 @@ fun TimelineLayout(
     val highlightTodayColumn = days.size > 1
     val showNowLabel = timedDays.any { it.date == today }
     val is24Hour = LocalUse24HourClock.current
-    val nowLabelFmt = remember(is24Hour) { timeFormatter(is24Hour) }
+    val locale = currentLocale()
+    val nowLabelFmt = remember(is24Hour, locale) { timeFormatter(is24Hour, locale) }
     var selection by remember { mutableStateOf<TimeSelection?>(null) }
     var eventDrag by remember { mutableStateOf<EventDrag?>(null) }
 
@@ -545,7 +547,8 @@ private fun EventBlock(
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     val is24Hour = LocalUse24HourClock.current
-    val timeFmt = remember(is24Hour) { timeFormatter(is24Hour) }
+    val locale = currentLocale()
+    val timeFmt = remember(is24Hour, locale) { timeFormatter(is24Hour, locale) }
     val showTime = !compact && heightDp >= 36.dp
     val textPadding = if (compact) {
         // Week columns are only ~48dp wide on a phone. Every dp of padding here costs a character,

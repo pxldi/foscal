@@ -43,11 +43,22 @@ class FakeCalendarRepository(
 
     override suspend fun getCalendars(): List<Calendar> = calendars
 
+    // The window is honoured, not ignored: the Instances table only ever returns occurrences
+    // overlapping it, and a fake that hands back everything hides exactly the bug where a caller
+    // looks an event up by scanning too narrow a range.
     override suspend fun getEvents(
         calendarIds: Set<Long>,
         from: Instant,
         to: Instant,
-    ): List<Event> = events.filter { it.calendarId in calendarIds }
+    ): List<Event> = events.filter {
+        it.calendarId in calendarIds && it.start <= to && it.end >= from
+    }
+
+    override suspend fun getEventOccurrence(eventId: Long, instanceStartMillis: Long): Event? {
+        val matches = events.filter { it.id == eventId }
+        return matches.firstOrNull { it.start.toEpochMilli() == instanceStartMillis }
+            ?: matches.firstOrNull()
+    }
 
     override suspend fun searchEvents(
         calendarIds: Set<Long>,
@@ -73,7 +84,9 @@ class FakeCalendarRepository(
         calendarIds: Set<Long>,
         from: Instant,
         to: Instant,
-    ): Flow<List<Event>> = MutableStateFlow(events.filter { it.calendarId in calendarIds })
+    ): Flow<List<Event>> = MutableStateFlow(
+        events.filter { it.calendarId in calendarIds && it.start <= to && it.end >= from },
+    )
 
     override suspend fun ensureLocalCalendar(name: String, color: Int): Long? = 1L
 
@@ -136,8 +149,10 @@ class FakeCalendarRepository(
         eventIds: Collection<Long>,
     ): Map<Long, List<Int>> = eventIds.associateWith { reminderMinutes }
 
+    // Mirrors the real read: master rows only, so a recurring series contributes one event and not
+    // one per occurrence. Test fixtures hold masters already, so this is just the id filter.
     override suspend fun getEventsForExport(calendarIds: Set<Long>): List<Event> =
-        events.filter { it.calendarId in calendarIds }
+        events.filter { it.calendarId in calendarIds }.distinctBy { it.id }
 
     override suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder> =
         emptyList()

@@ -71,10 +71,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import app.foscal.core.ui.theme.BricolageFamily
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
+import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
@@ -83,9 +83,10 @@ import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.TextStyle
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -541,7 +542,7 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
                 .background(Color(event.color)),
         )
         Text(
-            text = previewTimeLabel(event, LocalUse24HourClock.current),
+            text = previewTimeLabel(event, LocalUse24HourClock.current, currentLocale()),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -559,13 +560,13 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
     }
 }
 
-private fun previewTimeLabel(event: Event, is24Hour: Boolean): String =
+private fun previewTimeLabel(event: Event, is24Hour: Boolean, locale: Locale): String =
     if (event.allDay) {
         "All day"
     } else {
         event.start.atZone(ZoneId.systemDefault())
             .toLocalTime()
-            .format(timeFormatter(is24Hour))
+            .format(timeFormatter(is24Hour, locale))
     }
 
 internal enum class MonthSwipeDirection {
