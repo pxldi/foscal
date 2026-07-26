@@ -171,6 +171,18 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   Vertical swipes on the month grid are aliases for month navigation (up =
   next month, down = previous month) and use dominant-axis drag detection so
   diagonal gestures do not trigger both horizontal and vertical navigation.
+- **The agenda's month headers are the only thing on screen naming the date.** An agenda skips
+  empty days, so scrolling a few screens leaves no clue what month — let alone year — is being
+  looked at. `AgendaUiState.items` interleaves an `AgendaItem.MonthHeader` wherever the month
+  changes and the screen renders those with `stickyHeader`. The list is *flat*, not months nested
+  with their days, because a `LazyColumn` index has to be an index into it: both paging triggers
+  and `todayIndex` work in list indices, and nesting puts them permanently out of step with the
+  interleaved headers. Header keys are `YearMonth`, never `Month` — the latter folds July 2027 into
+  July 2026.
+- **Scrolling a row to index 0 hides it under the sticky header**, which is drawn *over* the list
+  rather than in its flow. Both the initial scroll-to-today and the Today pill pass a negative
+  `scrollOffset` of the header's height, measured with `onSizeChanged` rather than hardcoded as a
+  dp so it stays correct at any font scale.
 - **Alarm keys must include the occurrence start.** Every instance of a recurring series shares
   one `Events._ID`, so a PendingIntent request code (or notification id) keyed on
   `(eventId, minutes)` alone makes each occurrence's `FLAG_UPDATE_CURRENT` alarm overwrite the

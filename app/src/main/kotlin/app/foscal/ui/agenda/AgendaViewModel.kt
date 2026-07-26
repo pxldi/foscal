@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import javax.inject.Inject
 
@@ -25,11 +26,51 @@ data class AgendaDay(
     val events: List<Event>,
 )
 
+/**
+ * One row of the agenda list.
+ *
+ * The list is flat rather than nested months so a `LazyColumn` index *is* an index into this list:
+ * the paging triggers and the initial scroll-to-today both work in list indices, and nesting would
+ * put them permanently out of step with the headers interleaved between days.
+ */
+sealed interface AgendaItem {
+    /** Pinned while its month is on screen — an agenda skips empty days, so without it there is
+     *  nothing on screen naming the month or year being looked at. */
+    data class MonthHeader(val yearMonth: YearMonth) : AgendaItem
+
+    data class Day(val day: AgendaDay) : AgendaItem
+}
+
 data class AgendaUiState(
     val days: List<AgendaDay> = emptyList(),
     val hasVisibleCalendars: Boolean = true,
     val today: LocalDate = LocalDate.now(),
-)
+) {
+    /** [days] with a [AgendaItem.MonthHeader] inserted wherever the month changes. */
+    val items: List<AgendaItem> = buildList {
+        var month: YearMonth? = null
+        for (day in days) {
+            val dayMonth = YearMonth.from(day.date)
+            if (dayMonth != month) {
+                month = dayMonth
+                add(AgendaItem.MonthHeader(dayMonth))
+            }
+            add(AgendaItem.Day(day))
+        }
+    }
+
+    /**
+     * Where to park the list on first load: the first day that is not in the past, or the last row
+     * when the whole agenda is behind us. -1 when there is nothing to show.
+     */
+    val todayIndex: Int = items
+        .indexOfFirst { it is AgendaItem.Day && !it.day.date.isBefore(today) }
+        .takeIf { it >= 0 }
+        ?: items.lastIndex
+
+    val firstDate: LocalDate? = days.firstOrNull()?.date
+    val lastDate: LocalDate? = days.lastOrNull()?.date
+}
 
 private data class AgendaWindow(val pastDays: Long = 60L, val futureDays: Long = 60L)
 
