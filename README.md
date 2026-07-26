@@ -68,6 +68,11 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   colors, tap-to-open, and a "+" quick-add button.
 - **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
   tomorrow noon", "PTO all-day") and it parses the title, date, and time.
+- **Import & export `.ics`** — export every event on your visible calendars to a
+  standard iCalendar file, or import one into a calendar you pick. Recurrence
+  rules, all-day spans, time zones, reminders and multi-line notes are carried
+  across. Files are chosen through the system document picker, so Foscal needs
+  no storage permission and only ever touches the one file you select.
 - **Offline local calendars** and hand-off to DAVx⁵ for CalDAV sync.
 - **Permission-first onboarding** — calendar access is requested up front and
   the UI reacts the instant it is granted; no provider access happens before.
@@ -81,12 +86,14 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Import/export of `.ics` files.
+- Opt-in Material You dynamic color (`FoscalTheme` already accepts it; needs a
+  Settings toggle).
+- Round-tripping single-occurrence changes through `.ics`: export currently
+  writes the master series and skips recurrence exceptions, which need
+  `RECURRENCE-ID` support.
 
 **Later / future goals**
 
-- Opt-in Material You dynamic color (`FoscalTheme` already accepts it; needs a
-  Settings toggle).
 - Richer event detail: map preview, guests/attendees, join-video-call.
 - More unit/UI test coverage (repository, more view models, widget factory).
 - Play Store / F-Droid release: signing config, screenshots, store listing.

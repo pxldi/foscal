@@ -1,5 +1,6 @@
 package app.foscal.ui.calendars
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
@@ -7,14 +8,17 @@ import app.foscal.core.data.UserPreferencesRepository
 import app.foscal.core.model.AccentColor
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.ThemeMode
+import app.foscal.ics.IcsTransfer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.IOException
 import javax.inject.Inject
 
 data class CalendarsUiState(
@@ -26,6 +30,14 @@ data class CalendarsUiState(
     val themeMode: ThemeMode = ThemeMode.Default,
     val use24HourClock: Boolean = true,
     val osmMapsEnabled: Boolean = false,
+    val transfer: TransferState = TransferState(),
+)
+
+/** Progress and outcome of an `.ics` import or export, shown inline in Settings. */
+data class TransferState(
+    val busy: Boolean = false,
+    val message: String? = null,
+    val failed: Boolean = false,
 )
 
 data class CalendarRow(
@@ -48,7 +60,10 @@ private data class PrefsSnapshot(
 class CalendarsViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: UserPreferencesRepository,
+    private val icsTransfer: IcsTransfer,
 ) : ViewModel() {
+
+    private val transferState = MutableStateFlow(TransferState())
 
     // combine() has no typed 6+-arg overload, so fold the extra preferences in with a nested combine.
     private val prefsFlow = combine(
@@ -70,8 +85,10 @@ class CalendarsViewModel @Inject constructor(
     val state: StateFlow<CalendarsUiState> = combine(
         repository.observeCalendars(),
         prefsFlow,
-    ) { all, p ->
+        transferState,
+    ) { all, p, transfer ->
         CalendarsUiState(
+            transfer = transfer,
             items = all.map { cal ->
                 CalendarRow(cal, isHidden = cal.id.toString() in p.hidden)
             },
@@ -125,4 +142,58 @@ class CalendarsViewModel @Inject constructor(
     fun setOsmMapsEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setOsmMapsEnabled(enabled) }
     }
+
+    /** Writes every event on the currently visible calendars to the document at [target]. */
+    fun exportTo(target: Uri) {
+        runTransfer {
+            val calendarIds = state.value.items
+                .filterNot { it.isHidden }
+                .map { it.calendar.id }
+                .toSet()
+            if (calendarIds.isEmpty()) {
+                TransferState(message = "No visible calendars to export", failed = true)
+            } else {
+                val count = icsTransfer.export(target, calendarIds)
+                TransferState(message = "Exported $count ${plural(count, "event")}")
+            }
+        }
+    }
+
+    /** Creates every event in the document at [source] on [calendarId]. */
+    fun importFrom(source: Uri, calendarId: Long) {
+        runTransfer {
+            val summary = icsTransfer.import(source, calendarId)
+            val message = buildString {
+                append("Imported ${summary.imported} ${plural(summary.imported, "event")}")
+                if (summary.skipped > 0) append(" · ${summary.skipped} skipped")
+            }
+            TransferState(message = message, failed = summary.imported == 0)
+        }
+    }
+
+    fun dismissTransferMessage() {
+        transferState.value = TransferState()
+    }
+
+    /**
+     * Runs [block] with the busy flag held, turning any failure into a message rather than a crash.
+     * A document URI can go stale between the picker returning it and the read (the file is
+     * deleted, the provider is uninstalled, a network volume drops), and the file itself is
+     * arbitrary user input — none of that should take the app down.
+     */
+    private fun runTransfer(block: suspend () -> TransferState) {
+        if (transferState.value.busy) return
+        viewModelScope.launch {
+            transferState.value = TransferState(busy = true)
+            transferState.value = try {
+                block()
+            } catch (e: IOException) {
+                TransferState(message = e.message ?: "Could not read the file", failed = true)
+            } catch (_: SecurityException) {
+                TransferState(message = "No longer allowed to access that file", failed = true)
+            }
+        }
+    }
+
+    private fun plural(count: Int, noun: String): String = if (count == 1) noun else "${noun}s"
 }

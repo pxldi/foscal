@@ -132,6 +132,13 @@ class FakeCalendarRepository(
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> = reminderMinutes
 
+    override suspend fun getReminderMinutesFor(
+        eventIds: Collection<Long>,
+    ): Map<Long, List<Int>> = eventIds.associateWith { reminderMinutes }
+
+    override suspend fun getEventsForExport(calendarIds: Set<Long>): List<Event> =
+        events.filter { it.calendarId in calendarIds }
+
     override suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder> =
         emptyList()
 }

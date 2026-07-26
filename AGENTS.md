@@ -76,7 +76,8 @@ tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination; the
 selected tab is `rememberSaveable` so returning from detail/editor preserves the
 current tab), event create/edit/delete, recurring events
 (this-vs-all-events, exceptions), reminders/notifications, real calendar colors,
-offline local calendars, permission-first onboarding. Week view is the shared
+offline local calendars, `.ics` import/export via the system document picker,
+permission-first onboarding. Week view is the shared
 hourly `TimelineLayout` with long-press drag-to-create and long-press
 drag-to-move for timed events; recurring timed moves are stored as single
 occurrence exceptions. There is no separate Day view — it was dropped as
@@ -211,6 +212,23 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   instant locally but re-anchors recurrence expansion and shifts the event for every other
   client on the same CalDAV calendar. Only new events (and all-day events, which are UTC by
   contract) may use the device zone. Unparseable stored zones fall back to it.
+- **`.ics` export reads the `Events` table, never `Instances`.** Every other read path in the app
+  goes through `Instances`, which expands a recurring series into one row per occurrence — each
+  carrying the master's RRULE. Exporting that writes one VEVENT per occurrence, all claiming to
+  repeat forever. `getEventsForExport` reads master rows instead, skips recurrence exceptions
+  (`ORIGINAL_ID IS NULL` — they need a `RECURRENCE-ID` this app does not model) and derives the end
+  from `DURATION`, which the provider stores *instead of* DTEND for recurring events.
+- **Timed events export as UTC, deliberately.** A `TZID` parameter is only usable by the reader if
+  the file also carries that zone's full VTIMEZONE with its DST rules; emitting a one-block
+  VTIMEZONE with today's offset is worse than none, because it silently shifts occurrences on the
+  other side of a DST boundary. Import still honours `TZID` and preserves it, so Foscal→Foscal
+  round-trips keep the authored zone. A trailing `Z` is reported as the zone `UTC`, not as "no
+  zone": falling back to the device zone there would re-anchor a recurring series' wall time.
+- **An all-day `DTEND` is exclusive and must be strictly later than `DTSTART`.** The provider
+  really does hold all-day rows written with `DTEND == DTSTART`, and exporting those verbatim
+  produces a VEVENT covering zero days that strict parsers reject, so `Ics.write` clamps them to a
+  one-day span. This matches the provider's own convention, so no translation happens at either
+  boundary — `IcsEvent.end` is the provider's end.
 - **Provider calls can throw `IllegalArgumentException`** for values it rejects;
   the repository's `safe*` helpers swallow both that and `SecurityException` so a
   bad write never crashes the app.

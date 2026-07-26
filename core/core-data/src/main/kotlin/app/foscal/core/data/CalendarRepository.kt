@@ -13,6 +13,7 @@ import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
+import app.foscal.core.model.Ics
 import app.foscal.core.model.RecurrenceRules
 import app.foscal.core.model.ScheduledReminder
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -121,6 +122,30 @@ interface CalendarRepository {
     suspend fun deleteEventFollowing(eventId: Long, instanceStartMillis: Long): Boolean
 
     suspend fun getReminderMinutes(eventId: Long): List<Int>
+
+    /**
+     * Reminder offsets for many events at once, keyed by event id. Events with no reminders are
+     * absent from the map.
+     *
+     * Export would otherwise issue one query per event; on a calendar with a few thousand events
+     * that is thousands of round-trips through the provider's binder interface.
+     */
+    suspend fun getReminderMinutesFor(eventIds: Collection<Long>): Map<Long, List<Int>>
+
+    /**
+     * Master event rows on [calendarIds] — the `Events` table, *not* the expanded `Instances` the
+     * rest of the app reads.
+     *
+     * Export must not go through instances: every occurrence of a recurring series is its own
+     * instance row carrying the master's RRULE, so exporting them would write one VEVENT per
+     * occurrence, each claiming to repeat forever. The master row is the single VEVENT the file
+     * should contain. Recurrence exceptions (rows with an `ORIGINAL_ID`) are skipped — they are
+     * only meaningful alongside a `RECURRENCE-ID`, which this app does not model.
+     *
+     * For recurring events the provider stores `DURATION` instead of `DTEND`, so [Event.end] is
+     * derived from it here.
+     */
+    suspend fun getEventsForExport(calendarIds: Set<Long>): List<Event>
 
     suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder>
 }
@@ -617,6 +642,94 @@ class CalendarContractRepository @Inject constructor(
             }
         }
         return out
+    }
+
+    override suspend fun getReminderMinutesFor(
+        eventIds: Collection<Long>,
+    ): Map<Long, List<Int>> = withContext(Dispatchers.IO) {
+        if (eventIds.isEmpty()) return@withContext emptyMap()
+        val out = mutableMapOf<Long, MutableList<Int>>()
+        // SQLite caps a statement at 999 bound variables, so a large calendar has to be chunked
+        // rather than passed as one IN clause.
+        for (chunk in eventIds.distinct().chunked(500)) {
+            val placeholders = chunk.joinToString(",") { "?" }
+            safeQuery(
+                CalendarContract.Reminders.CONTENT_URI,
+                arrayOf(CalendarContract.Reminders.EVENT_ID, CalendarContract.Reminders.MINUTES),
+                "${CalendarContract.Reminders.EVENT_ID} IN ($placeholders)",
+                chunk.map { it.toString() }.toTypedArray(),
+                null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    out.getOrPut(c.getLong(0)) { mutableListOf() } += c.getInt(1)
+                }
+            }
+        }
+        out.mapValues { (_, minutes) -> minutes.distinct().sorted() }
+    }
+
+    override suspend fun getEventsForExport(
+        calendarIds: Set<Long>,
+    ): List<Event> = withContext(Dispatchers.IO) {
+        if (calendarIds.isEmpty()) return@withContext emptyList()
+        val projection = arrayOf(
+            CalendarContract.Events._ID,
+            CalendarContract.Events.CALENDAR_ID,
+            CalendarContract.Events.TITLE,
+            CalendarContract.Events.EVENT_LOCATION,
+            CalendarContract.Events.DESCRIPTION,
+            CalendarContract.Events.DTSTART,
+            CalendarContract.Events.DTEND,
+            CalendarContract.Events.DURATION,
+            CalendarContract.Events.ALL_DAY,
+            CalendarContract.Events.EVENT_TIMEZONE,
+            CalendarContract.Events.DISPLAY_COLOR,
+            CalendarContract.Events.CALENDAR_COLOR,
+            CalendarContract.Events.RRULE,
+        )
+        val placeholders = calendarIds.joinToString(",") { "?" }
+        val selection = "${CalendarContract.Events.CALENDAR_ID} IN ($placeholders) AND " +
+            "${CalendarContract.Events.DELETED} != 1 AND " +
+            "${CalendarContract.Events.ORIGINAL_ID} IS NULL"
+        val out = mutableListOf<Event>()
+        safeQuery(
+            CalendarContract.Events.CONTENT_URI,
+            projection,
+            selection,
+            calendarIds.map { it.toString() }.toTypedArray(),
+            "${CalendarContract.Events.DTSTART} ASC",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val title = c.getString(2).orEmpty()
+                if (title.isBlank()) continue
+                if (c.isNull(5)) continue
+                val start = c.getLong(5)
+                val allDay = c.getInt(8) == 1
+                val end = when {
+                    !c.isNull(6) -> c.getLong(6)
+                    else -> {
+                        val millis = c.getString(7)?.let { Ics.parseDuration(it) }
+                        start + (millis ?: if (allDay) 86_400_000L else 0L)
+                    }
+                }
+                val displayColor = c.getInt(10)
+                val calendarColor = c.getInt(11)
+                out += Event(
+                    id = c.getLong(0),
+                    calendarId = c.getLong(1),
+                    title = title,
+                    location = c.getString(3),
+                    description = c.getString(4),
+                    start = Instant.ofEpochMilli(start),
+                    end = Instant.ofEpochMilli(end),
+                    allDay = allDay,
+                    timezone = c.getString(9),
+                    color = if (displayColor != 0) displayColor else calendarColor,
+                    rrule = c.getString(12),
+                )
+            }
+        }
+        out
     }
 
     override suspend fun getUpcomingReminders(
