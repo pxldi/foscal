@@ -101,7 +101,10 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `Preferences.accentColor`, with `Preferences.accentCustomColor` storing the
   custom seed. Fixed per-accent tokens live in `theme/Color.kt` (`AccentTokens`);
   custom colors are expanded by `customAccentTokens(seed)` in `Theme.kt`.
-  Never hardcode the accent — read `colorScheme.primary`.
+  Never hardcode the accent — read `colorScheme.primary`. `Preferences.dynamicColor`
+  (off by default) swaps the whole scheme for a wallpaper-derived Material You one;
+  Settings shows the toggle and the accent picker mutually exclusively, and renders the
+  toggle only on API 31+ — the platform has no dynamic scheme to read below it.
 - **Weekend labels** — use `weekendLabelColor()` from the theme (theme-aware gold),
   never a hardcoded value.
 - **Locale** — in composables read `currentLocale()` (`ui/util/Locales.kt`) or
@@ -223,9 +226,29 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **`.ics` export reads the `Events` table, never `Instances`.** Every other read path in the app
   goes through `Instances`, which expands a recurring series into one row per occurrence — each
   carrying the master's RRULE. Exporting that writes one VEVENT per occurrence, all claiming to
-  repeat forever. `getEventsForExport` reads master rows instead, skips recurrence exceptions
-  (`ORIGINAL_ID IS NULL` — they need a `RECURRENCE-ID` this app does not model) and derives the end
-  from `DURATION`, which the provider stores *instead of* DTEND for recurring events.
+  repeat forever. `getEventsForExport` reads master rows instead and derives the end from
+  `DURATION`, which the provider stores *instead of* DTEND for recurring events.
+- **A recurrence exception is not a top-level event.** `getEventsForExport` returns
+  `ExportEvent(master, overrides, cancelledOccurrences)`: the exception rows are attached to the
+  series they belong to, because on their own they look like ordinary one-off events and exporting
+  them flat duplicates an occurrence the series already covers. Which rows those are cannot be
+  decided on `ORIGINAL_ID` alone — a sync adapter links its exceptions by `ORIGINAL_SYNC_ID` — so
+  both columns are read and the sync id is resolved back to a local row id in Kotlin.
+- **Every VEVENT of one series shares the master's UID.** UID + `RECURRENCE-ID` is the only thing
+  tying an override back to its series. `Ics.write` falls back to a *synthetic* uid derived from
+  title and start, which an override is free to have changed, so `ExportEvent.toIcsEvents` computes
+  the master's uid once (`Ics.syntheticUid`) and copies it onto each override. It also strips any
+  RRULE from an override (AOSP leaves the column null, but a sync adapter may not) — leaving one in
+  turns a single replaced occurrence into a second full series overlapping the first.
+- **Cancelled occurrences export as `EXDATE` on the master, not as `STATUS:CANCELLED` overrides.**
+  Every RFC 5545 reader understands EXDATE; a cancelled override is routinely imported as a real
+  (if cancelled) event.
+- **Import writes masters before overrides.** An override can only be applied once the series it
+  replaces has a row id, so `writeImported` creates every non-override first, keeps a uid→id map,
+  then applies EXDATEs via `deleteEventInstance` and RECURRENCE-ID VEVENTs via
+  `updateEventInstance`. An override whose master is not in the file is created as a standalone
+  event rather than dropped. That function is deliberately separate from `IcsTransfer.import` so
+  the ordering is testable without a `Context` or a document URI.
 - **Timed events export as UTC, deliberately.** A `TZID` parameter is only usable by the reader if
   the file also carries that zone's full VTIMEZONE with its DST rules; emitting a one-block
   VTIMEZONE with today's offset is worse than none, because it silently shifts occurrences on the

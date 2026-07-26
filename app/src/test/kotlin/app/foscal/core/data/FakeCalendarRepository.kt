@@ -4,6 +4,7 @@ import android.net.Uri
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
+import app.foscal.core.model.ExportEvent
 import app.foscal.core.model.ScheduledReminder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,11 +33,28 @@ class FakeCalendarRepository(
     var lastWritten: EventInput? = null
         private set
 
+    /** Overrides what [getEventsForExport] returns; null falls back to the [events] fixture. */
+    var exportEvents: List<ExportEvent>? = null
+
+    /** Every event created, in order — import writes many rows in one call. */
+    val created = mutableListOf<EventInput>()
+
+    /** Every single-occurrence override written, as (masterId, originalInstanceTime, values). */
+    val instanceUpdates = mutableListOf<Triple<Long, Long, EventInput>>()
+
+    /** Every single-occurrence cancellation, as (masterId, originalInstanceTime). */
+    val instanceDeletes = mutableListOf<Pair<Long, Long>>()
+
+    private var nextEventId = 1L
+
     fun reset() {
         lastOp = null
         lastRebaseCount = null
         lastCreated = null
         lastWritten = null
+        created.clear()
+        instanceUpdates.clear()
+        instanceDeletes.clear()
     }
 
     override fun getCalendarUri(calendarId: Long): Uri = Uri.EMPTY
@@ -96,7 +114,10 @@ class FakeCalendarRepository(
         lastOp = Op.CREATE
         lastCreated = input
         lastWritten = input
-        return 1L
+        created += input
+        // Distinct ids per call: an import creates several masters and then addresses each by the
+        // id it got back, which a constant would collapse into one.
+        return nextEventId++
     }
 
     override suspend fun updateEvent(eventId: Long, input: EventInput): Boolean {
@@ -117,6 +138,7 @@ class FakeCalendarRepository(
     ): Boolean {
         lastOp = Op.UPDATE_INSTANCE
         lastWritten = input
+        instanceUpdates += Triple(eventId, instanceStartMillis, input)
         return true
     }
 
@@ -135,6 +157,7 @@ class FakeCalendarRepository(
 
     override suspend fun deleteEventInstance(eventId: Long, instanceStartMillis: Long): Boolean {
         lastOp = Op.DELETE_INSTANCE
+        instanceDeletes += eventId to instanceStartMillis
         return true
     }
 
@@ -151,8 +174,11 @@ class FakeCalendarRepository(
 
     // Mirrors the real read: master rows only, so a recurring series contributes one event and not
     // one per occurrence. Test fixtures hold masters already, so this is just the id filter.
-    override suspend fun getEventsForExport(calendarIds: Set<Long>): List<Event> =
-        events.filter { it.calendarId in calendarIds }.distinctBy { it.id }
+    // [exportEvents] overrides it for tests that need a series with exceptions attached.
+    override suspend fun getEventsForExport(calendarIds: Set<Long>): List<ExportEvent> =
+        exportEvents
+            ?: events.filter { it.calendarId in calendarIds }.distinctBy { it.id }
+                .map { ExportEvent(it) }
 
     override suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder> =
         emptyList()

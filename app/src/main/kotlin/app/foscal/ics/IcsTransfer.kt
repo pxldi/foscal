@@ -5,6 +5,7 @@ import android.net.Uri
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
+import app.foscal.core.model.ExportEvent
 import app.foscal.core.model.Ics
 import app.foscal.core.model.IcsEvent
 import app.foscal.core.model.RecurrenceRules
@@ -12,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -33,11 +35,19 @@ class IcsTransfer @Inject constructor(
     private val repository: CalendarRepository,
 ) {
 
-    /** Writes every event on [calendarIds] to [target]. Returns how many events were written. */
+    /**
+     * Writes every event on [calendarIds] to [target]. Returns how many events were written,
+     * counting a recurring series and each of its individually edited occurrences separately —
+     * they are separate VEVENTs in the file.
+     */
     suspend fun export(target: Uri, calendarIds: Set<Long>): Int = withContext(Dispatchers.IO) {
-        val events = repository.getEventsForExport(calendarIds)
-        val reminders = repository.getReminderMinutesFor(events.map { it.id })
-        val text = Ics.write(events.map { it.toIcsEvent(reminders[it.id].orEmpty()) })
+        val exports = repository.getEventsForExport(calendarIds)
+        val ids = exports.flatMap { export ->
+            listOf(export.event.id) + export.overrides.map { it.event.id }
+        }
+        val reminders = repository.getReminderMinutesFor(ids)
+        val events = exports.flatMap { it.toIcsEvents(reminders) }
+        val text = Ics.write(events)
         // "wt" truncates. Plain "w" leaves any bytes past the new content in place, so exporting a
         // smaller calendar over an existing file would leave a tail of the previous export behind
         // and produce a file with two END:VCALENDAR lines.
@@ -47,7 +57,20 @@ class IcsTransfer @Inject constructor(
         events.size
     }
 
-    /** Reads [source] and creates every event it contains on [calendarId]. */
+    /**
+     * Reads [source] and creates every event it contains on [calendarId].
+     *
+     * A VEVENT carrying a RECURRENCE-ID replaces one occurrence of the series with the same UID, so
+     * it can only be written once that series exists: masters are created first and the overrides
+     * are then applied against the ids they produced. An override whose master is not in the file
+     * is created as a standalone event instead of being dropped — the occurrence it describes is
+     * real, and there is nothing here for it to override.
+     *
+     * An exception insert needs the master's `_sync_id`, which only exists straight away on local
+     * calendars (`createEvent` mints it there). Importing a series with overrides into a CalDAV
+     * calendar before its sync adapter has assigned one leaves those overrides in [ImportSummary
+     * .skipped] rather than writing them somewhere they would duplicate the series.
+     */
     suspend fun import(source: Uri, calendarId: Long): ImportSummary =
         withContext(Dispatchers.IO) {
             val text = context.contentResolver.openInputStream(source)?.use { input ->
@@ -55,14 +78,7 @@ class IcsTransfer @Inject constructor(
             } ?: throw IOException("Could not open $source for reading")
 
             val zone = ZoneId.systemDefault()
-            val events = Ics.read(text, zone)
-            var imported = 0
-            for (event in events) {
-                // A null id means the provider rejected the row (a read-only calendar, or a value
-                // it did not like). One bad event must not abandon the rest of the file.
-                if (repository.createEvent(event.toEventInput(calendarId, zone)) != null) imported++
-            }
-            ImportSummary(imported = imported, skipped = events.size - imported)
+            writeImported(repository, Ics.read(text, zone), calendarId, zone)
         }
 
     /**
@@ -93,6 +109,48 @@ class IcsTransfer @Inject constructor(
     }
 }
 
+/**
+ * Writes already-parsed [events] onto [calendarId]. Split out of [IcsTransfer.import] so the
+ * ordering rules below can be tested without a `Context` or a document URI.
+ */
+internal suspend fun writeImported(
+    repository: CalendarRepository,
+    events: List<IcsEvent>,
+    calendarId: Long,
+    zone: ZoneId,
+): ImportSummary {
+    val (overrides, masters) = events.partition { it.isOverride }
+    var imported = 0
+    val masterIds = mutableMapOf<String, Long>()
+
+    for (event in masters) {
+        // A null id means the provider rejected the row (a read-only calendar, or a value it did
+        // not like). One bad event must not abandon the rest of the file.
+        val id = repository.createEvent(event.toEventInput(calendarId, zone)) ?: continue
+        imported++
+        event.uid?.let { masterIds[it] = id }
+        for (exdate in event.exdates) {
+            repository.deleteEventInstance(id, exdate.toEpochMilli())
+        }
+    }
+
+    for (event in overrides) {
+        val masterId = event.uid?.let { masterIds[it] }
+        val written = if (masterId != null) {
+            repository.updateEventInstance(
+                masterId,
+                event.recurrenceId!!.toEpochMilli(),
+                event.toEventInput(calendarId, zone),
+            )
+        } else {
+            repository.createEvent(event.toEventInput(calendarId, zone)) != null
+        }
+        if (written) imported++
+    }
+
+    return ImportSummary(imported = imported, skipped = events.size - imported)
+}
+
 internal fun Event.toIcsEvent(reminderMinutes: List<Int>): IcsEvent = IcsEvent(
     title = title,
     start = start,
@@ -104,6 +162,33 @@ internal fun Event.toIcsEvent(reminderMinutes: List<Int>): IcsEvent = IcsEvent(
     rrule = rrule,
     reminderMinutes = reminderMinutes,
 )
+
+/**
+ * The series and its overrides as VEVENTs, master first.
+ *
+ * All of them must carry the *master's* UID — that shared UID plus a RECURRENCE-ID is the only
+ * thing tying an override back to the series it belongs to. The master's synthetic uid is
+ * therefore computed once and copied down; letting the writer derive one per event would key each
+ * override off its own (edited) title and start and orphan it.
+ */
+internal fun ExportEvent.toIcsEvents(reminders: Map<Long, List<Int>>): List<IcsEvent> {
+    val master = event.toIcsEvent(reminders[event.id].orEmpty()).copy(
+        exdates = cancelledOccurrences.map(Instant::ofEpochMilli),
+    )
+    val uid = master.uid ?: Ics.syntheticUid(master)
+    return listOf(master.copy(uid = uid)) + overrides.map { override ->
+        override.event.toIcsEvent(reminders[override.event.id].orEmpty()).copy(
+            uid = uid,
+            // RFC 5545 §3.8.5.3: a VEVENT with a RECURRENCE-ID replaces one occurrence and must not
+            // define a series of its own. AOSP leaves an exception row's RRULE null, but a sync
+            // adapter is free to store one, and emitting it would turn the single occurrence this
+            // VEVENT replaces into a second full series overlapping the first.
+            rrule = null,
+            recurrenceId = Instant.ofEpochMilli(override.originalInstanceTime),
+            recurrenceIdAllDay = override.originalAllDay,
+        )
+    }
+}
 
 internal fun IcsEvent.toEventInput(calendarId: Long, zone: ZoneId): EventInput = EventInput(
     calendarId = calendarId,

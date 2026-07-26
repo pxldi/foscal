@@ -22,6 +22,7 @@ class FakePreferences(
     override val accentColor: MutableStateFlow<AccentColor> = MutableStateFlow(accent)
     override val accentCustomColor: MutableStateFlow<Int> =
         MutableStateFlow(AccentColor.DEFAULT_CUSTOM_COLOR)
+    override val dynamicColor: MutableStateFlow<Boolean> = MutableStateFlow(false)
     override val themeMode: MutableStateFlow<ThemeMode> = MutableStateFlow(theme)
     override val use24HourClock: MutableStateFlow<Boolean> = MutableStateFlow(use24Hour)
     override val osmMapsEnabled: MutableStateFlow<Boolean> = MutableStateFlow(osmMaps)
@@ -35,6 +36,10 @@ class FakePreferences(
 
     override suspend fun setAccentCustomColor(color: Int) {
         accentCustomColor.value = color
+    }
+
+    override suspend fun setDynamicColor(enabled: Boolean) {
+        dynamicColor.value = enabled
     }
 
     override suspend fun setThemeMode(mode: ThemeMode) {

@@ -42,6 +42,9 @@ class UserPreferencesRepository @Inject constructor(
     override val accentCustomColor: Flow<Int> =
         context.dataStore.data.map { it[ACCENT_CUSTOM_COLOR] ?: AccentColor.DEFAULT_CUSTOM_COLOR }
 
+    override val dynamicColor: Flow<Boolean> =
+        context.dataStore.data.map { it[DYNAMIC_COLOR] ?: false }
+
     override val themeMode: Flow<ThemeMode> =
         context.dataStore.data.map { ThemeMode.fromKey(it[THEME_MODE]) }
 
@@ -71,6 +74,10 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { prefs -> prefs[ACCENT_CUSTOM_COLOR] = color }
     }
 
+    override suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[DYNAMIC_COLOR] = enabled }
+    }
+
     override suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { prefs -> prefs[THEME_MODE] = mode.key }
     }
@@ -92,6 +99,7 @@ class UserPreferencesRepository @Inject constructor(
         private val DEFAULT_REMINDER = intPreferencesKey("default_reminder_minutes")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
         private val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
+        private val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
         private val USE_24H_CLOCK = booleanPreferencesKey("use_24h_clock")
         private val OSM_MAPS_ENABLED = booleanPreferencesKey("osm_maps_enabled")

@@ -22,6 +22,13 @@ interface Preferences {
     val accentColor: Flow<AccentColor>
     /** ARGB seed color used when [accentColor] is [AccentColor.CUSTOM]. */
     val accentCustomColor: Flow<Int>
+    /**
+     * Whether to derive the color scheme from the system wallpaper (Material You) instead of
+     * [accentColor]. Off by default: Foscal's own accent is part of its visual identity, and the
+     * platform only supplies a dynamic scheme from Android 12 on, so on older releases this has
+     * nothing to read and is never offered.
+     */
+    val dynamicColor: Flow<Boolean>
     val themeMode: Flow<ThemeMode>
     val use24HourClock: Flow<Boolean>
 
@@ -37,6 +44,7 @@ interface Preferences {
     suspend fun setDefaultReminder(minutes: Int?)
     suspend fun setAccentColor(accent: AccentColor)
     suspend fun setAccentCustomColor(color: Int)
+    suspend fun setDynamicColor(enabled: Boolean)
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setUse24HourClock(use24Hour: Boolean)
     suspend fun setOsmMapsEnabled(enabled: Boolean)

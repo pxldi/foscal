@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = AccentColor.Default)
             val customAccent by prefs.accentCustomColor
                 .collectAsStateWithLifecycle(initialValue = AccentColor.DEFAULT_CUSTOM_COLOR)
+            val dynamicColor by prefs.dynamicColor
+                .collectAsStateWithLifecycle(initialValue = false)
             val themeMode by prefs.themeMode
                 .collectAsStateWithLifecycle(initialValue = ThemeMode.Default)
             val use24Hour by prefs.use24HourClock
@@ -62,6 +64,7 @@ class MainActivity : ComponentActivity() {
             }
             FoscalTheme(
                 darkTheme = darkTheme,
+                dynamicColor = dynamicColor,
                 accent = accent,
                 customSeed = androidx.compose.ui.graphics.Color(customAccent),
             ) {

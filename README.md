@@ -43,7 +43,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Settings** is a fourth bottom-nav tab (it slides in alongside Month / Week /
   Agenda) with appearance, date & time, calendar visibility, and reminder options.
 - **Configurable accent** — pick **Cobalt / Violet / Forest** or a custom color
-  in Settings; the whole UI re-tints instantly and the choice is persisted.
+  in Settings; the whole UI re-tints instantly and the choice is persisted. On
+  Android 12+ you can instead switch on **wallpaper colors** (Material You) and
+  let the system palette drive the app.
 - **Theme & clock** — force **System / Light / Dark** and toggle **12- / 24-hour
   time**; both apply live across every screen and persist.
 - **Event editor** — create, edit, and delete events with title, calendar,
@@ -71,33 +73,31 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Import & export `.ics`** — export every event on your visible calendars to a
   standard iCalendar file, or import one into a calendar you pick. Recurrence
   rules, all-day spans, time zones, reminders and multi-line notes are carried
-  across. Files are chosen through the system document picker, so Foscal needs
-  no storage permission and only ever touches the one file you select.
+  across, and so are per-occurrence changes to a repeating event: a moved
+  occurrence exports as a `RECURRENCE-ID` override and a deleted one as an
+  `EXDATE`, both of which import back onto the series. Files are chosen through
+  the system document picker, so Foscal needs no storage permission and only
+  ever touches the one file you select.
 - **Offline local calendars** and hand-off to DAVx⁵ for CalDAV sync.
 - **Permission-first onboarding** — calendar access is requested up front and
   the UI reacts the instant it is granted; no provider access happens before.
   The final step lets users choose theme, accent color, reminders, and opt-in
   map picking before entering the main calendar.
-- Material 3, edge-to-edge, light & dark themes. The color scheme is Foscal's own
-  accent system (Cobalt / Violet / Forest / custom) rather than wallpaper-derived
-  dynamic color — see [Roadmap](#roadmap).
+- Material 3, edge-to-edge, light & dark themes. The color scheme defaults to
+  Foscal's own accent system (Cobalt / Violet / Forest / custom); wallpaper-derived
+  dynamic color is available as an opt-in toggle on Android 12+.
 
 ## Roadmap
 
 **Next up**
 
-- Opt-in Material You dynamic color (`FoscalTheme` already accepts it; needs a
-  Settings toggle).
-- Round-tripping single-occurrence changes through `.ics`: export currently
-  writes the master series and skips recurrence exceptions, which need
-  `RECURRENCE-ID` support.
+- Richer event detail: map preview, guests/attendees, join-video-call.
+- Time-zone-aware editing UI and a world-clock style secondary zone.
 
 **Later / future goals**
 
-- Richer event detail: map preview, guests/attendees, join-video-call.
 - More unit/UI test coverage (repository, more view models, widget factory).
 - Play Store / F-Droid release: signing config, screenshots, store listing.
-- Time-zone-aware editing UI and a world-clock style secondary zone.
 
 ## Tech stack
 

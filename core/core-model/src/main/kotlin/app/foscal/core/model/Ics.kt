@@ -31,7 +31,25 @@ data class IcsEvent(
     /** Reminder offsets in minutes before [start], from VALARM TRIGGERs. */
     val reminderMinutes: List<Int> = emptyList(),
     val uid: String? = null,
-)
+    /**
+     * Set when this VEVENT overrides a single occurrence of the series sharing its [uid] rather
+     * than describing a series of its own (RFC 5545 §3.8.4.4, RECURRENCE-ID). Such a VEVENT
+     * carries no RRULE; it restates the occurrence's *original* start so the reader knows which
+     * one it replaces.
+     */
+    val recurrenceId: Instant? = null,
+    /**
+     * Whether [recurrenceId] identifies its occurrence by date rather than by instant. It tracks
+     * the *series'* value type, which an override may not change even when it changes its own —
+     * so it is a separate flag and not [allDay].
+     */
+    val recurrenceIdAllDay: Boolean = false,
+    /** Occurrence starts cancelled from this series (EXDATE). Empty for overrides and non-series. */
+    val exdates: List<Instant> = emptyList(),
+) {
+    /** Whether this VEVENT replaces one occurrence of another VEVENT with the same [uid]. */
+    val isOverride: Boolean get() = recurrenceId != null
+}
 
 /**
  * Minimal RFC 5545 reader/writer covering the subset Foscal models.
@@ -84,6 +102,15 @@ object Ics {
             sb.line("BEGIN:VEVENT")
             sb.line("UID:${event.uid ?: syntheticUid(event)}")
             sb.line("DTSTAMP:$stampValue")
+            event.recurrenceId?.let { occurrence ->
+                if (event.recurrenceIdAllDay) {
+                    sb.line("RECURRENCE-ID;VALUE=DATE:${utcDate(occurrence)}")
+                } else {
+                    sb.line(
+                        "RECURRENCE-ID:${occurrence.atZone(ZoneOffset.UTC).format(dateTimeUtc)}",
+                    )
+                }
+            }
             if (event.allDay) {
                 sb.line("DTSTART;VALUE=DATE:${utcDate(event.start)}")
                 // RFC 5545 §3.8.2.2 requires a DATE-valued DTEND to be later than DTSTART, and the
@@ -103,6 +130,20 @@ object Ics {
                 ?.let { sb.line("DESCRIPTION:${escape(it)}") }
             event.rrule?.takeIf { it.isNotBlank() }
                 ?.let { sb.line("RRULE:${it.removePrefix("RRULE:")}") }
+            // Cancelled occurrences ride on the master as EXDATE rather than as their own
+            // STATUS:CANCELLED override: every RFC 5545 reader understands EXDATE, while a
+            // cancelled override is routinely imported as a real (if cancelled) event.
+            val exdates = event.exdates.distinct().sorted()
+            if (exdates.isNotEmpty()) {
+                if (event.allDay) {
+                    sb.line("EXDATE;VALUE=DATE:${exdates.joinToString(",") { utcDate(it) }}")
+                } else {
+                    val values = exdates.joinToString(",") {
+                        it.atZone(ZoneOffset.UTC).format(dateTimeUtc)
+                    }
+                    sb.line("EXDATE:$values")
+                }
+            }
             for (minutes in event.reminderMinutes.distinct().sorted()) {
                 sb.line("BEGIN:VALARM")
                 sb.line("ACTION:DISPLAY")
@@ -127,8 +168,13 @@ object Ics {
      * A UID is mandatory, so events that never had one (anything Foscal created on a local
      * calendar) get a deterministic stand-in: re-exporting the same event twice must not look like
      * two different events to whatever imports the file.
+     *
+     * Public because an override VEVENT must carry its *master's* UID — and this derives one from
+     * the title and start, which an override is free to change. Callers holding a series and its
+     * overrides compute the master's uid once and copy it onto each override; letting [write] fall
+     * back per event would hand every override a UID of its own and orphan it.
      */
-    private fun syntheticUid(event: IcsEvent): String =
+    fun syntheticUid(event: IcsEvent): String =
         "${event.start.toEpochMilli()}-${abs(event.title.hashCode())}@foscal.app"
 
     private fun triggerDuration(minutes: Int): String {
@@ -255,10 +301,17 @@ object Ics {
         var end: DateValue? = null
         var duration: Long? = null
         var rrule: String? = null
+        var recurrenceId: DateValue? = null
+        val exdates = mutableListOf<DateValue>()
         val reminders = mutableListOf<Int>()
 
         fun property(line: ContentLine) {
             when (line.name) {
+                "RECURRENCE-ID" -> recurrenceId = parseDateValue(line)
+                // EXDATE is multi-valued: one property can carry a whole comma-separated list, and
+                // a VEVENT may repeat the property as well. Both forms accumulate.
+                "EXDATE" -> exdates += splitUnquoted(line.value, ',')
+                    .mapNotNull { parseDateToken(it, line.params) }
                 "UID" -> uid = line.value.trim().takeIf { it.isNotEmpty() }
                 "SUMMARY" -> title = unescape(line.value)
                 "LOCATION" -> location = unescape(line.value).takeIf { it.isNotBlank() }
@@ -291,9 +344,13 @@ object Ics {
                 location = location,
                 description = description,
                 timezone = if (allDay) null else startValue.zone?.id,
-                rrule = rrule,
+                // An override describes one occurrence; any RRULE on it would be a second series.
+                rrule = if (recurrenceId != null) null else rrule,
                 reminderMinutes = reminders.distinct().sorted(),
                 uid = uid,
+                recurrenceId = recurrenceId?.toInstant(fallbackZone),
+                recurrenceIdAllDay = recurrenceId?.dateOnly == true,
+                exdates = exdates.map { it.toInstant(fallbackZone) }.distinct().sorted(),
             )
         }
     }
@@ -318,12 +375,16 @@ object Ics {
         }
     }
 
-    private fun parseDateValue(line: ContentLine): DateValue? {
-        val value = line.value.trim()
-        val zone = line.params["TZID"]?.let { tzid ->
+    private fun parseDateValue(line: ContentLine): DateValue? =
+        parseDateToken(line.value, line.params)
+
+    /** One DATE / DATE-TIME value, which for a multi-valued property is one item of its list. */
+    private fun parseDateToken(raw: String, params: Map<String, String>): DateValue? {
+        val value = raw.trim()
+        val zone = params["TZID"]?.let { tzid ->
             runCatching { ZoneId.of(tzid.trim().trim('"')) }.getOrNull()
         }
-        val dateOnly = line.params["VALUE"]?.equals("DATE", ignoreCase = true) == true ||
+        val dateOnly = params["VALUE"]?.equals("DATE", ignoreCase = true) == true ||
             (value.length == 8 && 'T' !in value)
         return runCatching {
             if (dateOnly) {

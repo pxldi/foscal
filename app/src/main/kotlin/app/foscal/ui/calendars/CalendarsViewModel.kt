@@ -27,6 +27,7 @@ data class CalendarsUiState(
     val defaultReminderMinutes: Int? = 15,
     val accentColor: AccentColor = AccentColor.Default,
     val accentCustomColor: Int = AccentColor.DEFAULT_CUSTOM_COLOR,
+    val dynamicColor: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.Default,
     val use24HourClock: Boolean = true,
     val osmMapsEnabled: Boolean = false,
@@ -53,6 +54,7 @@ private data class PrefsSnapshot(
     val use24Hour: Boolean,
     val osmMaps: Boolean,
     val accentCustom: Int,
+    val dynamicColor: Boolean,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -74,12 +76,22 @@ class CalendarsViewModel @Inject constructor(
             prefs.themeMode,
             prefs.use24HourClock,
         ) { hidden, defaultReminder, accent, themeMode, use24Hour ->
-            PrefsSnapshot(hidden, defaultReminder, accent, themeMode, use24Hour, osmMaps = false, accentCustom = 0)
+            PrefsSnapshot(
+                hidden = hidden,
+                defaultReminder = defaultReminder,
+                accent = accent,
+                themeMode = themeMode,
+                use24Hour = use24Hour,
+                osmMaps = false,
+                accentCustom = 0,
+                dynamicColor = false,
+            )
         },
         prefs.osmMapsEnabled,
         prefs.accentCustomColor,
-    ) { snapshot, osmMaps, accentCustom ->
-        snapshot.copy(osmMaps = osmMaps, accentCustom = accentCustom)
+        prefs.dynamicColor,
+    ) { snapshot, osmMaps, accentCustom, dynamicColor ->
+        snapshot.copy(osmMaps = osmMaps, accentCustom = accentCustom, dynamicColor = dynamicColor)
     }
 
     val state: StateFlow<CalendarsUiState> = combine(
@@ -96,6 +108,7 @@ class CalendarsViewModel @Inject constructor(
             defaultReminderMinutes = p.defaultReminder,
             accentColor = p.accent,
             accentCustomColor = p.accentCustom,
+            dynamicColor = p.dynamicColor,
             themeMode = p.themeMode,
             use24HourClock = p.use24Hour,
             osmMapsEnabled = p.osmMaps,
@@ -129,6 +142,10 @@ class CalendarsViewModel @Inject constructor(
             prefs.setAccentCustomColor(color)
             prefs.setAccentColor(AccentColor.CUSTOM)
         }
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { prefs.setDynamicColor(enabled) }
     }
 
     fun setThemeMode(mode: ThemeMode) {

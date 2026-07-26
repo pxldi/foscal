@@ -448,6 +448,146 @@ class IcsTest {
         assertTrue(Ics.read("BEGIN:VCALENDAR\r\nEND:VCALENDAR", berlin).isEmpty())
     }
 
+    // ------------------------------------------ recurrence exceptions (RECURRENCE-ID / EXDATE)
+
+    @Test
+    fun `an override round trips its recurrence id and stays tied to the master's uid`() {
+        val master = timed(rrule = "FREQ=DAILY").copy(uid = "series@foscal.app")
+        val override = timed(
+            title = "Standup (late)",
+            start = "2026-07-28T11:00:00Z",
+            end = "2026-07-28T11:30:00Z",
+        ).copy(
+            uid = "series@foscal.app",
+            recurrenceId = Instant.parse("2026-07-28T09:00:00Z"),
+        )
+
+        val read = Ics.read(Ics.write(listOf(master, override), stamp), berlin)
+        assertEquals(2, read.size)
+        assertFalse(read[0].isOverride)
+        assertEquals("FREQ=DAILY", read[0].rrule)
+
+        val readOverride = read[1]
+        assertTrue(readOverride.isOverride)
+        assertEquals("series@foscal.app", readOverride.uid)
+        assertEquals(Instant.parse("2026-07-28T09:00:00Z"), readOverride.recurrenceId)
+        assertEquals(Instant.parse("2026-07-28T11:00:00Z"), readOverride.start)
+    }
+
+    @Test
+    fun `an override never carries a rule of its own`() {
+        // A RECURRENCE-ID VEVENT replaces one occurrence. Keeping an RRULE the file happened to
+        // carry would import it as a second full series overlapping the first.
+        val text = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            UID:series@foscal.app
+            DTSTART:20260728T110000Z
+            DTEND:20260728T113000Z
+            RECURRENCE-ID:20260728T090000Z
+            RRULE:FREQ=DAILY
+            SUMMARY:Standup
+            END:VEVENT
+            END:VCALENDAR
+        """.trimIndent()
+        val event = Ics.read(text, berlin).single()
+        assertTrue(event.isOverride)
+        assertNull(event.rrule)
+    }
+
+    @Test
+    fun `an all-day override is identified by date`() {
+        val override = IcsEvent(
+            title = "Holiday",
+            start = Instant.parse("2026-07-28T00:00:00Z"),
+            end = Instant.parse("2026-07-29T00:00:00Z"),
+            allDay = true,
+            uid = "series@foscal.app",
+            recurrenceId = Instant.parse("2026-07-27T00:00:00Z"),
+            recurrenceIdAllDay = true,
+        )
+        val text = Ics.write(listOf(override), stamp)
+        assertTrue(text.contains("RECURRENCE-ID;VALUE=DATE:20260727"))
+
+        val read = Ics.read(text, berlin).single()
+        assertTrue(read.recurrenceIdAllDay)
+        assertEquals(Instant.parse("2026-07-27T00:00:00Z"), read.recurrenceId)
+    }
+
+    @Test
+    fun `cancelled occurrences round trip as exdates`() {
+        val master = timed(rrule = "FREQ=DAILY").copy(
+            exdates = listOf(
+                Instant.parse("2026-07-28T09:00:00Z"),
+                Instant.parse("2026-07-27T09:00:00Z"),
+            ),
+        )
+        val text = Ics.write(listOf(master), stamp)
+        // One multi-valued property, ascending — the ordering the provider's rows do not have.
+        assertTrue(text.contains("EXDATE:20260727T090000Z,20260728T090000Z"))
+
+        assertEquals(
+            listOf(
+                Instant.parse("2026-07-27T09:00:00Z"),
+                Instant.parse("2026-07-28T09:00:00Z"),
+            ),
+            Ics.read(text, berlin).single().exdates,
+        )
+    }
+
+    @Test
+    fun `an all-day series writes date-valued exdates`() {
+        val master = IcsEvent(
+            title = "Standup",
+            start = Instant.parse("2026-07-26T00:00:00Z"),
+            end = Instant.parse("2026-07-27T00:00:00Z"),
+            allDay = true,
+            rrule = "FREQ=DAILY",
+            exdates = listOf(Instant.parse("2026-07-28T00:00:00Z")),
+        )
+        val text = Ics.write(listOf(master), stamp)
+        assertTrue(text.contains("EXDATE;VALUE=DATE:20260728"))
+        assertEquals(
+            listOf(Instant.parse("2026-07-28T00:00:00Z")),
+            Ics.read(text, berlin).single().exdates,
+        )
+    }
+
+    @Test
+    fun `exdates accumulate across repeated properties and honour a zone`() {
+        // Other apps emit one EXDATE property per cancelled occurrence, and zone them by TZID
+        // rather than by UTC. Both have to land on the same instants as our own output.
+        val text = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            UID:series@foscal.app
+            DTSTART;TZID=Europe/Berlin:20260726T110000
+            DTEND;TZID=Europe/Berlin:20260726T113000
+            RRULE:FREQ=DAILY
+            EXDATE;TZID=Europe/Berlin:20260727T110000
+            EXDATE;TZID=Europe/Berlin:20260728T110000,20260729T110000
+            SUMMARY:Standup
+            END:VEVENT
+            END:VCALENDAR
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                Instant.parse("2026-07-27T09:00:00Z"),
+                Instant.parse("2026-07-28T09:00:00Z"),
+                Instant.parse("2026-07-29T09:00:00Z"),
+            ),
+            Ics.read(text, berlin).single().exdates,
+        )
+    }
+
+    @Test
+    fun `an ordinary event has no exception data`() {
+        val read = writeRead(timed())
+        assertFalse(read.isOverride)
+        assertNull(read.recurrenceId)
+        assertTrue(read.exdates.isEmpty())
+    }
+
     @Test
     fun `multiple events round trip in order`() {
         val events = listOf(

@@ -12,6 +12,8 @@ import android.provider.CalendarContract
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
+import app.foscal.core.model.EventOverride
+import app.foscal.core.model.ExportEvent
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.Ics
 import app.foscal.core.model.RecurrenceRules
@@ -149,18 +151,23 @@ interface CalendarRepository {
 
     /**
      * Master event rows on [calendarIds] — the `Events` table, *not* the expanded `Instances` the
-     * rest of the app reads.
+     * rest of the app reads — each with the recurrence exceptions that belong to it.
      *
      * Export must not go through instances: every occurrence of a recurring series is its own
      * instance row carrying the master's RRULE, so exporting them would write one VEVENT per
      * occurrence, each claiming to repeat forever. The master row is the single VEVENT the file
-     * should contain. Recurrence exceptions (rows with an `ORIGINAL_ID`) are skipped — they are
-     * only meaningful alongside a `RECURRENCE-ID`, which this app does not model.
+     * should contain.
+     *
+     * Recurrence exceptions are returned attached to their master rather than as top-level events:
+     * on their own they look like ordinary one-off events, so exporting them flat would duplicate
+     * an occurrence the series already covers. Which rows those are cannot be decided on
+     * `ORIGINAL_ID` alone — a sync adapter links an exception by `ORIGINAL_SYNC_ID` — so both are
+     * read and the sync id is resolved back to a local row id here.
      *
      * For recurring events the provider stores `DURATION` instead of `DTEND`, so [Event.end] is
      * derived from it here.
      */
-    suspend fun getEventsForExport(calendarIds: Set<Long>): List<Event>
+    suspend fun getEventsForExport(calendarIds: Set<Long>): List<ExportEvent>
 
     suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder>
 }
@@ -689,28 +696,85 @@ class CalendarContractRepository @Inject constructor(
 
     override suspend fun getEventsForExport(
         calendarIds: Set<Long>,
-    ): List<Event> = withContext(Dispatchers.IO) {
+    ): List<ExportEvent> = withContext(Dispatchers.IO) {
         if (calendarIds.isEmpty()) return@withContext emptyList()
         val placeholders = calendarIds.joinToString(",") { "?" }
         val selection = "${CalendarContract.Events.CALENDAR_ID} IN ($placeholders) AND " +
-            "${CalendarContract.Events.DELETED} != 1 AND " +
-            "${CalendarContract.Events.ORIGINAL_ID} IS NULL"
-        val out = mutableListOf<Event>()
+            "${CalendarContract.Events.DELETED} != 1"
+
+        val masters = mutableListOf<Event>()
+        val syncIdToMasterId = mutableMapOf<String, Long>()
+        val exceptions = mutableListOf<ExceptionRow>()
+
+        // Masters and exceptions come from one pass: splitting them into two queries would read the
+        // same table twice and still need this join to be done in memory.
         safeQuery(
             CalendarContract.Events.CONTENT_URI,
-            EVENT_PROJECTION,
+            EXPORT_PROJECTION,
             selection,
             calendarIds.map { it.toString() }.toTypedArray(),
             "${CalendarContract.Events.DTSTART} ASC",
         )?.use { c ->
             while (c.moveToNext()) {
+                val originalId = c.getString(14)?.toLongOrNull()
+                val originalSyncId = c.getString(15)?.takeIf { it.isNotBlank() }
+                val originalStart = if (c.isNull(16)) null else c.getLong(16)
+                if (originalStart != null && (originalId != null || originalSyncId != null)) {
+                    exceptions += ExceptionRow(
+                        masterId = originalId,
+                        masterSyncId = originalSyncId,
+                        originalInstanceTime = originalStart,
+                        originalAllDay = c.getInt(17) == 1,
+                        cancelled = !c.isNull(18) &&
+                            c.getInt(18) == CalendarContract.Events.STATUS_CANCELED,
+                        event = c.readEventRow(),
+                    )
+                    continue
+                }
                 val event = c.readEventRow() ?: continue
                 if (event.title.isBlank()) continue
-                out += event
+                masters += event
+                c.getString(13)?.takeIf { it.isNotBlank() }?.let { syncIdToMasterId[it] = event.id }
             }
         }
-        out
+
+        val overrides = mutableMapOf<Long, MutableList<EventOverride>>()
+        val cancelled = mutableMapOf<Long, MutableList<Long>>()
+        for (row in exceptions) {
+            val masterId = row.masterId ?: row.masterSyncId?.let { syncIdToMasterId[it] } ?: continue
+            if (row.cancelled) {
+                cancelled.getOrPut(masterId) { mutableListOf() } += row.originalInstanceTime
+            } else {
+                val event = row.event ?: continue
+                if (event.title.isBlank()) continue
+                overrides.getOrPut(masterId) { mutableListOf() } += EventOverride(
+                    originalInstanceTime = row.originalInstanceTime,
+                    originalAllDay = row.originalAllDay,
+                    event = event,
+                )
+            }
+        }
+
+        masters.map { master ->
+            ExportEvent(
+                event = master,
+                overrides = overrides[master.id]
+                    ?.sortedBy { it.originalInstanceTime }
+                    .orEmpty(),
+                cancelledOccurrences = cancelled[master.id]?.sorted().orEmpty(),
+            )
+        }
     }
+
+    /** A raw recurrence-exception row, before its master has been resolved. */
+    private class ExceptionRow(
+        val masterId: Long?,
+        val masterSyncId: String?,
+        val originalInstanceTime: Long,
+        val originalAllDay: Boolean,
+        val cancelled: Boolean,
+        val event: Event?,
+    )
 
     override suspend fun getEventOccurrence(
         eventId: Long,
@@ -985,6 +1049,20 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Events.DISPLAY_COLOR,
             CalendarContract.Events.CALENDAR_COLOR,
             CalendarContract.Events.RRULE,
+        )
+
+        /**
+         * [EVENT_PROJECTION] plus the columns that describe how a row relates to a series. The
+         * first 13 are byte-for-byte the same so `readEventRow` reads either projection; the
+         * export-only columns are appended at 13..18.
+         */
+        private val EXPORT_PROJECTION = EVENT_PROJECTION + arrayOf(
+            CalendarContract.Events._SYNC_ID,
+            CalendarContract.Events.ORIGINAL_ID,
+            CalendarContract.Events.ORIGINAL_SYNC_ID,
+            CalendarContract.Events.ORIGINAL_INSTANCE_TIME,
+            CalendarContract.Events.ORIGINAL_ALL_DAY,
+            CalendarContract.Events.STATUS,
         )
 
         /** Reminder methods Foscal delivers itself; EMAIL and SMS are the server's job. */

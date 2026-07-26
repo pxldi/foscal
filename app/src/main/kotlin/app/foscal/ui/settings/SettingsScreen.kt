@@ -1,6 +1,7 @@
 package app.foscal.ui.settings
 
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -133,14 +134,36 @@ fun SettingsScreen(
                 Spacer(Modifier.height(12.dp))
                 SectionHeader("Appearance")
             }
-            item {
-                AccentPicker(
-                    selected = state.accentColor,
-                    customColor = state.accentCustomColor,
-                    onSelectPreset = { viewModel.setAccentColor(it) },
-                    onPickCustom = { viewModel.setCustomAccentColor(it) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+            // Material You needs a wallpaper-derived palette the platform only exposes from
+            // Android 12 on, so on anything older the toggle would be a switch that cannot do
+            // anything and is left out entirely.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                item {
+                    ToggleRow(
+                        title = "Use wallpaper colors",
+                        subtitle = if (state.dynamicColor) {
+                            "On · Material You, tinted by your wallpaper"
+                        } else {
+                            "Off · using Foscal's own accent"
+                        },
+                        checked = state.dynamicColor,
+                        onToggle = { viewModel.setDynamicColor(it) },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                }
+            }
+            // The accent is what wallpaper colors replace, so showing the picker alongside them
+            // would offer a choice that changes nothing on screen.
+            if (!state.dynamicColor) {
+                item {
+                    AccentPicker(
+                        selected = state.accentColor,
+                        customColor = state.accentCustomColor,
+                        onSelectPreset = { viewModel.setAccentColor(it) },
+                        onPickCustom = { viewModel.setCustomAccentColor(it) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
             }
             item {
                 Spacer(Modifier.height(4.dp))
