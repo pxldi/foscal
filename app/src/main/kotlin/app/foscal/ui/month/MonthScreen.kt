@@ -154,21 +154,27 @@ fun MonthRoute(
                     .weight(1f)
                     .pointerInput(Unit) {
                         var total = Offset.Zero
+                        var handled = false
                         val threshold = 56.dp.toPx()
                         detectDragGestures(
-                            onDragStart = { total = Offset.Zero },
+                            onDragStart = {
+                                total = Offset.Zero
+                                handled = false
+                            },
                             onDrag = { change, dragAmount ->
                                 change.consume()
+                                // One gesture, one month. The threshold is crossed long before the
+                                // finger stops moving, so without this latch a single flick would
+                                // keep firing and skid through several months at once.
+                                if (handled) return@detectDragGestures
                                 total += dragAmount
                                 // The month changes the moment the drag passes the threshold,
                                 // while the finger is still down. Waiting for the lift meant the
                                 // swipe was already over before anything happened, which reads as
                                 // the app being slow rather than as a deliberate confirm step.
-                                // Zeroing the accumulator re-arms it, so one long drag pages
-                                // through several months instead of counting as a single swipe.
                                 val swipe = monthSwipe(total, threshold)
                                     ?: return@detectDragGestures
-                                total = Offset.Zero
+                                handled = true
                                 when (swipe) {
                                     MonthSwipeDirection.Next -> viewModel.nextMonth()
                                     MonthSwipeDirection.Previous -> viewModel.previousMonth()
@@ -188,8 +194,13 @@ fun MonthRoute(
                         // Slide only. The fade that used to ride along dimmed both grids at once,
                         // so for the length of the transition neither month was readable. The
                         // movement already says which way the calendar went.
-                        slideIntoContainer(direction, tween(Motion.DurationShort)) togetherWith
-                            slideOutOfContainer(direction, tween(Motion.DurationShort))
+                        //
+                        // Medium rather than short: this one travels the full width of the screen,
+                        // and at 90ms that distance reads as a jump cut — the grid is simply
+                        // different, with no sense of which way it went. A tab fade can be that
+                        // quick because it is not moving anywhere.
+                        slideIntoContainer(direction, tween(Motion.DurationMedium)) togetherWith
+                            slideOutOfContainer(direction, tween(Motion.DurationMedium))
                     },
                     label = "monthGrid",
                     modifier = Modifier.fillMaxSize(),
