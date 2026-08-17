@@ -97,39 +97,31 @@ class MonthViewModelTest {
     }
 
     @Test
-    fun `month swipe direction supports horizontal and vertical navigation`() {
+    fun `month swipe navigates left and right`() {
         val threshold = 56f
 
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Horizontal),
-            monthSwipe(Offset(-80f, 12f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Horizontal),
-            monthSwipe(Offset(80f, -12f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Vertical),
-            monthSwipe(Offset(8f, -80f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Vertical),
-            monthSwipe(Offset(-8f, 80f), threshold),
-        )
+        assertEquals(MonthSwipeDirection.Next, monthSwipe(Offset(-80f, 12f), threshold))
+        assertEquals(MonthSwipeDirection.Previous, monthSwipe(Offset(80f, -12f), threshold))
     }
 
     @Test
-    fun `month swipe direction ignores short or non-dominant diagonal drags`() {
+    fun `month swipe ignores vertical drags entirely`() {
+        val threshold = 56f
+
+        assertTrue(monthSwipe(Offset(8f, -80f), threshold) == null)
+        assertTrue(monthSwipe(Offset(-8f, 80f), threshold) == null)
+        // Far past the threshold vertically is still not a month change, however long the drag.
+        assertTrue(monthSwipe(Offset(0f, -400f), threshold) == null)
+    }
+
+    @Test
+    fun `month swipe ignores short drags and vertically dominant diagonals`() {
         val threshold = 56f
 
         assertTrue(monthSwipe(Offset(40f, 4f), threshold) == null)
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Horizontal),
-            monthSwipe(Offset(-80f, 78f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Vertical),
-            monthSwipe(Offset(-78f, 80f), threshold),
-        )
+        // Horizontal wins the tie-break, so a drag that is barely more sideways than not counts.
+        assertEquals(MonthSwipeDirection.Next, monthSwipe(Offset(-80f, 78f), threshold))
+        // One pixel the other way and it is a vertical drag, which does nothing.
+        assertTrue(monthSwipe(Offset(-78f, 80f), threshold) == null)
     }
 }

@@ -92,7 +92,6 @@ fun MonthRoute(
     val selectedDate = state.selectedDate ?: state.today
     val selectedEvents = state.eventsByDay[selectedDate].orEmpty()
     var showMonthPicker by remember { mutableStateOf(false) }
-    var monthTransitionAxis by remember { mutableStateOf(MonthSwipeAxis.Horizontal) }
 
     if (showMonthPicker) {
         MonthJumpDialog(
@@ -100,7 +99,6 @@ fun MonthRoute(
             onDismiss = { showMonthPicker = false },
             onSelect = { month ->
                 showMonthPicker = false
-                monthTransitionAxis = MonthSwipeAxis.Horizontal
                 viewModel.goToMonth(month)
             },
         )
@@ -124,7 +122,6 @@ fun MonthRoute(
                 actions = {
                     TodayPill(
                         onClick = {
-                            monthTransitionAxis = MonthSwipeAxis.Horizontal
                             viewModel.goToMonth(YearMonth.now())
                         },
                     )
@@ -172,8 +169,7 @@ fun MonthRoute(
                                 val swipe = monthSwipe(total, threshold)
                                     ?: return@detectDragGestures
                                 total = Offset.Zero
-                                monthTransitionAxis = swipe.axis
-                                when (swipe.direction) {
+                                when (swipe) {
                                     MonthSwipeDirection.Next -> viewModel.nextMonth()
                                     MonthSwipeDirection.Previous -> viewModel.previousMonth()
                                 }
@@ -184,18 +180,10 @@ fun MonthRoute(
                 AnimatedContent(
                     targetState = state.visibleMonth,
                     transitionSpec = {
-                        val direction = if (monthTransitionAxis == MonthSwipeAxis.Vertical) {
-                            if (targetState > initialState) {
-                                AnimatedContentTransitionScope.SlideDirection.Up
-                            } else {
-                                AnimatedContentTransitionScope.SlideDirection.Down
-                            }
+                        val direction = if (targetState > initialState) {
+                            AnimatedContentTransitionScope.SlideDirection.Start
                         } else {
-                            if (targetState > initialState) {
-                                AnimatedContentTransitionScope.SlideDirection.Start
-                            } else {
-                                AnimatedContentTransitionScope.SlideDirection.End
-                            }
+                            AnimatedContentTransitionScope.SlideDirection.End
                         }
                         // Slide only. The fade that used to ride along dimmed both grids at once,
                         // so for the length of the transition neither month was readable. The
@@ -526,34 +514,19 @@ internal enum class MonthSwipeDirection {
     Next,
 }
 
-internal enum class MonthSwipeAxis {
-    Horizontal,
-    Vertical,
-}
-
-internal data class MonthSwipe(
-    val direction: MonthSwipeDirection,
-    val axis: MonthSwipeAxis,
-)
-
-internal fun monthSwipe(totalDrag: Offset, threshold: Float): MonthSwipe? {
+/**
+ * Which month a drag asks for, or null if it asks for nothing.
+ *
+ * Horizontal only: the calendar reads left to right, so that is the axis that means "the month
+ * before / the month after". A vertical drag used to move the month too, which made it far too easy
+ * to lose your place while resting a thumb on the grid, and gave one action two contradictory
+ * gestures. The dominance check keeps a mostly-vertical drag from counting on its horizontal wobble.
+ */
+internal fun monthSwipe(totalDrag: Offset, threshold: Float): MonthSwipeDirection? {
     val absX = kotlin.math.abs(totalDrag.x)
     val absY = kotlin.math.abs(totalDrag.y)
-    return when {
-        absX >= absY && absX >= threshold -> {
-            MonthSwipe(
-                direction = if (totalDrag.x < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous,
-                axis = MonthSwipeAxis.Horizontal,
-            )
-        }
-        absY > absX && absY >= threshold -> {
-            MonthSwipe(
-                direction = if (totalDrag.y < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous,
-                axis = MonthSwipeAxis.Vertical,
-            )
-        }
-        else -> null
-    }
+    if (absX < absY || absX < threshold) return null
+    return if (totalDrag.x < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous
 }
 
 @Composable
