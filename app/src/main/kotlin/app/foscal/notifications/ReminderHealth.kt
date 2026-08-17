@@ -85,9 +85,8 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Calendar access is off",
-                    detail = "Foscal reads your reminders from the system calendar. Without access " +
-                        "there is nothing to schedule.",
+                    title = "No calendar access",
+                    detail = "Foscal can't read your events, so there's nothing to remind you about.",
                     fix = ReminderFix.GRANT_CALENDAR,
                     fixLabel = "Grant access",
                 ),
@@ -97,11 +96,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Notifications are turned off",
-                    detail = "Alarms still fire, but Android discards the notification, so nothing " +
-                        "reaches you.",
+                    title = "Notifications are off",
+                    detail = "Alarms still fire, but Android throws the notification away.",
                     fix = ReminderFix.OPEN_NOTIFICATION_SETTINGS,
-                    fixLabel = "Open notification settings",
+                    fixLabel = "Open notifications",
                 ),
             )
         }
@@ -109,11 +107,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Foscal is restricted from running in the background",
-                    detail = "Already-set alarms may still fire, but Foscal cannot re-read your " +
-                        "calendar, so reminders stop within a week as the scheduled window runs out.",
+                    title = "Background use is blocked",
+                    detail = "Foscal can't re-read your calendar, so reminders run out within a week.",
                     fix = ReminderFix.OPEN_APP_SETTINGS,
-                    fixLabel = "Open app settings",
+                    fixLabel = "App settings",
                 ),
             )
         }
@@ -121,10 +118,9 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Android has put Foscal in the restricted bucket",
-                    detail = "In this bucket background work runs roughly once a day and alarms are " +
-                        "heavily deferred. Opening Foscal now and then, or exempting it from " +
-                        "battery optimization, moves it back out.",
+                    title = "Android has restricted Foscal",
+                    detail = "Background work runs about once a day here. Opening Foscal now and " +
+                        "then, or turning off battery optimization, gets it out.",
                     fix = ReminderFix.OPEN_BATTERY_OPTIMIZATION,
                     fixLabel = "Battery settings",
                 ),
@@ -135,9 +131,8 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Exact alarms are not allowed",
-                    detail = "Reminders are still scheduled, but Android may deliver them minutes " +
-                        "or hours late — it batches them with whenever the device next wakes.",
+                    title = "Exact alarms are off",
+                    detail = "Reminders still work, but Android may deliver them minutes or hours late.",
                     fix = ReminderFix.REQUEST_EXACT_ALARMS,
                     fixLabel = "Allow exact alarms",
                 ),
@@ -147,9 +142,9 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Battery optimization is on for Foscal",
-                    detail = "Doze can hold reminders back until the device wakes up. Exempting " +
-                        "Foscal costs almost nothing — it wakes only when a reminder is due.",
+                    title = "Battery optimization is on",
+                    detail = "It can hold reminders back until the phone wakes up. Foscal only " +
+                        "wakes when one is due.",
                     fix = ReminderFix.OPEN_BATTERY_OPTIMIZATION,
                     fixLabel = "Battery settings",
                 ),
@@ -161,9 +156,9 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Foscal is in Android's \"rare\" bucket",
-                    detail = "Background work is limited because Foscal is opened seldom. Reminders " +
-                        "may be refreshed less often than every few hours.",
+                    title = "Foscal is opened rarely",
+                    detail = "Android limits background work for apps you seldom use, so reminders " +
+                        "refresh less often.",
                     fix = null,
                 ),
             )
@@ -172,12 +167,11 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "This device has its own app-killing settings",
-                    detail = "Some manufacturers stop background work regardless of Android's own " +
-                        "settings. If reminders keep failing, allow Foscal to autostart and remove " +
-                        "any extra battery restriction there.",
+                    title = "This phone kills background apps",
+                    detail = "Some manufacturers stop apps whatever Android says. If reminders keep " +
+                        "failing, allow Foscal to autostart.",
                     fix = ReminderFix.OPEN_VENDOR_AUTOSTART,
-                    fixLabel = "Open device settings",
+                    fixLabel = "Device settings",
                 ),
             )
         }
@@ -195,8 +189,7 @@ object ReminderHealthCheck {
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
                     title = "The last calendar read failed",
-                    detail = "Existing reminders were deliberately left armed rather than cleared. " +
-                        "Foscal will retry on its own; you can also force it now.",
+                    detail = "Your existing reminders were left alone. Foscal will retry on its own.",
                     fix = ReminderFix.RESYNC,
                     fixLabel = "Resync now",
                 ),
@@ -207,8 +200,8 @@ object ReminderHealthCheck {
             return listOf(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Reminders have never been scheduled",
-                    detail = "No sync has completed on this device yet.",
+                    title = "Reminders have never been set up",
+                    detail = "No sync has finished on this phone yet.",
                     fix = ReminderFix.RESYNC,
                     fixLabel = "Resync now",
                 ),
@@ -218,10 +211,9 @@ object ReminderHealthCheck {
             return listOf(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Reminders have not been refreshed recently",
-                    detail = "The last successful sync was more than " +
-                        "${STALE_AFTER.toHours()} hours ago, which usually means background work " +
-                        "is being blocked.",
+                    title = "Reminders are out of date",
+                    detail = "Nothing has synced for over ${STALE_AFTER.toHours()} hours, which " +
+                        "usually means background work is being blocked.",
                     fix = ReminderFix.RESYNC,
                     fixLabel = "Resync now",
                 ),

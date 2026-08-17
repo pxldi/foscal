@@ -178,7 +178,7 @@ fun OnboardingRoute(
                         if (!viewModel.openBatterySettings()) {
                             Toast.makeText(
                                 context,
-                                "This device has no battery optimization screen",
+                                "This phone has no battery settings screen",
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
@@ -248,7 +248,7 @@ private fun WelcomeStep(onStart: () -> Unit) {
         Spacer(Modifier.height(30.dp))
         FoscalWordmark()
         Text(
-            "Your calendars, quietly organized. Local first, open source, and ready for DAVx5 sync.",
+            "Your calendars, on your phone and nowhere else.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -288,22 +288,22 @@ private fun CalendarSetupStep(
             modifier = Modifier.padding(top = 18.dp),
         )
         Text(
-            "Choose where Foscal should start. You can change visible calendars later in Settings.",
+            "Pick a starting point. You can change this later.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         ChoiceCard(
             icon = Icons.Outlined.DevicesOther,
-            title = "Use offline",
-            subtitle = "Create a local calendar that stays on this device.",
-            buttonText = "Create local calendar",
+            title = "Start fresh",
+            subtitle = "A new calendar, kept on this phone.",
+            buttonText = "Create calendar",
             enabled = !state.completing,
             onClick = onUseLocal,
         )
         ChoiceCard(
             icon = Icons.Outlined.CalendarMonth,
-            title = "Use existing calendars",
-            subtitle = "Show calendars Android already has on this device.",
+            title = "Use what's already here",
+            subtitle = "The calendars your phone already has.",
             buttonText = "Continue",
             enabled = !state.completing,
             onClick = onUseExisting,
@@ -312,9 +312,9 @@ private fun CalendarSetupStep(
             icon = Icons.Outlined.CloudSync,
             title = "Sync with CalDAV",
             subtitle = if (state.davxStatus == DAVxStatus.INSTALLED) {
-                "DAVx5 is installed. Open it to add Nextcloud, ownCloud, or another CalDAV account."
+                "Add Nextcloud, ownCloud or another account through DAVx5."
             } else {
-                "Install DAVx5 from F-Droid to add Nextcloud, ownCloud, or another CalDAV account."
+                "Needs DAVx5, free on F-Droid."
             },
             buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) "Open DAVx5" else "Install DAVx5",
             enabled = !state.completing,
@@ -348,7 +348,7 @@ private fun PersonalizeStep(
             modifier = Modifier.padding(top = 18.dp),
         )
         Text(
-            "Personalize Foscal. You can change any of this later in Settings.",
+            "All of this is in Settings too.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -362,7 +362,7 @@ private fun PersonalizeStep(
         ToggleCard(
             icon = Icons.Outlined.Notifications,
             title = "Reminders",
-            subtitle = "Get a heads-up before events, using only your local calendar data.",
+            subtitle = "A heads-up before your events.",
             checked = notificationsEnabled,
             onToggle = onNotificationsToggle,
         )
@@ -371,10 +371,9 @@ private fun PersonalizeStep(
         if (notificationsEnabled && batteryOptimized) {
             ActionCard(
                 icon = Icons.Outlined.BatteryAlert,
-                title = "Let reminders through Doze",
-                subtitle = "Android's battery optimization can hold reminders back until the phone " +
-                    "next wakes up. Find Foscal in the list that opens and allow it to run " +
-                    "unrestricted — it only wakes when a reminder is due.",
+                title = "Reminders may arrive late",
+                subtitle = "Android's battery saver holds them back until the phone wakes. " +
+                    "Set Foscal to unrestricted — it only wakes when a reminder is due.",
                 buttonText = "Open battery settings",
                 onClick = onOpenBatterySettings,
             )
@@ -382,10 +381,9 @@ private fun PersonalizeStep(
         ToggleCard(
             icon = Icons.Outlined.Map,
             title = "Pick locations on a map",
-            subtitle = "Optional — the only feature that uses the internet. Choose a location on " +
-                "an OpenStreetMap map instead of typing it. The map and address lookup contact " +
-                "OpenStreetMap's servers (no ads, no tracking profile), so they can see your IP " +
-                "and the places you look up. Everything else stays offline.",
+            subtitle = "Tap a place instead of typing it. This is the only part of Foscal that " +
+                "uses the internet: OpenStreetMap sees your IP and what you search for. " +
+                "Everything else stays offline.",
             checked = mapsEnabled,
             onToggle = onMapsToggle,
         )

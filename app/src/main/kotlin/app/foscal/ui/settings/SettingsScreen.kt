@@ -132,7 +132,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            "Calendars come from your device and CalDAV synced by DAVx₅. Nothing leaves your phone.",
+                            "Your calendars come from this phone. Nothing leaves it.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),
@@ -152,9 +152,9 @@ fun SettingsScreen(
                     ToggleRow(
                         title = "Use wallpaper colors",
                         subtitle = if (state.dynamicColor) {
-                            "On · Material You, tinted by your wallpaper"
+                            "On · Material You"
                         } else {
-                            "Off · using Foscal's own accent"
+                            "Off · Foscal's own accent"
                         },
                         checked = state.dynamicColor,
                         onToggle = { viewModel.setDynamicColor(it) },
@@ -204,9 +204,9 @@ fun SettingsScreen(
                 ToggleRow(
                     title = "Pick locations on a map",
                     subtitle = if (state.osmMapsEnabled) {
-                        "On · uses OpenStreetMap (contacts the network)"
+                        "On · uses OpenStreetMap"
                     } else {
-                        "Off · location entry stays fully offline"
+                        "Off · fully offline"
                     },
                     checked = state.osmMapsEnabled,
                     onToggle = { viewModel.setOsmMapsEnabled(it) },
@@ -219,7 +219,7 @@ fun SettingsScreen(
             }
             item {
                 Text(
-                    "Tap a calendar to give it its own default reminder.",
+                    "Tap a calendar to give it its own reminder.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
@@ -270,7 +270,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        "Default reminder for new events",
+                        "Default reminder",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     ReminderChips(
@@ -293,7 +293,7 @@ fun SettingsScreen(
             }
             item {
                 Text(
-                    "Foscal does not run its own sync service. DAVx₅ or your account app keeps CalDAV calendars current.",
+                    "Foscal doesn't sync by itself. DAVx₅ or your account app keeps calendars current.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -411,7 +411,7 @@ private fun CalendarRowCard(
                 ) {
                     HorizontalDivider()
                     Text(
-                        "Default reminder for new events here",
+                        "Reminder for new events here",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 6.dp),
                     )
@@ -511,7 +511,7 @@ private fun ImportExportSection(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ActionRow(
             title = "Export to .ics",
-            subtitle = "Writes every event on your visible calendars to a file",
+            subtitle = "Every event on your visible calendars",
             icon = Icons.Outlined.FileUpload,
             enabled = !transfer.busy,
             onClick = {
@@ -521,7 +521,7 @@ private fun ImportExportSection(
         )
         ActionRow(
             title = "Import from .ics",
-            subtitle = "Adds the events in a file to a calendar you choose",
+            subtitle = "Adds a file's events to a calendar you pick",
             icon = Icons.Outlined.FileDownload,
             enabled = !transfer.busy && calendars.isNotEmpty(),
             onClick = {

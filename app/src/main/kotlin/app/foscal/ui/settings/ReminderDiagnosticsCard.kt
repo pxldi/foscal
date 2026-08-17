@@ -155,7 +155,7 @@ private fun DiagnosticsHeader(
         loading -> "Checking…"
         blocking > 0 -> "$blocking ${plural(blocking, "problem")} stopping reminders"
         issues.isNotEmpty() -> "${issues.size} ${plural(issues.size, "thing")} that could delay them"
-        else -> "Everything reminders need is in place"
+        else -> "All good"
     }
 
     Row(
