@@ -112,7 +112,7 @@ fun WeekRoute(
         ) {
             Crossfade(
                 targetState = state.weekStart,
-                animationSpec = tween(Motion.DurationMedium),
+                animationSpec = tween(Motion.DurationShort),
                 label = "weekNav",
                 modifier = Modifier.fillMaxSize(),
             ) { weekStart ->

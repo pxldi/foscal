@@ -2,14 +2,7 @@ package app.foscal.ui.month
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -53,7 +46,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -169,18 +160,23 @@ fun MonthRoute(
                         val threshold = 56.dp.toPx()
                         detectDragGestures(
                             onDragStart = { total = Offset.Zero },
-                            onDragEnd = {
-                                val swipe = monthSwipe(total, threshold)
-                                if (swipe != null) monthTransitionAxis = swipe.axis
-                                when (swipe?.direction) {
-                                    MonthSwipeDirection.Next -> viewModel.nextMonth()
-                                    MonthSwipeDirection.Previous -> viewModel.previousMonth()
-                                    null -> Unit
-                                }
-                            },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 total += dragAmount
+                                // The month changes the moment the drag passes the threshold,
+                                // while the finger is still down. Waiting for the lift meant the
+                                // swipe was already over before anything happened, which reads as
+                                // the app being slow rather than as a deliberate confirm step.
+                                // Zeroing the accumulator re-arms it, so one long drag pages
+                                // through several months instead of counting as a single swipe.
+                                val swipe = monthSwipe(total, threshold)
+                                    ?: return@detectDragGestures
+                                total = Offset.Zero
+                                monthTransitionAxis = swipe.axis
+                                when (swipe.direction) {
+                                    MonthSwipeDirection.Next -> viewModel.nextMonth()
+                                    MonthSwipeDirection.Previous -> viewModel.previousMonth()
+                                }
                             },
                         )
                     },
@@ -201,10 +197,11 @@ fun MonthRoute(
                                 AnimatedContentTransitionScope.SlideDirection.End
                             }
                         }
-                        (slideIntoContainer(direction, tween(Motion.DurationMedium)) +
-                            fadeIn(tween(Motion.DurationMedium))) togetherWith
-                            (slideOutOfContainer(direction, tween(Motion.DurationMedium)) +
-                                fadeOut(tween(Motion.DurationMedium)))
+                        // Slide only. The fade that used to ride along dimmed both grids at once,
+                        // so for the length of the transition neither month was readable. The
+                        // movement already says which way the calendar went.
+                        slideIntoContainer(direction, tween(Motion.DurationShort)) togetherWith
+                            slideOutOfContainer(direction, tween(Motion.DurationShort))
                     },
                     label = "monthGrid",
                     modifier = Modifier.fillMaxSize(),
@@ -262,13 +259,13 @@ private fun MonthTitle(month: YearMonth, onClick: () -> Unit) {
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedLetters(
+        TitleText(
             text = monthName,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.size(8.dp))
-        AnimatedLetters(
+        TitleText(
             text = month.year.toString(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Normal,
@@ -360,41 +357,26 @@ private fun MonthJumpDialog(
 }
 
 /**
- * Renders [text] as individually animated glyphs: when the string changes, characters that stay
- * the same at a given position hold still while the ones that differ roll over, staggered left to
- * right. The row animates its own width so a shorter or longer month name glides the year across.
+ * The month title, plainly.
+ *
+ * This used to animate glyph by glyph, each letter rolling over on a 28ms stagger. A nine-letter
+ * month therefore took the transition duration *plus* a quarter of a second to finish settling —
+ * longer than the grid it was labelling, and a stack of nested `AnimatedContent`s competing for
+ * frames with the swipe that triggered it. The grid sliding already announces the month change.
  */
 @Composable
-private fun AnimatedLetters(text: String, color: Color, fontWeight: FontWeight) {
-    Row(modifier = Modifier.animateContentSize(tween(Motion.DurationMedium))) {
-        text.forEachIndexed { index, ch ->
-            key(index) {
-                AnimatedContent(
-                    targetState = ch,
-                    transitionSpec = {
-                        val delay = index * 28
-                        (slideInVertically(tween(Motion.DurationMedium, delayMillis = delay)) { it / 2 } +
-                            fadeIn(tween(Motion.DurationMedium, delayMillis = delay))) togetherWith
-                            (slideOutVertically(tween(Motion.DurationMedium)) { -it / 2 } +
-                                fadeOut(tween(Motion.DurationMedium)))
-                    },
-                    label = "letter",
-                ) { c ->
-                    Text(
-                        c.toString(),
-                        fontFamily = BricolageFamily,
-                        fontSize = 24.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = fontWeight,
-                        letterSpacing = (-0.01).em,
-                        color = color,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-            }
-        }
-    }
+private fun TitleText(text: String, color: Color, fontWeight: FontWeight) {
+    Text(
+        text,
+        fontFamily = BricolageFamily,
+        fontSize = 24.sp,
+        lineHeight = 28.sp,
+        fontWeight = fontWeight,
+        letterSpacing = (-0.01).em,
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+    )
 }
 
 @Composable
@@ -649,28 +631,17 @@ private fun DayCell(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(12.dp)
-    val primary = MaterialTheme.colorScheme.primary
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    // 1f = the focused month (crisp/black), 0f = an adjacent month (greyed). Animating it means
-    // days entering the focused month fade to black and departing days fade to grey.
-    val fraction by animateFloatAsState(
-        targetValue = if (isInFocusedMonth) 1f else 0f,
-        animationSpec = tween(Motion.DurationMedium),
-        label = "inMonthFraction",
-    )
-    val dayNumberColor = lerp(muted, onSurface, fraction)
-    // Today reads as a filled accent disc; a tapped (but not-today) day gets a soft tonal disc so
-    // both states are legible without competing with the accent. Today keeps an animated fill so it
-    // eases in/out as months slide past; selection is a direct tap, so it snaps instantly — animating
-    // it would leave the previously selected day glowing through the crossfade.
-    val todayDisc by animateColorAsState(
-        targetValue = if (isToday) primary else Color.Transparent,
-        animationSpec = tween(Motion.DurationMedium),
-        label = "todayDisc",
-    )
+    // Both of these were animated, and neither could ever animate: AnimatedContent gives each month
+    // its own subtree, so a cell's month membership and its today-ness are fixed for its whole
+    // lifetime. The animations snapped to their targets on the first frame and charged 42 cells x 2
+    // running animations per swipe for the privilege — spent during the exact frames the slide
+    // needs. Today reads as a filled accent disc; a tapped day gets a soft tonal one, so both are
+    // legible without competing.
+    val dayNumberColor = if (isInFocusedMonth) onSurface else muted
     val discColor = when {
-        isToday -> todayDisc
+        isToday -> MaterialTheme.colorScheme.primary
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         else -> Color.Transparent
     }
@@ -706,14 +677,14 @@ private fun DayCell(
                     maxLines = 1,
                 )
             }
-            EventDots(events.take(4), inMonthFraction = fraction)
+            EventDots(events.take(4), inFocusedMonth = isInFocusedMonth)
         }
     }
 }
 
 @Composable
-private fun EventDots(events: List<Event>, inMonthFraction: Float = 1f) {
-    val f = inMonthFraction
+private fun EventDots(events: List<Event>, inFocusedMonth: Boolean = true) {
+    val alpha = if (inFocusedMonth) 1f else 0.4f
     // Keep the dot size fixed and small enough that the cell content fits even in a six-row month;
     // otherwise Compose squeezes the overflowing dots and they render smaller in taller months than
     // in shorter ones. See DayCell's vertical padding, which is tuned to leave room for this row.
@@ -725,16 +696,13 @@ private fun EventDots(events: List<Event>, inMonthFraction: Float = 1f) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         events.forEach { event ->
-            val color = Color(event.color).copy(alpha = lerpFloat(0.4f, 1f, f))
+            val color = Color(event.color).copy(alpha = alpha)
             Canvas(modifier = Modifier.size(5.dp)) {
                 drawCircle(color = color)
             }
         }
     }
 }
-
-private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float =
-    start + (stop - start) * fraction
 
 internal fun visibleMonthCells(
     month: YearMonth,

@@ -8,10 +8,19 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 
+/**
+ * How long anything is allowed to move.
+ *
+ * These are deliberately short. Every transition in this app follows something the user did — a
+ * tap, a swipe — and until it finishes the screen is showing a state that is on its way out. A
+ * 300ms slide is a third of a second between "I swiped" and "I can read the month I asked for",
+ * repeated on every navigation. The animation's job here is only to say which way the content
+ * went; it is not the point of the interaction, so it gets out of the way quickly.
+ */
 object Motion {
-    const val DurationShort = 150
-    const val DurationMedium = 300
-    const val DurationLong = 450
+    const val DurationShort = 90
+    const val DurationMedium = 160
+    const val DurationLong = 260
 
     const val DefaultAlpha = 1f
     const val DimmedAlpha = 0.0f

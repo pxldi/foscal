@@ -1,7 +1,6 @@
 package app.foscal.ui.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -100,16 +99,13 @@ fun HomeRoute(
         ) {
             AnimatedContent(
                 targetState = tab,
+                // A tab is a direct hit on a target the user was already looking at, so the answer
+                // should be there when the finger lifts. Sliding a whole screen in from the side
+                // spent a third of a second moving content the user did not ask to see move; a
+                // fade this short is over before it registers as a wait.
                 transitionSpec = {
-                    val direction = if (targetState.ordinal > initialState.ordinal) {
-                        AnimatedContentTransitionScope.SlideDirection.Start
-                    } else {
-                        AnimatedContentTransitionScope.SlideDirection.End
-                    }
-                    (slideIntoContainer(direction, tween(Motion.DurationMedium)) +
-                        fadeIn(tween(Motion.DurationMedium))) togetherWith
-                        (slideOutOfContainer(direction, tween(Motion.DurationMedium)) +
-                            fadeOut(tween(Motion.DurationMedium)))
+                    fadeIn(tween(Motion.DurationShort)) togetherWith
+                        fadeOut(tween(Motion.DurationShort))
                 },
                 label = "homeTab",
             ) { currentTab ->
