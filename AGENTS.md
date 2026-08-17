@@ -2,21 +2,28 @@
 
 ## Toolchain
 
-This project uses a self-contained toolchain installed at
-`/home/pxldi/.local/android-dev/`:
+**Do not set `JAVA_HOME` or `ANDROID_HOME` yourself — the environment already provides
+them, and overriding them is how you break the build.** Run `./gradlew` directly.
 
-- JDK 17 (Temurin): `/home/pxldi/.local/android-dev/jdk`
-- Android SDK: `/home/pxldi/.local/android-dev/android-sdk`
-
-Before running any Gradle command, set up the environment:
+Earlier revisions of this file hardcoded a toolchain under `/home/pxldi/.local/android-dev/`.
+That path does not exist in the current dev container (JDK 17 is at `/usr/local/jdk-17`, the
+SDK at `/usr/local/android-sdk`), and exporting the old paths fails *deceptively*: Gradle
+rejects the bogus `JAVA_HOME` outright, while a bare `java -version` still appears to work
+because it falls back to the system `java` on `PATH`. If you must confirm the toolchain,
+echo the variables rather than assuming a location:
 
 ```bash
-export JAVA_HOME=/home/pxldi/.local/android-dev/jdk
-export ANDROID_HOME=/home/pxldi/.local/android-dev/android-sdk
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+echo "$JAVA_HOME $ANDROID_HOME"   # /usr/local/jdk-17 /usr/local/android-sdk
 ```
 
-`local.properties` already points to the SDK dir.
+Two consequences of how the SDK is mounted:
+
+- **It is read-only.** Gradle cannot install SDK components on demand, which is why
+  `buildToolsVersion` is pinned in every Android module (see Build configuration).
+- **`sdkmanager` is absent** from `cmdline-tools/latest/bin`, so missing components have to
+  be added to the image rather than fetched from a build.
+
+`local.properties` is absent and not needed; `ANDROID_HOME` covers it.
 
 ## Commands
 
@@ -40,6 +47,11 @@ AGP 9 with **built-in Kotlin support**. Consequences worth knowing before editin
   and still uses `kotlin-jvm`. The Compose compiler plugin *is* still applied separately.
 - **`jvmTarget` lives in `android { kotlin { compilerOptions { … } } }`.** The old
   top-level `kotlinOptions { }` block is gone.
+- **`buildToolsVersion` is pinned to `37.0.0`** in `:app`, `:core:core-ui` and
+  `:core:core-data`. AGP's default build-tools version trails `compileSdk`, so with the
+  pin removed it tries to auto-install `build-tools;36.0.0` and the build dies with
+  "The SDK directory is not writable" on any read-only or offline SDK. Keep the pin in
+  step with what the image actually ships (`ls $ANDROID_HOME/build-tools`).
 - **`compileSdk` is 37, `targetSdk` is 36.** They are deliberately different: the newest
   androidx libraries require compiling against 37, while 36 is what the app has actually
   been tested against for runtime behavior. Bumping `targetSdk` opts into Android 17
@@ -53,21 +65,39 @@ changes. Do not commit code that does not build or that fails lint.
 
 ## Testing on the emulator
 
-A headless AVD named `calendarium_test` (predates the rename; `emulator -list-avds` is the
-authority if it is missing) is available for UI verification:
+The emulator runs **outside** the dev container and is reached over adb — there is no
+`emulator` binary or system image inside the image, so you cannot start or create an AVD
+from here. `adb devices` is the authority on whether one is attached.
 
-```bash
-emulator -avd calendarium_test -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect &
-# wait until: adb shell getprop sys.boot_completed == 1
-```
-
-- Screen is 1080x2400; captured screenshots display at 900x2000, so **multiply
-  screenshot coordinates by 1.2** before `adb shell input tap` (input uses device px).
+- **Verify the device before trusting coordinates.** The current device is
+  **320x640 at density 160**, where screenshots are native size and taps map **1:1**. An
+  earlier AVD was 1080x2400 and needed a 1.2x factor. Always run `adb shell wm size` first;
+  a stale factor silently sends every tap to the wrong widget.
+- **No KVM, so it is slow.** `am start` returns immediately while the app is still starting;
+  the first frame took ~20s. Poll `dumpsys window | grep mCurrentFocus` until it names the
+  activity instead of screenshotting straight away, or you will capture the launcher and
+  read it as a crash. `adb shell pidof app.foscal` distinguishes "still rendering" from
+  "died".
+- **`sys.boot_completed` reads empty on this image even when boot is done.** Use
+  `dev.bootcomplete`, or just check that `pm list packages` answers.
 - Reproduce first-run: `adb shell pm clear app.foscal` then
   `adb shell pm revoke app.foscal android.permission.READ_CALENDAR` (+WRITE_CALENDAR,
   POST_NOTIFICATIONS). Grant back with `pm grant`.
 - Inspect provider state directly with `adb shell content query/insert/update/delete --uri
   content://com.android.calendar/{events,instances/when/<from>/<to>,reminders,calendars,exception/<id>}`.
+- **Reminder scheduling is only verifiable at runtime**, since the alarm path is
+  `AlarmManager` + receivers rather than anything a JVM test can reach:
+
+  ```bash
+  adb shell dumpsys alarm | grep -A3 foscal      # what is actually armed, and when
+  adb shell cmd deviceidle force-idle            # force doze; `unforce` to release
+  adb shell am get-standby-bucket app.foscal     # 10=active … 45=restricted
+  adb shell am set-standby-bucket app.foscal restricted
+  adb shell am broadcast -a android.intent.action.MY_PACKAGE_REPLACED -p app.foscal
+  ```
+
+  An empty `dumpsys alarm` grep means nothing is armed — treat it as a failure signal, not
+  as "probably fine".
 
 ## Current status
 

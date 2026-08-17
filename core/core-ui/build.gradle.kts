@@ -9,6 +9,7 @@ plugins {
 android {
     namespace = "app.foscal.core.ui"
     compileSdk = 37
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         minSdk = 26

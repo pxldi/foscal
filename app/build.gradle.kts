@@ -13,6 +13,10 @@ plugins {
 android {
     namespace = "app.foscal"
     compileSdk = 37
+    // Pinned because AGP's default build-tools version trails compileSdk: left unset it tries to
+    // install build-tools 36.0.0, which fails on any machine whose SDK is read-only or offline.
+    // 37.0.0 is what the README already lists as a requirement.
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "app.foscal"
