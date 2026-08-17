@@ -43,6 +43,11 @@ Two consequences of how the SDK is mounted:
   on it, so keep the PR job to one invocation, leave `--max-workers=2` alone, and do not add steps
   that build a second variant. `concurrency.cancel-in-progress` means a force-push supersedes the
   older run rather than queueing behind it.
+- **Never put `[skip ci]` in a commit that a release tag will point at.** GitHub evaluates skip
+  directives per *commit*, not per ref, so the tag push inherits the skip and `release.yml` never
+  runs — no APK, no GitHub Release, and no failed run to notice. Tempting on a version bump, whose
+  tree CI has already passed; it costs the release instead. Recover by dispatching `release.yml`
+  with the tag as input rather than by moving the tag.
 
 ## Build configuration
 
