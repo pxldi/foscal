@@ -48,6 +48,21 @@ Two consequences of how the SDK is mounted:
   runs — no APK, no GitHub Release, and no failed run to notice. Tempting on a version bump, whose
   tree CI has already passed; it costs the release instead. Recover by dispatching `release.yml`
   with the tag as input rather than by moving the tag.
+- **Nothing ever launches the release APK.** CI assembles it and publishes it; no job installs it or
+  starts it. Debug builds do not minify, so an R8 mistake is invisible right up until a user opens
+  the shipped app. v0.9.0 crashed on every launch for exactly this reason. When a change adds a
+  library that resolves anything by name — reflection, a Room database, a service loader — assume
+  R8 will strip it and check `app/build/outputs/apk/release/*.apk` with `dexdump` before tagging,
+  or install the APK on a device.
+
+## R8 and `proguard-rules.pro`
+
+R8 **full mode** is on (it is the default from AGP 8; nothing in `gradle.properties` turns it off).
+The trap is that under full mode a bare `-keep class Foo` keeps the class but **not its members** —
+compat mode used to retain the default constructor implicitly, full mode does not. Library consumer
+rules written before the switch are therefore quietly wrong, and Room 2.6.1 ships exactly such a
+rule, which is what broke v0.9.0. When adding a keep rule, write the member spec you actually need
+(`{ <init>(); }`, `{ *; }`) rather than relying on the class-level keep to imply it.
 
 ## Build configuration
 
