@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.data.CalendarPermissionState
+import app.foscal.notifications.ReminderSyncScheduler
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -55,6 +56,18 @@ fun PermissionGate(content: @Composable () -> Unit) {
 
     LaunchedEffect(Unit) {
         if (!granted) launcher.launch(CalendarPermissionState.REQUIRED_PERMISSIONS)
+    }
+
+    LaunchedEffect(granted) {
+        // Reminders cannot be read before this moment, so the grant is the first opportunity to arm
+        // anything. Waiting for the next content change or the 6-hourly backstop would leave a
+        // freshly set-up device with no alarms for hours.
+        if (granted) {
+            EntryPointAccessors
+                .fromApplication(context, PermissionGateEntryPoint::class.java)
+                .syncScheduler()
+                .syncNow()
+        }
     }
 
     if (granted) {
@@ -95,4 +108,5 @@ fun PermissionGate(content: @Composable () -> Unit) {
 @InstallIn(SingletonComponent::class)
 internal interface PermissionGateEntryPoint {
     fun permissionState(): CalendarPermissionState
+    fun syncScheduler(): ReminderSyncScheduler
 }

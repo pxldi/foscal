@@ -20,6 +20,29 @@
 
     <uses-feature android:name="android.hardware.alarm" android:required="false" />
 
+    <!--
+      Package visibility. From Android 11 an app cannot see another package unless it is declared
+      here, and both things below fail *silently* without it — getPackageInfo throws
+      NameNotFoundException and resolveActivity returns null, exactly as if the app were absent.
+
+      - DAVx5, so onboarding can tell "install it" from "open it".
+      - The vendor autostart / app-manager screens the reminder diagnostics panel offers when the
+        device has one. See VendorSettings, which holds the matching component names.
+    -->
+    <queries>
+        <package android:name="at.bitfire.davdroid" />
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.huawei.systemmanager" />
+        <package android:name="com.coloros.safecenter" />
+        <package android:name="com.oppo.safe" />
+        <package android:name="com.vivo.permissionmanager" />
+        <package android:name="com.iqoo.secure" />
+        <package android:name="com.oneplus.security" />
+        <package android:name="com.asus.mobilemanager" />
+        <package android:name="com.letv.android.letvsafe" />
+        <package android:name="com.htc.pitroad" />
+    </queries>
+
     <application
         android:name=".FoscalApp"
         android:allowBackup="true"
@@ -46,14 +69,39 @@
             android:name=".notifications.ReminderAlarmReceiver"
             android:exported="false" />
 
+        <!--
+          Every action here is a protected broadcast the system alone can send, so exporting the
+          receiver does not let another app trigger it. See SystemEventReceiver for why each one
+          invalidates the armed alarms.
+        -->
         <receiver
-            android:name=".notifications.BootReceiver"
+            android:name=".notifications.SystemEventReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          WorkManager's default initializer is removed so FoscalApp can supply a Configuration with
+          Hilt's worker factory; without this the on-demand configuration is ignored and
+          ReminderSyncWorker fails to instantiate at runtime.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
         <receiver
             android:name=".widget.AgendaWidgetProvider"

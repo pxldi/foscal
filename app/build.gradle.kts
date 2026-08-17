@@ -119,6 +119,12 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // Durable reminder scheduling: WorkManager survives process death and reboots, which the
+    // previous in-process observer did not. hilt-work supplies the @HiltWorker factory.
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
     // OpenStreetMap map view for the on-demand location picker (Apache-2.0, FOSS).
     implementation(libs.osmdroid.android)
 

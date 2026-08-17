@@ -35,6 +35,14 @@ Two consequences of how the SDK is mounted:
 - **Format / verify Kotlin style:** the project uses `kotlin.code.style=official`,
   so formatting follows the official Kotlin conventions; no ktlint/detekt is
   wired up yet.
+- **What CI actually runs on a pull request:**
+  `./gradlew :app:assembleDebug :app:lintDebug testDebugUnitTest :core:core-model:test`.
+  Run exactly that before pushing — it is one Gradle invocation on purpose, and it is the whole
+  gate. The release variant is *not* built on pull requests; it runs on `main`, on tags, and via
+  `workflow_dispatch`. The runner is a single memory-constrained machine shared with everything else
+  on it, so keep the PR job to one invocation, leave `--max-workers=2` alone, and do not add steps
+  that build a second variant. `concurrency.cancel-in-progress` means a force-push supersedes the
+  older run rather than queueing behind it.
 
 ## Build configuration
 
@@ -238,7 +246,30 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `reschedule` receives only the reminders that still exist, so deriving what to cancel from it
   strands alarms for deleted events, removed reminders, moved occurrences, and any offset outside
   a hardcoded preset list. `AlarmReminderScheduler` records the request codes it scheduled in
-  SharedPreferences and cancels exactly those next time.
+  SharedPreferences and cancels exactly those next time. The registry write is in a `finally`: it is
+  the only record of what is armed, so losing it strands every alarm set in that pass.
+- **An all-day reminder anchors to *local* midnight, never to the stored start.** The provider keeps
+  all-day events at UTC midnight, so subtracting the offset from `Instances.BEGIN` puts "15 minutes
+  before" at 01:45 local in UTC+2 and at 18:45 the *previous day* in UTC-5. Compute triggers with
+  `ReminderTrigger.triggerAtMillis(start, allDay, minutes, zone)` and keep `startMillis` raw — it is
+  the alarm key and the Instances lookup value, not a display value.
+- **The scheduling horizon is `ARM_AHEAD_DAYS + largest reminder offset`, not the larger of the two.**
+  A reminder fires at `eventStart - offset`, so arming 7 days ahead of *firing* requires querying
+  events up to 7 days + the offset out. `max(7d, 14d)` silently loses a 2-week reminder on an event
+  20 days away — the event never enters the window, so the alarm is never set. `ReminderTrigger.horizonEnd`
+  also rounds up to the next local midnight; truncating down puts the end before `now + days`.
+- **An unreadable provider must not look like an empty calendar.** `getUpcomingReminders` returns
+  **null** when the query fails and an empty list only when there genuinely are no reminders. An
+  empty list instructs `reschedule` to cancel everything, so flattening the two silently disarmed a
+  user's whole calendar on any transient failure. The worker returns `Result.retry()` on null.
+- **`ReminderSyncWorker` must re-arm the content trigger *last*.** The trigger is one-shot unique
+  work, so the re-arm replaces the name the running job itself holds — and WorkManager cancels a
+  running instance to make room. Re-arming first therefore cancelled the worker before it armed
+  anything: the trigger looped forever while no alarm was ever scheduled. `ensureScheduled` uses
+  `KEEP` for the same reason, so opening the app cannot kill an in-flight sync.
+- **Force-stopping the app cancels its alarms *and* its jobs, and nothing runs until it is
+  reopened.** This is OS behaviour, not a bug — but it means `adb shell am force-stop` invalidates
+  any reminder test. Use `am kill` plus HOME to simulate a backgrounded app instead.
 - **`ensureLocalCalendar` is find-or-create, deliberately.** The Calendar Provider outlives the
   app's own data, so a plain insert on every onboarding run adds a duplicate "My calendar" after
   each data clear or reinstall and strands the user's events in the first one.
@@ -249,6 +280,24 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   a null Int, so the stored sentinel is `-1`; the flow resolves an *absent* key to the built-in
   15-minute default itself. A caller writing `?: 15` therefore re-adds the exact alarm the user
   turned off in Settings. Use `listOfNotNull(...)` when building `EventInput.reminderMinutes`.
+- **A per-calendar reminder default has three states, and `perCalendar[id] ?: global` collapses two
+  of them.** An absent key means "follow the global default"; a key mapped to null means the user
+  chose "None" *for that calendar*, which must beat a non-null global. Always go through
+  `CalendarReminderDefaults.resolve`, which checks `containsKey` before the lookup.
+- **`ReminderHealthProbe.probe()` runs on `Dispatchers.IO`, and must keep doing so.** It reads like a
+  handful of getters, but it is a DataStore read from disk plus a dozen-odd binder round trips
+  (notification, alarm, power, activity and package managers). `viewModelScope` is the main
+  dispatcher, so calling it without the switch ANRs the settings screen on a slow device — which is
+  how this was found. `VendorSettings.autostartIntent` caches its result for the same reason: it
+  costs one `resolveActivity` per candidate ROM and the answer cannot change at runtime.
+- **Offer the battery-optimization *list*, never `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.**
+  The one-tap dialog needs the `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission, which store policy
+  treats as restricted and grants only to a narrow set of app categories.
+  `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` needs no permission at all.
+- **Anything resolved across a package boundary needs a `<queries>` entry.** From Android 11,
+  `getPackageInfo` throws `NameNotFoundException` and `resolveActivity` returns null for undeclared
+  packages — indistinguishable from the app genuinely not being installed. This covers DAVx⁵ and
+  every vendor autostart screen in `VendorSettings.CANDIDATES`.
 - **A recurrence exception starts life with the master's reminders.** The provider seeds the new
   exception row by copying the master's children, so `updateEventInstance` must clear reminders on
   the new id before writing the editor's set — otherwise editing one occurrence leaves it holding

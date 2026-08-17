@@ -6,19 +6,15 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    @Provides
-    @Singleton
-    fun provideCoroutineScope(): CoroutineScope =
-        CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The application-wide CoroutineScope that used to live here existed solely for ReminderSync's
+    // provider-observing flow. WorkManager owns that lifecycle now, and an unused injectable scope
+    // is an invitation to start background work that nothing supervises.
 
     @Provides
     @Singleton

@@ -10,6 +10,7 @@ class FakePreferences(
     onboardingDone: Boolean = true,
     hidden: Set<String> = emptySet(),
     private val defaultReminder: Int? = 15,
+    calendarReminders: Map<Long, Int?> = emptyMap(),
     accent: AccentColor = AccentColor.COBALT,
     theme: ThemeMode = ThemeMode.SYSTEM,
     use24Hour: Boolean = true,
@@ -19,6 +20,8 @@ class FakePreferences(
     override val onboardingCompleted: Flow<Boolean> = MutableStateFlow(onboardingDone)
     override val hiddenCalendarIds: Flow<Set<String>> = MutableStateFlow(hidden)
     override val defaultReminderMinutes: Flow<Int?> = MutableStateFlow(defaultReminder)
+    override val calendarReminderDefaults: MutableStateFlow<Map<Long, Int?>> =
+        MutableStateFlow(calendarReminders)
     override val accentColor: MutableStateFlow<AccentColor> = MutableStateFlow(accent)
     override val accentCustomColor: MutableStateFlow<Int> =
         MutableStateFlow(AccentColor.DEFAULT_CUSTOM_COLOR)
@@ -30,6 +33,15 @@ class FakePreferences(
     override suspend fun setOnboardingCompleted() = Unit
     override suspend fun setHiddenCalendars(ids: Set<String>) = Unit
     override suspend fun setDefaultReminder(minutes: Int?) = Unit
+
+    override suspend fun setCalendarReminderDefault(calendarId: Long, minutes: Int?) {
+        calendarReminderDefaults.value += (calendarId to minutes)
+    }
+
+    override suspend fun clearCalendarReminderDefault(calendarId: Long) {
+        calendarReminderDefaults.value -= calendarId
+    }
+
     override suspend fun setAccentColor(accent: AccentColor) {
         accentColor.value = accent
     }

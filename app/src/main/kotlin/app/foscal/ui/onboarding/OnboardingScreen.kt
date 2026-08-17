@@ -2,6 +2,7 @@ package app.foscal.ui.onboarding
 
 import android.Manifest
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Contrast
@@ -63,6 +65,8 @@ import app.foscal.core.model.ThemeMode
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.ui.settings.AccentPicker
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 
@@ -108,6 +112,10 @@ fun OnboardingRoute(
     LaunchedEffect(state.finished) {
         if (state.finished) onContinue()
     }
+
+    // The battery exemption is granted on a system screen, so its result only becomes visible on
+    // the way back into the app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshBatteryStatus() }
 
     Scaffold(
     ) { padding ->
@@ -163,6 +171,16 @@ fun OnboardingRoute(
                                 !hasNotificationPermission(context) ->
                                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             else -> notificationsEnabled = true
+                        }
+                    },
+                    batteryOptimized = state.batteryOptimized,
+                    onOpenBatterySettings = {
+                        if (!viewModel.openBatterySettings()) {
+                            Toast.makeText(
+                                context,
+                                "This device has no battery optimization screen",
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
                     },
                     mapsEnabled = state.mapsEnabled,
@@ -316,6 +334,8 @@ private fun PersonalizeStep(
     onCustomAccentPick: (Int) -> Unit,
     notificationsEnabled: Boolean,
     onNotificationsToggle: (Boolean) -> Unit,
+    batteryOptimized: Boolean,
+    onOpenBatterySettings: () -> Unit,
     mapsEnabled: Boolean,
     onMapsToggle: (Boolean) -> Unit,
     onDone: () -> Unit,
@@ -346,6 +366,19 @@ private fun PersonalizeStep(
             checked = notificationsEnabled,
             onToggle = onNotificationsToggle,
         )
+        // Only while it is still a problem. Once the exemption is granted the card has nothing to
+        // offer, and leaving it on screen reads as a step that failed.
+        if (notificationsEnabled && batteryOptimized) {
+            ActionCard(
+                icon = Icons.Outlined.BatteryAlert,
+                title = "Let reminders through Doze",
+                subtitle = "Android's battery optimization can hold reminders back until the phone " +
+                    "next wakes up. Find Foscal in the list that opens and allow it to run " +
+                    "unrestricted — it only wakes when a reminder is due.",
+                buttonText = "Open battery settings",
+                onClick = onOpenBatterySettings,
+            )
+        }
         ToggleCard(
             icon = Icons.Outlined.Map,
             title = "Pick locations on a map",
@@ -503,6 +536,58 @@ private fun ToggleCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/**
+ * A card whose subject is not a preference Foscal can hold but a system screen the user must visit.
+ * Same shape as [ToggleCard] with a button where the switch would be — a switch here would imply
+ * Foscal can turn the setting on itself, which is exactly what it cannot do.
+ */
+@Composable
+private fun ActionCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    buttonText: String,
+    onClick: () -> Unit,
+) {
+    androidx.compose.material3.Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.TextButton(
+                onClick = onClick,
+                modifier = Modifier.align(Alignment.End),
+            ) { Text(buttonText) }
         }
     }
 }

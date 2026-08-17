@@ -169,7 +169,28 @@ interface CalendarRepository {
      */
     suspend fun getEventsForExport(calendarIds: Set<Long>): List<ExportEvent>
 
-    suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder>
+    /**
+     * Reminders to arm between [from] and [to], resolved in [zone], or **null** if the calendar
+     * provider could not be read at all.
+     *
+     * The null case matters: an empty list is an instruction to cancel every alarm, and a revoked
+     * permission or a provider that is temporarily wedged used to be indistinguishable from
+     * "the user has no reminders". That is how a transient failure permanently disarmed a user's
+     * whole calendar until they next opened the app. Callers must treat null as "keep what is
+     * already scheduled".
+     */
+    suspend fun getUpcomingReminders(
+        from: Instant,
+        to: Instant,
+        zone: ZoneId = ZoneId.systemDefault(),
+        excludedCalendarIds: Set<Long> = emptySet(),
+    ): List<ScheduledReminder>?
+
+    /**
+     * Largest offset, in minutes, of any reminder this app would deliver itself, or 0 if there are
+     * none. Drives how far ahead [getUpcomingReminders] has to look; see `ReminderTrigger.horizonEnd`.
+     */
+    suspend fun getLargestReminderOffsetMinutes(): Int
 }
 
 @Singleton
@@ -224,7 +245,15 @@ class CalendarContractRepository @Inject constructor(
     override fun getCalendarUri(calendarId: Long): Uri =
         ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId)
 
-    override suspend fun getCalendars(): List<Calendar> = withContext(Dispatchers.IO) {
+    override suspend fun getCalendars(): List<Calendar> =
+        withContext(Dispatchers.IO) { queryCalendars().orEmpty() }
+
+    /**
+     * Same read as [getCalendars] but returns null when the provider could not be queried, rather
+     * than flattening that into an empty list. Only the reminder scheduler needs the distinction —
+     * for UI callers an unreadable calendar list and an empty one look the same anyway.
+     */
+    private fun queryCalendars(): List<Calendar>? {
         val projection = arrayOf(
             CalendarContract.Calendars._ID,
             CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
@@ -236,13 +265,14 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Calendars.SYNC_EVENTS,
         )
         val out = mutableListOf<Calendar>()
-        safeQuery(
+        val cursor = safeQuery(
             CalendarContract.Calendars.CONTENT_URI,
             projection,
             null,
             null,
             "${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME} ASC",
-        )?.use { c ->
+        ) ?: return null
+        cursor.use { c ->
             while (c.moveToNext()) {
                 out += Calendar(
                     id = c.getLong(0),
@@ -256,7 +286,7 @@ class CalendarContractRepository @Inject constructor(
                 )
             }
         }
-        out
+        return out
     }
 
     override suspend fun getEvents(
@@ -673,7 +703,21 @@ class CalendarContractRepository @Inject constructor(
     override suspend fun getReminderMinutesFor(
         eventIds: Collection<Long>,
     ): Map<Long, List<Int>> = withContext(Dispatchers.IO) {
-        if (eventIds.isEmpty()) return@withContext emptyMap()
+        queryReminderMinutes(eventIds, notifiableOnly = false)
+    }
+
+    /**
+     * Reminder offsets for many events in one pass, keyed by event id.
+     *
+     * See [readReminderMinutes] for what [notifiableOnly] excludes. Offsets below zero are dropped
+     * either way: the provider uses `MINUTES_DEFAULT` (-1) for "whatever the calendar's default is",
+     * and treating that as an offset would arm an alarm one minute *after* the event began.
+     */
+    private fun queryReminderMinutes(
+        eventIds: Collection<Long>,
+        notifiableOnly: Boolean,
+    ): Map<Long, List<Int>> {
+        if (eventIds.isEmpty()) return emptyMap()
         val out = mutableMapOf<Long, MutableList<Int>>()
         // SQLite caps a statement at 999 bound variables, so a large calendar has to be chunked
         // rather than passed as one IN clause.
@@ -681,17 +725,24 @@ class CalendarContractRepository @Inject constructor(
             val placeholders = chunk.joinToString(",") { "?" }
             safeQuery(
                 CalendarContract.Reminders.CONTENT_URI,
-                arrayOf(CalendarContract.Reminders.EVENT_ID, CalendarContract.Reminders.MINUTES),
+                arrayOf(
+                    CalendarContract.Reminders.EVENT_ID,
+                    CalendarContract.Reminders.MINUTES,
+                    CalendarContract.Reminders.METHOD,
+                ),
                 "${CalendarContract.Reminders.EVENT_ID} IN ($placeholders)",
                 chunk.map { it.toString() }.toTypedArray(),
                 null,
             )?.use { c ->
                 while (c.moveToNext()) {
-                    out.getOrPut(c.getLong(0)) { mutableListOf() } += c.getInt(1)
+                    if (notifiableOnly && c.getInt(2) !in NOTIFIABLE_REMINDER_METHODS) continue
+                    val minutes = c.getInt(1)
+                    if (minutes < 0) continue
+                    out.getOrPut(c.getLong(0)) { mutableListOf() } += minutes
                 }
             }
         }
-        out.mapValues { (_, minutes) -> minutes.distinct().sorted() }
+        return out.mapValues { (_, minutes) -> minutes.distinct().sorted() }
     }
 
     override suspend fun getEventsForExport(
@@ -822,25 +873,66 @@ class CalendarContractRepository @Inject constructor(
     override suspend fun getUpcomingReminders(
         from: Instant,
         to: Instant,
-    ): List<ScheduledReminder> = withContext(Dispatchers.IO) {
-        val calendarIds = getCalendars().map { it.id }.toSet()
+        zone: ZoneId,
+        excludedCalendarIds: Set<Long>,
+    ): List<ScheduledReminder>? = withContext(Dispatchers.IO) {
+        // A failed read must not look like "no calendars"; see the interface KDoc.
+        val calendars = queryCalendars() ?: return@withContext null
+        // Hidden calendars are hidden everywhere else in the app, so notifying for them is a
+        // reminder about an event the user cannot see. This is also the only lever a user has to
+        // silence a noisy shared calendar without unsubscribing from it. Both switches count: the
+        // provider's own VISIBLE flag (what other calendar apps and sync adapters set) and the
+        // per-calendar toggle in Foscal's settings, which never touched the provider.
+        val calendarIds = calendars
+            .filter { it.visible && it.id !in excludedCalendarIds }
+            .map { it.id }
+            .toSet()
         if (calendarIds.isEmpty()) return@withContext emptyList()
+
         val events = getEvents(calendarIds, from, to)
+        if (events.isEmpty()) return@withContext emptyList()
+
+        // One batched Reminders query instead of one per event: a busy month easily produces
+        // several hundred occurrences, and the per-event query made this an N+1 across a binder
+        // boundary. Occurrences of a series share the master's reminder rows, so key on event id.
+        val minutesByEvent = queryReminderMinutes(
+            eventIds = events.map { it.id }.toSet(),
+            notifiableOnly = true,
+        )
+
         val now = System.currentTimeMillis()
         events.flatMap { event ->
-            readReminderMinutes(event.id, notifiableOnly = true).distinct().mapNotNull { minutes ->
-                val trigger = event.start.toEpochMilli() - minutes * 60_000L
-                if (trigger <= now) return@mapNotNull null
-                ScheduledReminder(
+            minutesByEvent[event.id].orEmpty().mapNotNull { minutes ->
+                val reminder = ScheduledReminder.create(
                     eventId = event.id,
                     calendarId = event.calendarId,
                     title = event.title,
                     location = event.location,
                     startMillis = event.start.toEpochMilli(),
                     minutesBefore = minutes,
+                    allDay = event.allDay,
+                    zone = zone,
                 )
+                reminder.takeIf { it.triggerAtMillis > now }
             }
         }
+    }
+
+    override suspend fun getLargestReminderOffsetMinutes(): Int = withContext(Dispatchers.IO) {
+        var largest = 0
+        safeQuery(
+            CalendarContract.Reminders.CONTENT_URI,
+            arrayOf(CalendarContract.Reminders.MINUTES, CalendarContract.Reminders.METHOD),
+            null,
+            null,
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                if (c.getInt(1) !in NOTIFIABLE_REMINDER_METHODS) continue
+                largest = maxOf(largest, c.getInt(0))
+            }
+        }
+        largest
     }
 
     private fun deleteReminders(eventId: Long) {

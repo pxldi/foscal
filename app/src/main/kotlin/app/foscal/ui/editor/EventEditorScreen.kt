@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Frequency
+import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.Motion
+import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.rememberDateFormatter
@@ -575,15 +578,6 @@ private fun ChipRow(
 
 private val ReminderPresets = listOf(0, 5, 15, 30, 60, 1440)
 
-internal fun reminderLabel(minutes: Int): String = when {
-    minutes == 0 -> "At start"
-    minutes % 1440 == 0 -> "${minutes / 1440} day".pluralize(minutes / 1440)
-    minutes % 60 == 0 -> "${minutes / 60} hour".pluralize(minutes / 60)
-    else -> "$minutes min"
-}
-
-private fun String.pluralize(count: Int): String = if (count == 1) this else "${this}s"
-
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ReminderRow(
@@ -594,6 +588,8 @@ private fun ReminderRow(
     // Show the presets plus any value the event already carries (a 10-minute alarm set in another
     // app must stay togglable here, or saving would silently drop it).
     val options = remember(selected) { (ReminderPresets + selected).distinct().sorted() }
+    var picking by rememberSaveable { mutableStateOf(false) }
+
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Reminders", style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -606,10 +602,30 @@ private fun ReminderRow(
                 FilterChip(
                     selected = minutes in selected,
                     onClick = { onToggle(minutes) },
-                    label = { Text(reminderLabel(minutes)) },
+                    label = { Text(ReminderDuration.label(minutes)) },
                 )
             }
+            // Never "selected": anything it produces immediately shows up as its own chip above,
+            // because `options` folds the event's current reminders in with the presets.
+            FilterChip(
+                selected = false,
+                onClick = { picking = true },
+                label = { Text("Custom…") },
+            )
         }
+    }
+
+    if (picking) {
+        ReminderDurationDialog(
+            initialMinutes = selected.lastOrNull(),
+            onDismiss = { picking = false },
+            onConfirm = { minutes ->
+                picking = false
+                // A duplicate would toggle the existing chip *off*, so a user who re-picks a value
+                // they already have would silently lose it.
+                if (minutes !in selected) onToggle(minutes)
+            },
+        )
     }
 }
 

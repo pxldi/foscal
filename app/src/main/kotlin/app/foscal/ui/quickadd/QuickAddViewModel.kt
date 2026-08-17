@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Calendar
+import app.foscal.core.model.CalendarReminderDefaults
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.QuickAddParser
@@ -83,7 +84,13 @@ class QuickAddViewModel @Inject constructor(
                     timezone = if (parsed.allDay) ZoneOffset.UTC.id else zone.id,
                     frequency = Frequency.NONE,
                     rrule = null,
-                    reminderMinutes = listOfNotNull(prefs.defaultReminderMinutes.first()),
+                    reminderMinutes = listOfNotNull(
+                        CalendarReminderDefaults.resolve(
+                            calendarId = current.selectedCalendarId,
+                            perCalendar = prefs.calendarReminderDefaults.first(),
+                            global = prefs.defaultReminderMinutes.first(),
+                        ),
+                    ),
                 ),
             )
             mutate { it.copy(saving = false, finished = true) }

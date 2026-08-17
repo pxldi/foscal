@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import app.foscal.MainActivity
 import app.foscal.R
 import app.foscal.core.data.UserPreferencesRepository
+import app.foscal.core.model.ReminderTrigger
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -35,15 +37,23 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val whenMillis = intent.getLongExtra(AlarmReminderScheduler.EXTRA_WHEN_MILLIS, 0L)
         val location = intent.getStringExtra(AlarmReminderScheduler.EXTRA_LOCATION) ?: ""
         val minutes = intent.getIntExtra(AlarmReminderScheduler.EXTRA_MINUTES, 0)
+        val allDay = intent.getBooleanExtra(AlarmReminderScheduler.EXTRA_ALL_DAY, false)
 
         if (eventId <= 0L) return
+
+        // A fired alarm is consumed, so this is the natural moment to top the schedule back up: it
+        // frees a slot under the per-app alarm cap and walks the horizon forward. Without it a
+        // device that is never opened drains its armed set one reminder at a time.
+        EntryPointAccessors.fromApplication(context, ReceiverEntryPoint::class.java)
+            .syncScheduler()
+            .syncNow()
 
         // The provider read and the DataStore read are both disk I/O; onReceive runs on the main
         // thread, so hand off rather than blocking it.
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                notify(context, eventId, title, whenMillis, location, minutes)
+                notify(context, eventId, title, whenMillis, location, minutes, allDay)
             } finally {
                 pending.finish()
             }
@@ -57,17 +67,37 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         whenMillis: Long,
         location: String,
         minutes: Int,
+        allDay: Boolean,
     ) {
         if (!occurrenceExists(context, eventId, whenMillis)) return
 
+        // When the event begins as far as the *user* is concerned. Identical to whenMillis for a
+        // timed event; local midnight for an all-day one, whose stored value is UTC midnight. Used
+        // for everything the user reads — never for the alarm key or the Instances lookup, which
+        // must keep matching the provider's raw value.
+        val displayStart = ReminderTrigger.triggerAtMillis(
+            startMillis = whenMillis,
+            allDay = allDay,
+            minutesBefore = 0,
+            zone = ZoneId.systemDefault(),
+        )
+
         val absolute = whenMillis.takeIf { it > 0L }?.let {
-            val zdt = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
-            val pattern =
-                if (use24HourClock(context)) "EEE, MMM d · HH:mm" else "EEE, MMM d · h:mm a"
-            DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(zdt)
+            // All-day events are stored at UTC midnight, so they must be read back in UTC and shown
+            // without a time. Rendering one in the device zone printed "Tue, Aug 18 · 02:00" for a
+            // holiday that has no clock time at all — and a day earlier than that west of UTC.
+            if (allDay) {
+                val date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()).format(date)
+            } else {
+                val zdt = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
+                val pattern =
+                    if (use24HourClock(context)) "EEE, MMM d · HH:mm" else "EEE, MMM d · h:mm a"
+                DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(zdt)
+            }
         }
         val contentText = listOfNotNull(
-            leadLabel(whenMillis, System.currentTimeMillis()),
+            leadLabel(displayStart, System.currentTimeMillis()),
             absolute,
             location.takeIf { it.isNotBlank() },
         ).joinToString(" · ")
@@ -96,7 +126,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
-            .setWhen(whenMillis.takeIf { it > 0L } ?: System.currentTimeMillis())
+            .setWhen(displayStart.takeIf { whenMillis > 0L } ?: System.currentTimeMillis())
             .setShowWhen(true)
             .build()
 
@@ -164,6 +194,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
     @InstallIn(SingletonComponent::class)
     interface ReceiverEntryPoint {
         fun preferences(): UserPreferencesRepository
+        fun syncScheduler(): ReminderSyncScheduler
     }
 
     companion object {

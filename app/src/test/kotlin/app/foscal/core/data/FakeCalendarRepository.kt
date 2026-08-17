@@ -9,6 +9,7 @@ import app.foscal.core.model.ScheduledReminder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.Instant
+import java.time.ZoneId
 
 /**
  * In-memory [CalendarRepository] for unit tests. Records the most recent mutation so view-model
@@ -180,6 +181,12 @@ class FakeCalendarRepository(
             ?: events.filter { it.calendarId in calendarIds }.distinctBy { it.id }
                 .map { ExportEvent(it) }
 
-    override suspend fun getUpcomingReminders(from: Instant, to: Instant): List<ScheduledReminder> =
-        emptyList()
+    override suspend fun getUpcomingReminders(
+        from: Instant,
+        to: Instant,
+        zone: ZoneId,
+        excludedCalendarIds: Set<Long>,
+    ): List<ScheduledReminder>? = emptyList()
+
+    override suspend fun getLargestReminderOffsetMinutes(): Int = reminderMinutes.maxOrNull() ?: 0
 }

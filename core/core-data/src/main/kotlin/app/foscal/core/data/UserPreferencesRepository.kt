@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import app.foscal.core.model.AccentColor
+import app.foscal.core.model.CalendarReminderDefaults
 import app.foscal.core.model.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +35,11 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.data.map { prefs ->
             (prefs[DEFAULT_REMINDER] ?: Preferences.DEFAULT_REMINDER_MINUTES)
                 .takeIf { it != NO_REMINDER }
+        }
+
+    override val calendarReminderDefaults: Flow<Map<Long, Int?>> =
+        context.dataStore.data.map { prefs ->
+            CalendarReminderDefaults.decode(prefs[CALENDAR_REMINDERS].orEmpty())
         }
 
     override val accentColor: Flow<AccentColor> =
@@ -64,6 +70,26 @@ class UserPreferencesRepository @Inject constructor(
 
     override suspend fun setDefaultReminder(minutes: Int?) {
         context.dataStore.edit { prefs -> prefs[DEFAULT_REMINDER] = minutes ?: NO_REMINDER }
+    }
+
+    override suspend fun setCalendarReminderDefault(calendarId: Long, minutes: Int?) {
+        editCalendarDefaults { it + (calendarId to minutes) }
+    }
+
+    override suspend fun clearCalendarReminderDefault(calendarId: Long) {
+        editCalendarDefaults { it - calendarId }
+    }
+
+    /**
+     * Read-modify-write inside a single `edit`, which DataStore serialises against every other
+     * writer. Doing it as a `first()` followed by a separate write would let two rows edited in
+     * quick succession each start from the same map and the later one erase the earlier.
+     */
+    private suspend fun editCalendarDefaults(mutate: (Map<Long, Int?>) -> Map<Long, Int?>) {
+        context.dataStore.edit { prefs ->
+            val current = CalendarReminderDefaults.decode(prefs[CALENDAR_REMINDERS].orEmpty())
+            prefs[CALENDAR_REMINDERS] = CalendarReminderDefaults.encode(mutate(current))
+        }
     }
 
     override suspend fun setAccentColor(accent: AccentColor) {
@@ -97,6 +123,7 @@ class UserPreferencesRepository @Inject constructor(
         private val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         private val HIDDEN_CALENDARS = stringSetPreferencesKey("hidden_calendars")
         private val DEFAULT_REMINDER = intPreferencesKey("default_reminder_minutes")
+        private val CALENDAR_REMINDERS = stringSetPreferencesKey("calendar_reminder_defaults")
         private val ACCENT_COLOR = stringPreferencesKey("accent_color")
         private val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
         private val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")

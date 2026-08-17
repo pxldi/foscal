@@ -44,6 +44,14 @@ data class TransferState(
 data class CalendarRow(
     val calendar: Calendar,
     val isHidden: Boolean,
+    /**
+     * The reminder this calendar pre-fills, and whether that is its own choice.
+     *
+     * Two fields rather than a nullable one because null is a real answer here — "None on this
+     * calendar" — and it has to be distinguishable from "no override, follow the global default".
+     */
+    val reminderOverride: Int? = null,
+    val usesGlobalReminder: Boolean = true,
 )
 
 private data class PrefsSnapshot(
@@ -55,6 +63,7 @@ private data class PrefsSnapshot(
     val osmMaps: Boolean,
     val accentCustom: Int,
     val dynamicColor: Boolean,
+    val calendarReminders: Map<Long, Int?>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -85,13 +94,20 @@ class CalendarsViewModel @Inject constructor(
                 osmMaps = false,
                 accentCustom = 0,
                 dynamicColor = false,
+                calendarReminders = emptyMap(),
             )
         },
         prefs.osmMapsEnabled,
         prefs.accentCustomColor,
         prefs.dynamicColor,
-    ) { snapshot, osmMaps, accentCustom, dynamicColor ->
-        snapshot.copy(osmMaps = osmMaps, accentCustom = accentCustom, dynamicColor = dynamicColor)
+        prefs.calendarReminderDefaults,
+    ) { snapshot, osmMaps, accentCustom, dynamicColor, calendarReminders ->
+        snapshot.copy(
+            osmMaps = osmMaps,
+            accentCustom = accentCustom,
+            dynamicColor = dynamicColor,
+            calendarReminders = calendarReminders,
+        )
     }
 
     val state: StateFlow<CalendarsUiState> = combine(
@@ -102,7 +118,12 @@ class CalendarsViewModel @Inject constructor(
         CalendarsUiState(
             transfer = transfer,
             items = all.map { cal ->
-                CalendarRow(cal, isHidden = cal.id.toString() in p.hidden)
+                CalendarRow(
+                    calendar = cal,
+                    isHidden = cal.id.toString() in p.hidden,
+                    reminderOverride = p.calendarReminders[cal.id],
+                    usesGlobalReminder = !p.calendarReminders.containsKey(cal.id),
+                )
             },
             loading = false,
             defaultReminderMinutes = p.defaultReminder,
@@ -130,6 +151,16 @@ class CalendarsViewModel @Inject constructor(
 
     fun setDefaultReminder(minutes: Int?) {
         viewModelScope.launch { prefs.setDefaultReminder(minutes) }
+    }
+
+    /** Overrides one calendar's pre-filled reminder; [minutes] of null means "None here". */
+    fun setCalendarReminder(calendarId: Long, minutes: Int?) {
+        viewModelScope.launch { prefs.setCalendarReminderDefault(calendarId, minutes) }
+    }
+
+    /** Drops the override so this calendar follows the global default again. */
+    fun clearCalendarReminder(calendarId: Long) {
+        viewModelScope.launch { prefs.clearCalendarReminderDefault(calendarId) }
     }
 
     fun setAccentColor(accent: AccentColor) {

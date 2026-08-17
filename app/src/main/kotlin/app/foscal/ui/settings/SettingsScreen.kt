@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +26,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.AlertDialog
@@ -34,6 +37,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -66,11 +70,14 @@ import app.foscal.BuildConfig
 import app.foscal.R
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Ics
+import app.foscal.core.model.ReminderDuration
 import app.foscal.core.model.ThemeMode
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.ics.IcsTransfer
+import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.calendars.CalendarsViewModel
 import app.foscal.ui.calendars.TransferState
+import app.foscal.ui.common.ReminderDurationDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +85,9 @@ fun SettingsScreen(
     viewModel: CalendarsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // One calendar open at a time: the per-calendar panel is tall, and several expanded at once
+    // turns the list into something you have to scroll to find anything in.
+    var expandedCalendarId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -207,11 +217,32 @@ fun SettingsScreen(
                 Spacer(Modifier.height(12.dp))
                 SectionHeader("Calendars")
             }
+            item {
+                Text(
+                    "Tap a calendar to give it its own default reminder.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+                )
+            }
             items(state.items, key = { it.calendar.id }) { row ->
                 CalendarRowCard(
-                    calendar = row.calendar,
-                    isHidden = row.isHidden,
-                    onToggle = { viewModel.toggleHidden(row) },
+                    row = row,
+                    globalReminderMinutes = state.defaultReminderMinutes,
+                    expanded = expandedCalendarId == row.calendar.id,
+                    onExpand = {
+                        expandedCalendarId =
+                            if (expandedCalendarId == row.calendar.id) null else row.calendar.id
+                    },
+                    onToggleHidden = { viewModel.toggleHidden(row) },
+                    onSelectReminder = { selection ->
+                        when (selection) {
+                            ReminderSelection.Global -> viewModel.clearCalendarReminder(row.calendar.id)
+                            ReminderSelection.None -> viewModel.setCalendarReminder(row.calendar.id, null)
+                            is ReminderSelection.Minutes ->
+                                viewModel.setCalendarReminder(row.calendar.id, selection.value)
+                        }
+                    },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
@@ -234,11 +265,31 @@ fun SettingsScreen(
                 SectionHeader("Notifications")
             }
             item {
-                NotificationSettings(
-                    selected = state.defaultReminderMinutes,
-                    onSelect = { viewModel.setDefaultReminder(it) },
+                Column(
                     modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        "Default reminder for new events",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    ReminderChips(
+                        selection = state.defaultReminderMinutes
+                            ?.let { ReminderSelection.Minutes(it) }
+                            ?: ReminderSelection.None,
+                        // Nothing above the app-wide default to fall back to.
+                        globalLabel = null,
+                        onSelect = { selection ->
+                            viewModel.setDefaultReminder(
+                                (selection as? ReminderSelection.Minutes)?.value,
+                            )
+                        },
+                    )
+                }
+            }
+            item {
+                Spacer(Modifier.height(4.dp))
+                ReminderDiagnosticsCard(modifier = Modifier.padding(horizontal = 12.dp))
             }
             item {
                 Text(
@@ -291,13 +342,23 @@ private fun SectionHeader(text: String) {
     )
 }
 
+/**
+ * One calendar: visible/hidden, and — when expanded — the reminder new events on it start with.
+ *
+ * The row used to toggle visibility on tap. That is now the switch's job alone, because a row that
+ * both expands and toggles has no way to be tapped for one without doing the other.
+ */
 @Composable
 private fun CalendarRowCard(
-    calendar: Calendar,
-    isHidden: Boolean,
-    onToggle: () -> Unit,
+    row: CalendarRow,
+    globalReminderMinutes: Int?,
+    expanded: Boolean,
+    onExpand: () -> Unit,
+    onToggleHidden: () -> Unit,
+    onSelectReminder: (ReminderSelection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val calendar = row.calendar
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -305,28 +366,68 @@ private fun CalendarRowCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            ColorDot(calendar.color)
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    calendar.displayName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onExpand)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                ColorDot(calendar.color)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        calendar.displayName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        buildString {
+                            append(accountLabel(calendar))
+                            if (!row.usesGlobalReminder) {
+                                append(" • ")
+                                append(row.reminderOverride?.let(ReminderDuration::label) ?: "No reminder")
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    accountLabel(calendar),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Switch(checked = !row.isHidden, onCheckedChange = { onToggleHidden() })
             }
-            Switch(checked = !isHidden, onCheckedChange = { onToggle() })
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HorizontalDivider()
+                    Text(
+                        "Default reminder for new events here",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    ReminderChips(
+                        selection = when {
+                            row.usesGlobalReminder -> ReminderSelection.Global
+                            row.reminderOverride == null -> ReminderSelection.None
+                            else -> ReminderSelection.Minutes(row.reminderOverride)
+                        },
+                        globalLabel = globalReminderMinutes
+                            ?.let { "Default · ${ReminderDuration.label(it)}" }
+                            ?: "Default · none",
+                        onSelect = onSelectReminder,
+                    )
+                }
+            }
         }
     }
 }
@@ -589,43 +690,92 @@ private fun ToggleRow(
     }
 }
 
+/** What a reminder chip row can be set to. */
+private sealed interface ReminderSelection {
+    /** Follow the app-wide default. Only offered on a per-calendar row. */
+    data object Global : ReminderSelection
+
+    /** No reminder at all — distinct from [Global] even when the global default is itself none. */
+    data object None : ReminderSelection
+
+    data class Minutes(val value: Int) : ReminderSelection
+}
+
+private val ReminderPresetMinutes = listOf(5, 15, 30, 60, 1440)
+
+/**
+ * The reminder picker shared by the app-wide default and each calendar's override.
+ *
+ * [globalLabel] non-null adds the leading "follow the default" chip; the app-wide row passes null
+ * because there is nothing above it to defer to.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NotificationSettings(
-    selected: Int?,
-    onSelect: (Int?) -> Unit,
+private fun ReminderChips(
+    selection: ReminderSelection,
+    globalLabel: String?,
+    onSelect: (ReminderSelection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val options = listOf(
-        null to "None",
-        5 to "5 min before",
-        15 to "15 min before",
-        30 to "30 min before",
-        60 to "1 hour before",
-        1440 to "1 day before",
-    )
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Default reminder for new events",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            options.forEach { (mins, label) ->
-                AssistChip(
-                    onClick = { onSelect(mins) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                    colors = if (selected == mins) {
-                        AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    } else {
-                        AssistChipDefaults.assistChipColors()
-                    },
-                )
-            }
-        }
+    val current = (selection as? ReminderSelection.Minutes)?.value
+    // Fold a custom value in with the presets so it shows as its own selected chip rather than
+    // leaving the row looking as though nothing is chosen.
+    val options = remember(current) {
+        (ReminderPresetMinutes + listOfNotNull(current)).distinct().sorted()
     }
+    var picking by rememberSaveable { mutableStateOf(false) }
+
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (globalLabel != null) {
+            ReminderChip(
+                label = globalLabel,
+                selected = selection == ReminderSelection.Global,
+                onClick = { onSelect(ReminderSelection.Global) },
+            )
+        }
+        ReminderChip(
+            label = "None",
+            selected = selection == ReminderSelection.None,
+            onClick = { onSelect(ReminderSelection.None) },
+        )
+        options.forEach { minutes ->
+            ReminderChip(
+                label = ReminderDuration.label(minutes),
+                selected = current == minutes,
+                onClick = { onSelect(ReminderSelection.Minutes(minutes)) },
+            )
+        }
+        ReminderChip(
+            label = "Custom…",
+            selected = false,
+            onClick = { picking = true },
+        )
+    }
+
+    if (picking) {
+        ReminderDurationDialog(
+            initialMinutes = current,
+            onDismiss = { picking = false },
+            onConfirm = { minutes ->
+                picking = false
+                onSelect(ReminderSelection.Minutes(minutes))
+            },
+        )
+    }
+}
+
+@Composable
+private fun ReminderChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        colors = if (selected) {
+            AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        } else {
+            AssistChipDefaults.assistChipColors()
+        },
+    )
 }

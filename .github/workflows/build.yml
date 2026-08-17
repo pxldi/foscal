@@ -4,11 +4,30 @@ on:
   push:
     branches: [master, main]
   pull_request:
+  # So a release build can still be produced on demand from a branch without pushing to main.
+  workflow_dispatch:
+
+# The runner is a single machine with finite RAM, so an older run of the same branch is not worth
+# keeping alive: it is building a commit nobody is going to look at any more.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+
+    env:
+      # Pull requests verify the debug variant only. The release build is a full second compilation
+      # of every module plus R8, and it can only fail in ways the debug build and lint do not for
+      # signing or shrinking reasons — neither of which a code review is checking. It still runs on
+      # main, on tags, and on demand, so a broken release build is caught before it ships.
+      FULL_BUILD: ${{ github.event_name != 'pull_request' }}
+      # One Gradle invocation and a smaller heap than the local default. The runner shares its RAM
+      # with everything else on the machine, and four separate --no-daemon invocations each paid for
+      # their own JVM, configuration phase and Kotlin daemon.
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -XX:+UseParallelGC"
 
     steps:
       - uses: actions/checkout@v4
@@ -33,10 +52,8 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/libs.versions.toml', 'gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Assemble debug
-        run: ./gradlew :app:assembleDebug --no-daemon
-
       - name: Decode release keystore
+        if: env.FULL_BUILD == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.CALENDARIUM_KEYSTORE_BASE64 }}
         run: |
@@ -45,29 +62,45 @@ jobs:
             echo "FOSCAL_STORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
           fi
 
-      - name: Assemble release
-        run: ./gradlew :app:assembleRelease --no-daemon
+      # Assemble, lint and test in a single invocation: Gradle configures the build once, keeps one
+      # Kotlin compile daemon, and can overlap independent tasks. --max-workers caps how many of
+      # those run at a time, which is the knob that actually decides peak memory.
+      - name: Build, lint and test
+        run: |
+          TASKS=":app:assembleDebug :app:lintDebug testDebugUnitTest :core:core-model:test"
+          if [ "$FULL_BUILD" = "true" ]; then
+            TASKS="$TASKS :app:assembleRelease"
+          fi
+          ./gradlew $TASKS --no-daemon --max-workers=2
         env:
           FOSCAL_STORE_PASSWORD: ${{ secrets.CALENDARIUM_STORE_PASSWORD }}
           FOSCAL_KEY_ALIAS: ${{ secrets.CALENDARIUM_KEY_ALIAS }}
           FOSCAL_KEY_PASSWORD: ${{ secrets.CALENDARIUM_KEY_PASSWORD }}
 
-      - name: Lint
-        run: ./gradlew lint --no-daemon
-
-      - name: Test
-        run: ./gradlew test --no-daemon
-
+      # Uploaded only where someone might install it. A debug APK per pull-request push is a build
+      # artifact nobody downloads and storage that has to be paid for either way.
       - name: Upload debug APK
+        if: env.FULL_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: calendarium-debug-apk
+          name: foscal-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload release APK
+        if: env.FULL_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: calendarium-release-apk
+          name: foscal-release-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      # Test reports are the one artifact worth having on a failed pull-request run: without them
+      # the only record of which assertion failed is the scrollback of a log that expires.
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore

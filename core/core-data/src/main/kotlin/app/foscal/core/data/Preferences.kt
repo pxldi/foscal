@@ -19,6 +19,16 @@ interface Preferences {
      * re-add the alarm the user turned off.
      */
     val defaultReminderMinutes: Flow<Int?>
+
+    /**
+     * Per-calendar overrides of [defaultReminderMinutes], keyed by calendar id.
+     *
+     * A missing key means "no opinion, use the global default"; a key mapped to null means the user
+     * explicitly chose "None" for that calendar. See
+     * [app.foscal.core.model.CalendarReminderDefaults.resolve], which is the only correct way to
+     * combine this with [defaultReminderMinutes].
+     */
+    val calendarReminderDefaults: Flow<Map<Long, Int?>>
     val accentColor: Flow<AccentColor>
     /** ARGB seed color used when [accentColor] is [AccentColor.CUSTOM]. */
     val accentCustomColor: Flow<Int>
@@ -42,6 +52,12 @@ interface Preferences {
     suspend fun setOnboardingCompleted()
     suspend fun setHiddenCalendars(ids: Set<String>)
     suspend fun setDefaultReminder(minutes: Int?)
+
+    /** Overrides the default for one calendar; [minutes] of null means "None on this calendar". */
+    suspend fun setCalendarReminderDefault(calendarId: Long, minutes: Int?)
+
+    /** Drops [calendarId]'s override so it follows [defaultReminderMinutes] again. */
+    suspend fun clearCalendarReminderDefault(calendarId: Long)
     suspend fun setAccentColor(accent: AccentColor)
     suspend fun setAccentCustomColor(color: Int)
     suspend fun setDynamicColor(enabled: Boolean)

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Calendar
+import app.foscal.core.model.CalendarReminderDefaults
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.RecurrenceRules
@@ -65,6 +66,15 @@ data class EditorUiState(
     /** Every reminder on the event, in minutes before start; sorted, empty when there are none. */
     val reminderMinutes: List<Int> = listOf(15),
     /**
+     * Whether the user has chosen the reminders themselves.
+     *
+     * While false on a new event, switching calendars re-applies that calendar's default — the
+     * point of a per-calendar default is that picking the work calendar gives you the work
+     * calendar's reminder. Once true it stays true: silently replacing a reminder the user set
+     * because they then corrected the calendar would be a bug, not a convenience.
+     */
+    val remindersTouched: Boolean = false,
+    /**
      * The `EVENT_TIMEZONE` of the event being edited, or null for a new one. Preserved on save so
      * editing an event authored in another zone (CalDAV, travel) does not re-anchor it to the
      * device zone and shift it for every other client.
@@ -86,6 +96,16 @@ class EventEditorViewModel @Inject constructor(
 
     private val zone: ZoneId = ZoneId.systemDefault()
 
+    /**
+     * The reminder defaults, snapshotted when the editor opens.
+     *
+     * Held rather than re-read on every calendar switch: [selectCalendar] is a plain state update
+     * and turning it into a suspending read would let a fast double-tap apply the two calendars'
+     * defaults out of order.
+     */
+    private var globalReminderDefault: Int? = null
+    private var calendarReminderDefaults: Map<Long, Int?> = emptyMap()
+
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
@@ -100,7 +120,8 @@ class EventEditorViewModel @Inject constructor(
     private fun load(eventId: Long, startArg: Long?, endArg: Long?, calArg: Long?) {
         viewModelScope.launch {
             val hidden = prefs.hiddenCalendarIds.first()
-            val defaultReminder = prefs.defaultReminderMinutes.first()
+            globalReminderDefault = prefs.defaultReminderMinutes.first()
+            calendarReminderDefaults = prefs.calendarReminderDefaults.first()
             val calendars = repository.getCalendars()
             val visible = calendars.filter { it.visible && it.id.toString() !in hidden }
             val recentLocations = repository.getRecentLocations()
@@ -165,7 +186,7 @@ class EventEditorViewModel @Inject constructor(
                 endTime = defaultEnd.toLocalTime(),
                 recentLocations = recentLocations,
                 mapsEnabled = mapsEnabled,
-                reminderMinutes = listOfNotNull(defaultReminder),
+                reminderMinutes = listOfNotNull(defaultReminderFor(defaultCalendar)),
             )
         }
     }
@@ -214,17 +235,33 @@ class EventEditorViewModel @Inject constructor(
     /** Adds or removes one reminder. Passing null clears them all ("None"). */
     fun toggleReminder(minutes: Int?) = mutate { current ->
         if (minutes == null) {
-            current.copy(reminderMinutes = emptyList())
+            current.copy(reminderMinutes = emptyList(), remindersTouched = true)
         } else {
             val next = if (minutes in current.reminderMinutes) {
                 current.reminderMinutes - minutes
             } else {
                 current.reminderMinutes + minutes
             }
-            current.copy(reminderMinutes = next.sorted())
+            current.copy(reminderMinutes = next.sorted(), remindersTouched = true)
         }
     }
-    fun selectCalendar(id: Long) = mutate { it.copy(selectedCalendarId = id) }
+    fun selectCalendar(id: Long) = mutate { current ->
+        val next = current.copy(selectedCalendarId = id)
+        // Only for a new event whose reminders the user has not chosen: on an existing event the
+        // reminders are the event's own, and re-deriving them from the calendar would quietly
+        // rewrite data the user never asked to change.
+        if (current.isEditing || current.remindersTouched) {
+            next
+        } else {
+            next.copy(reminderMinutes = listOfNotNull(defaultReminderFor(id)))
+        }
+    }
+
+    private fun defaultReminderFor(calendarId: Long?): Int? = CalendarReminderDefaults.resolve(
+        calendarId = calendarId,
+        perCalendar = calendarReminderDefaults,
+        global = globalReminderDefault,
+    )
 
     fun save() {
         val current = _state.value

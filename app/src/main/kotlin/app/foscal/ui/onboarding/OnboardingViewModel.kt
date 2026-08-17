@@ -1,9 +1,12 @@
 package app.foscal.ui.onboarding
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarPermissionState
@@ -31,6 +34,14 @@ data class OnboardingUiState(
     val finished: Boolean = false,
     val davxStatus: DAVxStatus = DAVxStatus.NOT_INSTALLED,
     val calendarPermissionGranted: Boolean = false,
+    /**
+     * Whether Android's battery optimization still applies to Foscal.
+     *
+     * Surfaced during setup rather than left for the user to discover after their first missed
+     * reminder: Doze is the single most common reason a correctly scheduled reminder arrives late,
+     * and the exemption is far easier to grant while the user is already in a setup frame of mind.
+     */
+    val batteryOptimized: Boolean = false,
     val mapsEnabled: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val accentColor: AccentColor = AccentColor.Default,
@@ -46,7 +57,9 @@ class OnboardingViewModel @Inject constructor(
     private val permissionState: CalendarPermissionState,
 ) : ViewModel() {
 
-    private val _internal = MutableStateFlow(OnboardingUiState(davxStatus = davxStatus()))
+    private val _internal = MutableStateFlow(
+        OnboardingUiState(davxStatus = davxStatus(), batteryOptimized = batteryOptimized()),
+    )
 
     init {
         viewModelScope.launch {
@@ -74,6 +87,36 @@ class OnboardingViewModel @Inject constructor(
     /** Called after the system permission dialog returns, so the UI reflects the new grant. */
     fun onPermissionResult() {
         permissionState.refresh()
+    }
+
+    private fun batteryOptimized(): Boolean {
+        val pm = context.getSystemService(PowerManager::class.java) ?: return false
+        return !pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    /**
+     * Re-reads the exemption. Called when the onboarding screen resumes, because the user grants it
+     * on a system screen and the result is only visible once they come back.
+     */
+    fun refreshBatteryStatus() {
+        _internal.update { it.copy(batteryOptimized = batteryOptimized()) }
+    }
+
+    /**
+     * Opens the battery-optimization *list*, not the one-tap `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+     * dialog: that one needs a restricted permission granted only to a narrow set of app
+     * categories, while the list screen needs none. One more tap, no policy exposure.
+     */
+    fun openBatterySettings(): Boolean {
+        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            // Heavily customised ROMs do sometimes ship without it; nothing to do but not crash.
+            false
+        }
     }
 
     /** Opt into the OpenStreetMap location picker (the only networked feature). Off by default. */
