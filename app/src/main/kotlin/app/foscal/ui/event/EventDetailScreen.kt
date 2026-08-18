@@ -9,24 +9,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -34,13 +37,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +52,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
+import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
 import app.foscal.location.openInMaps
@@ -80,225 +83,229 @@ fun EventDetailScreen(
 
     val event = state.event
 
+    // No top bar. An app bar would paint its own surface across the top of the screen, and the
+    // header's gradient would start underneath it — a grey band above a coloured one, with a seam
+    // between them. Instead the header runs to the top edge and the back button floats on it.
     Scaffold(
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                title = {},
-                actions = {
-                    if (event != null) {
-                        IconButton(onClick = { onEdit(eventId, event.start.toEpochMilli()) }) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit")
-                        }
-                    }
-                },
-            )
-        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         val phase = when {
             state.loading -> "loading"
             event == null -> "missing"
             else -> "content"
         }
-        Crossfade(
-            targetState = phase,
-            animationSpec = tween(Motion.DurationMedium),
-            label = "detailCrossfade",
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) { p ->
-            when (p) {
-                "loading" -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            Crossfade(
+                targetState = phase,
+                animationSpec = tween(Motion.DurationShort),
+                label = "detailCrossfade",
+                modifier = Modifier.fillMaxSize(),
+            ) { p ->
+                when (p) {
+                    "loading" -> Centered { CircularProgressIndicator() }
 
-                "missing" -> Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "Event not found.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                    "missing" -> Centered {
+                        Text("Event not found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
 
-                else -> {
-                    // Crossfade keeps the old slot alive during a content→missing transition, so
-                    // `phase` may be stale while `state.event` has already cleared. Re-check rather
-                    // than `!!` to avoid an NPE mid-animation.
-                    val current = state.event
-                    if (current != null) {
-                        DetailContent(
-                            event = current,
-                            calendarName = state.calendar?.displayName ?: "Calendar",
-                            calendarColor = current.color,
-                            mapsEnabled = state.mapsEnabled,
-                            onOpenLocationMap = onOpenLocationMap,
-                        )
-                    } else {
-                        Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator()
+                    else -> {
+                        // Crossfade keeps the old slot alive during a content -> missing change, so
+                        // `phase` may be stale while `state.event` has already cleared. Re-check
+                        // rather than `!!` to avoid an NPE mid-animation.
+                        val current = state.event
+                        if (current == null) {
+                            Centered { CircularProgressIndicator() }
+                        } else {
+                            DetailContent(
+                                event = current,
+                                calendarName = state.calendar?.displayName ?: "Calendar",
+                                reminderMinutes = state.reminderMinutes,
+                                mapsEnabled = state.mapsEnabled,
+                                onOpenLocationMap = onOpenLocationMap,
+                                onEdit = { onEdit(eventId, current.start.toEpochMilli()) },
+                            )
                         }
                     }
                 }
             }
+            // Floated over the header rather than sitting in an app bar, so the gradient can own
+            // the whole top of the screen.
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(4.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
         }
     }
 }
 
+@Composable
+private fun Centered(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { content() }
+}
+
+/**
+ * Title, when, and then whatever else this event happens to have.
+ *
+ * The old version wrapped every fact in its own outlined card, which made the notes look exactly
+ * as important as the time. Here the header carries the two things you opened the screen for — what
+ * it is and when it is — and everything below is a plain list that only draws a container when a
+ * row actually does something when tapped.
+ */
 @Composable
 private fun DetailContent(
     event: Event,
     calendarName: String,
-    calendarColor: Int,
+    reminderMinutes: List<Int>,
     mapsEnabled: Boolean,
     onOpenLocationMap: (location: String) -> Unit,
+    onEdit: () -> Unit,
 ) {
+    val accent = Color(event.color)
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        Header(event = event, calendarName = calendarName, accent = accent)
+
         Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+        ) {
+            event.rrule?.takeIf { it.isNotBlank() }?.let {
+                DetailRow(Icons.Outlined.Repeat, describeRecurrence(it))
+            }
+            event.location?.takeIf { it.isNotBlank() }?.let { location ->
+                val context = LocalContext.current
+                DetailRow(
+                    icon = Icons.Outlined.LocationOn,
+                    text = location,
+                    // With the opt-in map on, show the place on an in-app OpenStreetMap; otherwise
+                    // hand the text to the device's maps app via a geo: intent so we stay offline.
+                    onClick = {
+                        if (mapsEnabled) onOpenLocationMap(location) else openInMaps(context, location)
+                    },
+                )
+            }
+            if (reminderMinutes.isNotEmpty()) {
+                DetailRow(
+                    icon = Icons.Outlined.Notifications,
+                    text = reminderMinutes.joinToString(" · ") { ReminderDuration.label(it) },
+                )
+            }
+            event.description?.takeIf { it.isNotBlank() }?.let {
+                DetailRow(Icons.Outlined.Description, it)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = onEdit,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(calendarColor).copy(alpha = 0.14f))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 20.dp)
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ),
         ) {
-            LabelPill(calendarName, calendarColor)
-            Text(
-                event.title,
-                style = MaterialTheme.typography.headlineLarge.copy(fontFamily = BricolageFamily),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-
-        InfoCard(Icons.Outlined.AccessTime, "When", formatWhen(event, LocalUse24HourClock.current, currentLocale()))
-        event.rrule?.takeIf { it.isNotBlank() }?.let {
-            InfoCard(Icons.Outlined.Repeat, "Repeats", describeRecurrence(it))
-        }
-        event.location?.takeIf { it.isNotBlank() }?.let { location ->
-            val context = LocalContext.current
-            InfoCard(
-                icon = Icons.Outlined.LocationOn,
-                label = "Location",
-                value = location,
-                trailingIcon = Icons.Outlined.Map,
-                // With the opt-in map on, show the place on an in-app OpenStreetMap; otherwise hand
-                // the text to the device's maps app via a geo: intent so we stay offline.
-                onClick = {
-                    if (mapsEnabled) onOpenLocationMap(location) else openInMaps(context, location)
-                },
-            )
-        }
-        event.description?.takeIf { it.isNotBlank() }?.let {
-            InfoCard(Icons.Outlined.Description, "Notes", it)
+            Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.size(10.dp))
+            Text("Edit event", fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
+/**
+ * The event's own colour, washed out from the top so the title sits in it rather than on a slab.
+ *
+ * A flat tinted block read as a card that had lost its edges; a gradient that fades into the page
+ * lets the header end without a line across the screen. It starts at the very top of the window —
+ * behind the status bar — because a gradient that begins below a bar of some other colour has a
+ * seam at the top, which is the one place it is most visible.
+ */
 @Composable
-private fun LabelPill(calendarName: String, calendarColor: Int) {
-    Row(
+private fun Header(event: Event, calendarName: String, accent: Color) {
+    Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(Color(calendarColor)),
-        )
-        Text(
-            calendarName,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
-}
-
-@Composable
-private fun InfoCard(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    trailingIcon: ImageVector? = null,
-    onClick: (() -> Unit)? = null,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    0f to accent.copy(alpha = 0.28f),
+                    0.55f to accent.copy(alpha = 0.10f),
+                    1f to MaterialTheme.colorScheme.surface,
+                ),
+            )
+            .statusBarsPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 56.dp, bottom = 30.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.size(2.dp))
-                Text(value, style = MaterialTheme.typography.bodyLarge)
-            }
-            if (trailingIcon != null) {
-                Icon(
-                    trailingIcon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
+            Box(Modifier.size(9.dp).clip(CircleShape).background(accent))
+            Text(
+                calendarName,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Text(
+            event.title,
+            style = MaterialTheme.typography.displaySmall.copy(fontFamily = BricolageFamily),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        // Promoted out of the list: with the title, this is the whole reason the screen was opened.
+        Text(
+            formatWhen(event, LocalUse24HourClock.current, currentLocale()),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun DetailRow(icon: ImageVector, text: String, onClick: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (onClick != null) {
+            Icon(
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }
@@ -317,23 +324,32 @@ private fun describeRecurrence(rrule: String): String {
     }
 }
 
+/**
+ * "Wed, 19 Aug · 09:00 – 10:00", or the all-day equivalent.
+ *
+ * Dates come from the model's own helpers rather than from `atZone(zone)`: an all-day event is
+ * stored at UTC midnight with an *exclusive* end, so reading it in the device zone shows the wrong
+ * day for anyone west of UTC and always shows one day too many at the end.
+ */
 private fun formatWhen(event: Event, is24Hour: Boolean, locale: Locale): String {
     val zone = ZoneId.systemDefault()
-    val dateFmt = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", locale)
+    val dateFmt = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", locale)
     val timeFmt = timeFormatter(is24Hour, locale)
+    val firstDay = event.startLocalDate(zone)
+    val lastDay = event.lastLocalDate(zone).coerceAtLeast(firstDay)
+
+    if (event.allDay) {
+        return if (firstDay == lastDay) {
+            "All day · ${firstDay.format(dateFmt)}"
+        } else {
+            "All day · ${firstDay.format(dateFmt)} – ${lastDay.format(dateFmt)}"
+        }
+    }
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
-    return if (event.allDay) {
-        if (start.toLocalDate() == end.toLocalDate().minusDays(1)) {
-            "All day • ${start.toLocalDate().format(dateFmt)}"
-        } else {
-            "All day • ${start.toLocalDate().format(dateFmt)} – ${end.toLocalDate().minusDays(1).format(dateFmt)}"
-        }
+    return if (firstDay == lastDay) {
+        "${firstDay.format(dateFmt)}\n${start.format(timeFmt)} – ${end.format(timeFmt)}"
     } else {
-        if (start.toLocalDate() == end.toLocalDate()) {
-            "${start.format(dateFmt)}\n${start.format(timeFmt)} – ${end.format(timeFmt)}"
-        } else {
-            "${start.format(dateFmt)} ${start.format(timeFmt)}\n– ${end.format(dateFmt)} ${end.format(timeFmt)}"
-        }
+        "${firstDay.format(dateFmt)} ${start.format(timeFmt)}\n– ${lastDay.format(dateFmt)} ${end.format(timeFmt)}"
     }
 }
