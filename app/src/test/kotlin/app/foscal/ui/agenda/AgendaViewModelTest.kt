@@ -79,4 +79,26 @@ class AgendaViewModelTest {
 
         assertFalse(vm.state.value.hasVisibleCalendars)
     }
+
+    @Test
+    fun `paging widens the window and eventually stops widening it`() = runTest(dispatcher) {
+        val vm = AgendaViewModel(
+            FakeCalendarRepository(calendars = listOf(testCalendar())),
+            FakePreferences(),
+        )
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        val startEnd = vm.state.value.windowEnd
+        vm.loadNewer(); advanceUntilIdle()
+        assertTrue(vm.state.value.windowEnd.isAfter(startEnd))
+
+        // The window edges are what the list pages against, so they have to keep moving for as long
+        // as there is room — and stop moving once there is not, which is what ends the chase.
+        repeat(60) { vm.loadNewer() }
+        advanceUntilIdle()
+        val capped = vm.state.value.windowEnd
+        vm.loadNewer(); advanceUntilIdle()
+        assertEquals(capped, vm.state.value.windowEnd)
+    }
 }
