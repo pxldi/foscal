@@ -1,9 +1,11 @@
 package app.foscal.core.data
 
 import app.foscal.core.model.AccentColor
+import app.foscal.core.model.DayTapAction
 import app.foscal.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.DayOfWeek
 
 /** In-memory [Preferences] for view-model tests. */
 class FakePreferences(
@@ -15,6 +17,8 @@ class FakePreferences(
     theme: ThemeMode = ThemeMode.SYSTEM,
     use24Hour: Boolean = true,
     osmMaps: Boolean = false,
+    firstDay: DayOfWeek = Preferences.DEFAULT_FIRST_DAY,
+    eventMinutes: Int = Preferences.DEFAULT_EVENT_MINUTES,
 ) : Preferences {
 
     override val onboardingCompleted: Flow<Boolean> = MutableStateFlow(onboardingDone)
@@ -29,6 +33,20 @@ class FakePreferences(
     override val themeMode: MutableStateFlow<ThemeMode> = MutableStateFlow(theme)
     override val use24HourClock: MutableStateFlow<Boolean> = MutableStateFlow(use24Hour)
     override val osmMapsEnabled: MutableStateFlow<Boolean> = MutableStateFlow(osmMaps)
+    override val startView: MutableStateFlow<String> = MutableStateFlow("")
+    override val lastUsedView: MutableStateFlow<String> = MutableStateFlow("")
+    override val firstDayOfWeek: MutableStateFlow<DayOfWeek> = MutableStateFlow(firstDay)
+    override val defaultEventMinutes: MutableStateFlow<Int> = MutableStateFlow(eventMinutes)
+    override val showWeekNumbers: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    override val dayTapAction: MutableStateFlow<DayTapAction> =
+        MutableStateFlow(DayTapAction.Default)
+
+    override suspend fun setStartView(view: String) { startView.value = view }
+    override suspend fun setLastUsedView(view: String) { lastUsedView.value = view }
+    override suspend fun setFirstDayOfWeek(day: DayOfWeek) { firstDayOfWeek.value = day }
+    override suspend fun setDefaultEventMinutes(minutes: Int) { defaultEventMinutes.value = minutes }
+    override suspend fun setShowWeekNumbers(enabled: Boolean) { showWeekNumbers.value = enabled }
+    override suspend fun setDayTapAction(action: DayTapAction) { dayTapAction.value = action }
 
     override suspend fun setOnboardingCompleted() = Unit
     override suspend fun setHiddenCalendars(ids: Set<String>) = Unit
