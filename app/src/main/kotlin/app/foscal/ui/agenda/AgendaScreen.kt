@@ -138,12 +138,14 @@ fun AgendaRoute(
                         )
                     }
 
+                    // No `animateItem`: this list grows by prepending and appending whole pages,
+                    // and a placement animation on every existing row turns each page arriving
+                    // into a second, unasked-for movement of the whole list.
                     is AgendaItem.Day -> item(key = item.day.date) {
                         AgendaDayRow(
                             day = item.day,
                             today = state.today,
                             onEventClick = onEventClick,
-                            modifier = Modifier.animateItem(),
                         )
                     }
                 }

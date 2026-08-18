@@ -170,17 +170,17 @@ fun HomeRoute(
                         onClick = {
                             when (current) {
                                 CalendarView.Month -> monthViewModel.goToMonth(YearMonth.now())
-                                // The agenda has no page to jump to, so Today means scrolling to
-                                // it. Animated rather than snapped: unlike the other views this
-                                // one keeps its surroundings on screen, so the travel is what
-                                // tells you which way and how far you just moved.
+                                // The agenda has no page to jump to, so Today means moving the
+                                // list to it. Snapped, not animated: `animateScrollToItem` cannot
+                                // know how tall the rows between here and there are, so over a
+                                // long distance it travels a guessed amount, discovers where the
+                                // target actually is, and animates again — two visible movements
+                                // for one tap. Every other view's Today lands in one step; this
+                                // one now does too.
                                 CalendarView.Agenda -> scope.launch {
                                     val index = agendaState.todayIndex
                                     if (index >= 0) {
-                                        agendaListState.animateScrollToItem(
-                                            index,
-                                            -agendaHeaderHeight,
-                                        )
+                                        agendaListState.scrollToItem(index, -agendaHeaderHeight)
                                     }
                                 }
                                 else -> timelineViewModel.goToToday()
