@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -28,6 +29,8 @@ data class MonthUiState(
     val eventsByDay: Map<LocalDate, List<Event>> = emptyMap(),
     val hasVisibleCalendars: Boolean = true,
     val today: LocalDate = LocalDate.now(),
+    val firstDayOfWeek: DayOfWeek = Preferences.DEFAULT_FIRST_DAY,
+    val showWeekNumbers: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -52,13 +55,18 @@ class MonthViewModel @Inject constructor(
         repository.observeEvents(ids, from, to)
     }
 
+    private val gridPrefs = combine(
+        prefs.firstDayOfWeek,
+        prefs.showWeekNumbers,
+    ) { firstDay, weekNumbers -> firstDay to weekNumbers }
+
     val state: StateFlow<MonthUiState> = combine(
-        _visibleMonth,
-        _selectedDate,
+        combine(_visibleMonth, _selectedDate) { month, selected -> month to selected },
         events,
         calendarIds,
         today,
-    ) { month, selected, evts, ids, currentDate ->
+        gridPrefs,
+    ) { (month, selected), evts, ids, currentDate, grid ->
         MonthUiState(
             visibleMonth = month,
             selectedDate = selected,
@@ -67,6 +75,8 @@ class MonthViewModel @Inject constructor(
                 .groupBy({ it.first }, { it.second }),
             hasVisibleCalendars = ids.isNotEmpty(),
             today = currentDate,
+            firstDayOfWeek = grid.first,
+            showWeekNumbers = grid.second,
         )
     }.stateIn(
         viewModelScope,
@@ -75,6 +85,15 @@ class MonthViewModel @Inject constructor(
     )
 
     fun selectDate(date: LocalDate?) {
+        _selectedDate.value = date
+    }
+
+    /**
+     * Shows [date]'s month with [date] selected — how another view hands its focus over, so
+     * switching to Month lands on the day being looked at rather than on today.
+     */
+    fun goToDate(date: LocalDate) {
+        _visibleMonth.value = YearMonth.from(date)
         _selectedDate.value = date
     }
 

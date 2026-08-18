@@ -6,7 +6,11 @@ import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
 import app.foscal.timedEvent
-import androidx.compose.ui.geometry.Offset
+import app.foscal.ui.common.SwipeDirection
+import app.foscal.ui.common.swipeDirection
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -20,9 +24,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.time.DayOfWeek
-import java.time.LocalDate
-import java.time.YearMonth
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MonthViewModelTest {
@@ -97,31 +98,22 @@ class MonthViewModelTest {
     }
 
     @Test
-    fun `month swipe navigates left and right`() {
+    fun `swipe navigates left and right`() {
         val threshold = 56f
 
-        assertEquals(MonthSwipeDirection.Next, monthSwipe(Offset(-80f, 12f), threshold))
-        assertEquals(MonthSwipeDirection.Previous, monthSwipe(Offset(80f, -12f), threshold))
+        assertEquals(SwipeDirection.Next, swipeDirection(-80f, threshold))
+        assertEquals(SwipeDirection.Previous, swipeDirection(80f, threshold))
     }
 
     @Test
-    fun `month swipe ignores vertical drags entirely`() {
+    fun `swipe ignores drags that have not travelled far enough`() {
         val threshold = 56f
 
-        assertTrue(monthSwipe(Offset(8f, -80f), threshold) == null)
-        assertTrue(monthSwipe(Offset(-8f, 80f), threshold) == null)
-        // Far past the threshold vertically is still not a month change, however long the drag.
-        assertTrue(monthSwipe(Offset(0f, -400f), threshold) == null)
-    }
-
-    @Test
-    fun `month swipe ignores short drags and vertically dominant diagonals`() {
-        val threshold = 56f
-
-        assertTrue(monthSwipe(Offset(40f, 4f), threshold) == null)
-        // Horizontal wins the tie-break, so a drag that is barely more sideways than not counts.
-        assertEquals(MonthSwipeDirection.Next, monthSwipe(Offset(-80f, 78f), threshold))
-        // One pixel the other way and it is a vertical drag, which does nothing.
-        assertTrue(monthSwipe(Offset(-78f, 80f), threshold) == null)
+        assertTrue(swipeDirection(0f, threshold) == null)
+        assertTrue(swipeDirection(-55f, threshold) == null)
+        assertTrue(swipeDirection(55f, threshold) == null)
+        // Exactly on the threshold counts, so a drag cannot stall one pixel short of committing.
+        assertEquals(SwipeDirection.Next, swipeDirection(-56f, threshold))
+        assertEquals(SwipeDirection.Previous, swipeDirection(56f, threshold))
     }
 }

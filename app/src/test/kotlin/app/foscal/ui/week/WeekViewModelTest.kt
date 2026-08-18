@@ -52,7 +52,7 @@ class WeekViewModelTest {
             advanceUntilIdle()
 
             val state = vm.state.value
-            assertEquals(monday, state.weekStart)
+            assertEquals(monday, state.anchor)
             assertEquals(7, state.days.size)
             assertEquals(listOf("Mon"), state.days[0].events.map { it.title })
             assertEquals(listOf("Wed"), state.days[2].events.map { it.title })
@@ -82,16 +82,67 @@ class WeekViewModelTest {
     }
 
     @Test
-    fun `week navigation moves by whole weeks and back to this week`() = runTest(dispatcher) {
+    fun `navigation moves by the current span and back to today`() = runTest(dispatcher) {
         val vm = WeekViewModel(FakeCalendarRepository(calendars = listOf(testCalendar())), FakePreferences())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
         val monday = WeekViewModel.startOfWeek(today)
-        vm.nextWeek(); advanceUntilIdle()
-        assertEquals(monday.plusWeeks(1), vm.state.value.weekStart)
+        vm.next(); advanceUntilIdle()
+        assertEquals(monday.plusWeeks(1), vm.state.value.anchor)
 
-        vm.goToThisWeek(); advanceUntilIdle()
-        assertEquals(monday, vm.state.value.weekStart)
+        vm.goToToday(); advanceUntilIdle()
+        assertEquals(monday, vm.state.value.anchor)
+    }
+
+    @Test
+    fun `narrowing the span keeps the anchor and widening snaps back to Monday`() =
+        runTest(dispatcher) {
+            val vm = WeekViewModel(
+                FakeCalendarRepository(calendars = listOf(testCalendar())),
+                FakePreferences(),
+            )
+            backgroundScope.launch(dispatcher) { vm.state.collect {} }
+            advanceUntilIdle()
+
+            val monday = WeekViewModel.startOfWeek(today)
+            vm.setSpan(3); advanceUntilIdle()
+            assertEquals(monday, vm.state.value.anchor)
+            assertEquals(3, vm.state.value.days.size)
+
+            // Page forward into mid-week, then widen: a week starting on a Thursday is not a week.
+            vm.next(); advanceUntilIdle()
+            assertEquals(monday.plusDays(3), vm.state.value.anchor)
+            vm.setSpan(7); advanceUntilIdle()
+            assertEquals(monday, vm.state.value.anchor)
+            assertEquals(7, vm.state.value.days.size)
+
+            vm.setSpan(1); advanceUntilIdle()
+            assertEquals(1, vm.state.value.days.size)
+        }
+
+    @Test
+    fun `the week starts on the day the preference names`() = runTest(dispatcher) {
+        val prefs = FakePreferences(firstDay = DayOfWeek.SUNDAY)
+        val vm = WeekViewModel(
+            FakeCalendarRepository(calendars = listOf(testCalendar())),
+            prefs,
+        )
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(DayOfWeek.SUNDAY, vm.state.value.anchor.dayOfWeek)
+
+        // Changing it re-snaps the week already on screen rather than waiting for the user to page.
+        prefs.firstDayOfWeek.value = DayOfWeek.WEDNESDAY
+        advanceUntilIdle()
+        assertEquals(DayOfWeek.WEDNESDAY, vm.state.value.anchor.dayOfWeek)
+
+        // Day and 3 Days are anchored on a real date, so they must not be snapped to anything.
+        vm.setSpan(3); advanceUntilIdle()
+        val anchor = vm.state.value.anchor
+        prefs.firstDayOfWeek.value = DayOfWeek.SUNDAY
+        advanceUntilIdle()
+        assertEquals(anchor, vm.state.value.anchor)
     }
 }

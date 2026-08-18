@@ -1,8 +1,13 @@
 package app.foscal.ui.week
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +17,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -25,11 +28,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,24 +44,34 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.ui.theme.Motion
+import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.common.TimelineEndInset
 import app.foscal.ui.common.TimelineGutterWidth
 import app.foscal.ui.common.TimelineLayout
+import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.currentLocale
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/**
+ * The timeline, at whatever zoom [span] asks for: 1 day, 3 days or a week.
+ *
+ * One screen for all three because they *are* one screen — `TimelineLayout` already divides its
+ * width by `days.size`, so the only difference between Day and Week is how many entries are in
+ * the list handed to it.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WeekRoute(
+fun TimelineRoute(
+    span: Int,
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
-    onOpenSearch: () -> Unit,
+    onOpenDay: (LocalDate) -> Unit,
     viewModel: WeekViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(span) { viewModel.setSpan(span) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val weekEnd = state.weekStart.plusDays(6)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -68,38 +82,19 @@ fun WeekRoute(
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            formatWeekRange(state.weekStart, weekEnd, currentLocale()),
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        TextButton(onClick = { viewModel.goToThisWeek() }) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Box(
-                                    Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                )
-                                Text("Today")
-                            }
-                        }
-                    }
+                    Text(
+                        formatSpanRange(state.anchor, state.spanDays, currentLocale()),
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.previousWeek() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous week")
+                    IconButton(onClick = { viewModel.previous() }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.nextWeek() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next week")
-                    }
-                    IconButton(onClick = onOpenSearch) {
-                        Icon(Icons.Outlined.Search, "Search")
+                    IconButton(onClick = { viewModel.next() }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next")
                     }
                 },
             )
@@ -108,22 +103,59 @@ fun WeekRoute(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                // Safe over the grid below: horizontal drag detection only starts once the
+                // *horizontal* slop is crossed, so scrolling the timeline up and down and dragging
+                // an event block around both still reach the children untouched.
+                .pageOnSwipe(onPrevious = viewModel::previous, onNext = viewModel::next),
         ) {
-            Crossfade(
-                targetState = state.weekStart,
-                animationSpec = tween(Motion.DurationShort),
-                label = "weekNav",
+            AnimatedContent(
+                targetState = state.anchor to state.spanDays,
+                transitionSpec = {
+                    if (initialState.second != targetState.second) {
+                        // A zoom change, not a move through time — there is no left or right for it
+                        // to slide towards, so it dissolves instead.
+                        fadeIn(tween(Motion.DurationShort)) togetherWith
+                            fadeOut(tween(Motion.DurationShort))
+                    } else {
+                        val direction = if (targetState.first > initialState.first) {
+                            AnimatedContentTransitionScope.SlideDirection.Start
+                        } else {
+                            AnimatedContentTransitionScope.SlideDirection.End
+                        }
+                        slideIntoContainer(direction, tween(Motion.DurationMedium)) togetherWith
+                            slideOutOfContainer(direction, tween(Motion.DurationMedium))
+                    }
+                },
+                label = "timelineNav",
                 modifier = Modifier.fillMaxSize(),
-            ) { weekStart ->
+            ) { (anchor, days) ->
+                // Built here rather than taken from state.days so the page sliding out keeps the
+                // events it was showing instead of repainting with the incoming page's.
+                val visible = remember(anchor, days, state.eventsByDay) {
+                    (0 until days).map { offset ->
+                        val date = anchor.plusDays(offset.toLong())
+                        TimelineDay(date, state.eventsByDay[date].orEmpty())
+                    }
+                }
                 Column(modifier = Modifier.fillMaxSize()) {
-                    WeekDayHeader(weekStart = weekStart, today = state.today)
+                    TimelineDayHeader(
+                        anchor = anchor,
+                        spanDays = days,
+                        today = state.today,
+                        // Tapping a day zooms into it. Only when there is more than one on screen:
+                        // in Day view the header names the page you are already on.
+                        onDayClick = if (days > 1) onOpenDay else null,
+                    )
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant,
                         thickness = 0.5.dp,
                     )
                     WeekScheduleList(
-                        days = state.days,
+                        days = visible,
+                        // A single column has room for the time as well as the title; seven
+                        // narrow ones do not. Same component, different breathing room.
+                        compact = visible.size > 1,
                         onEventClick = onEventClick,
                         onNewEvent = onNewEvent,
                         onEventMove = viewModel::moveEvent,
@@ -138,6 +170,7 @@ fun WeekRoute(
 @Composable
 private fun WeekScheduleList(
     days: List<app.foscal.ui.common.TimelineDay>,
+    compact: Boolean,
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
     onEventMove: (app.foscal.core.model.Event, Long, Long) -> Unit,
@@ -149,12 +182,17 @@ private fun WeekScheduleList(
         onTimeRangeSelected = onNewEvent,
         onEventMove = onEventMove,
         modifier = modifier,
-        compact = true,
+        compact = compact,
     )
 }
 
 @Composable
-private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
+private fun TimelineDayHeader(
+    anchor: LocalDate,
+    spanDays: Int,
+    today: LocalDate,
+    onDayClick: ((LocalDate) -> Unit)?,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -166,13 +204,23 @@ private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
             ),
     ) {
         val locale = currentLocale()
-        (0 until 7).forEach { offset ->
-            val date = weekStart.plusDays(offset.toLong())
+        (0 until spanDays).forEach { offset ->
+            val date = anchor.plusDays(offset.toLong())
             val isToday = date == today
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .then(
+                        if (onDayClick == null) {
+                            Modifier
+                        } else {
+                            Modifier.clickable { onDayClick(date) }
+                        },
+                    )
+                    .padding(vertical = 2.dp),
             ) {
                 Text(
                     date.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, locale),
@@ -200,10 +248,14 @@ private fun WeekDayHeader(weekStart: LocalDate, today: LocalDate) {
     }
 }
 
-private fun formatWeekRange(start: LocalDate, end: LocalDate, locale: Locale): String {
-    val sameMonth = start.month == end.month
+/** "Mon, Aug 17" for a single day; "Aug 17 – 23" or "Jul 30 – Aug 5" for a range. */
+private fun formatSpanRange(start: LocalDate, spanDays: Int, locale: Locale): String {
+    if (spanDays <= 1) {
+        return start.format(DateTimeFormatter.ofPattern("EEE, MMM d", locale))
+    }
+    val end = start.plusDays(spanDays - 1L)
     val f = DateTimeFormatter.ofPattern("MMM d", locale)
-    return if (sameMonth) {
+    return if (start.month == end.month) {
         val month = start.month.getDisplayName(java.time.format.TextStyle.SHORT, locale)
         "$month ${start.dayOfMonth} – ${end.dayOfMonth}"
     } else {

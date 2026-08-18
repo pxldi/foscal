@@ -4,12 +4,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -30,8 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -52,9 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,7 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
-import app.foscal.ui.common.TodayPill
+import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
@@ -78,14 +73,13 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.TextStyle
+import java.time.temporal.WeekFields
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MonthRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
-    onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
-    onOpenSearch: () -> Unit,
     viewModel: MonthViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -119,26 +113,6 @@ fun MonthRoute(
                         onClick = { showMonthPicker = true },
                     )
                 },
-                actions = {
-                    TodayPill(
-                        onClick = {
-                            viewModel.goToMonth(YearMonth.now())
-                        },
-                    )
-                    Spacer(Modifier.size(6.dp))
-                    Surface(
-                        onClick = onOpenSearch,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(42.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Search, "Search")
-                        }
-                    }
-                    Spacer(Modifier.size(8.dp))
-                },
             )
         },
     ) { padding ->
@@ -147,41 +121,15 @@ fun MonthRoute(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            WeekHeader()
+            WeekHeader(firstDayOfWeek = state.firstDayOfWeek, showWeekNumbers = state.showWeekNumbers)
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .pointerInput(Unit) {
-                        var total = Offset.Zero
-                        var handled = false
-                        val threshold = 56.dp.toPx()
-                        detectDragGestures(
-                            onDragStart = {
-                                total = Offset.Zero
-                                handled = false
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                // One gesture, one month. The threshold is crossed long before the
-                                // finger stops moving, so without this latch a single flick would
-                                // keep firing and skid through several months at once.
-                                if (handled) return@detectDragGestures
-                                total += dragAmount
-                                // The month changes the moment the drag passes the threshold,
-                                // while the finger is still down. Waiting for the lift meant the
-                                // swipe was already over before anything happened, which reads as
-                                // the app being slow rather than as a deliberate confirm step.
-                                val swipe = monthSwipe(total, threshold)
-                                    ?: return@detectDragGestures
-                                handled = true
-                                when (swipe) {
-                                    MonthSwipeDirection.Next -> viewModel.nextMonth()
-                                    MonthSwipeDirection.Previous -> viewModel.previousMonth()
-                                }
-                            },
-                        )
-                    },
+                    .pageOnSwipe(
+                        onPrevious = viewModel::previousMonth,
+                        onNext = viewModel::nextMonth,
+                    ),
             ) {
                 AnimatedContent(
                     targetState = state.visibleMonth,
@@ -205,7 +153,9 @@ fun MonthRoute(
                     label = "monthGrid",
                     modifier = Modifier.fillMaxSize(),
                 ) { visibleMonth ->
-                    val rows = remember(visibleMonth) { visibleMonthCells(visibleMonth).chunked(7) }
+                    val rows = remember(visibleMonth, state.firstDayOfWeek) {
+                        visibleMonthCells(visibleMonth, state.firstDayOfWeek).chunked(7)
+                    }
                     val rowHeight = maxHeight / rows.size.coerceAtLeast(1)
                     Column(
                         modifier = Modifier
@@ -221,6 +171,7 @@ fun MonthRoute(
                                 selectedDate = state.selectedDate,
                                 eventsByDay = state.eventsByDay,
                                 rowHeight = rowHeight,
+                                showWeekNumber = state.showWeekNumbers,
                                 onDayClick = { date ->
                                     viewModel.selectDate(date)
                                 },
@@ -233,12 +184,6 @@ fun MonthRoute(
                 date = selectedDate,
                 events = selectedEvents,
                 onEventClick = onEventClick,
-                onNewEvent = {
-                    val zone = ZoneId.systemDefault()
-                    val start = selectedDate.atStartOfDay(zone).plusHours(9)
-                    val end = start.plusHours(1)
-                    onNewEvent(start.toInstant().toEpochMilli(), end.toInstant().toEpochMilli())
-                },
                 modifier = Modifier.weight(1f),
             )
             if (!state.hasVisibleCalendars) {
@@ -383,7 +328,6 @@ private fun DayPreviewPanel(
     date: LocalDate,
     events: List<Event>,
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
-    onNewEvent: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -456,21 +400,6 @@ private fun DayPreviewPanel(
                     }
                 }
             }
-            Surface(
-                onClick = onNewEvent,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 12.dp, end = 16.dp)
-                    .size(36.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, contentDescription = "New event")
-                }
-            }
         }
     }
 }
@@ -520,35 +449,19 @@ private fun previewTimeLabel(event: Event, is24Hour: Boolean, locale: Locale): S
             .format(timeFormatter(is24Hour, locale))
     }
 
-internal enum class MonthSwipeDirection {
-    Previous,
-    Next,
-}
-
-/**
- * Which month a drag asks for, or null if it asks for nothing.
- *
- * Horizontal only: the calendar reads left to right, so that is the axis that means "the month
- * before / the month after". A vertical drag used to move the month too, which made it far too easy
- * to lose your place while resting a thumb on the grid, and gave one action two contradictory
- * gestures. The dominance check keeps a mostly-vertical drag from counting on its horizontal wobble.
- */
-internal fun monthSwipe(totalDrag: Offset, threshold: Float): MonthSwipeDirection? {
-    val absX = kotlin.math.abs(totalDrag.x)
-    val absY = kotlin.math.abs(totalDrag.y)
-    if (absX < absY || absX < threshold) return null
-    return if (totalDrag.x < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous
-}
-
 @Composable
-private fun WeekHeader() {
+private fun WeekHeader(firstDayOfWeek: DayOfWeek, showWeekNumbers: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
+        // Matches the gutter the rows draw their week numbers in, so the columns line up.
+        if (showWeekNumbers) Spacer(Modifier.width(WeekNumberGutter))
         val locale = currentLocale()
-        val labels = remember(locale) { Dates.weekStartLabels(locale) }
+        val labels = remember(locale, firstDayOfWeek) {
+            Dates.weekStartLabels(locale, firstDayOfWeek)
+        }
         labels.forEachIndexed { index, label ->
             Text(
                 label,
@@ -574,6 +487,7 @@ private fun MonthWeekRow(
     selectedDate: LocalDate?,
     eventsByDay: Map<LocalDate, List<Event>>,
     rowHeight: Dp,
+    showWeekNumber: Boolean,
     onDayClick: (LocalDate) -> Unit,
 ) {
     val weekDates = remember(weekStart) { (0L..6L).map { weekStart.plusDays(it) } }
@@ -587,6 +501,21 @@ private fun MonthWeekRow(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
+            if (showWeekNumber) {
+                Box(
+                    modifier = Modifier.width(WeekNumberGutter).fillMaxHeight(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Text(
+                        // ISO week, which is the one printed on European calendars and the only
+                        // definition that does not change with the week's first day.
+                        weekStart.get(WeekFields.ISO.weekOfWeekBasedYear()).toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
+            }
             weekDates.forEach { date ->
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     DayCell(
@@ -700,6 +629,9 @@ internal fun visibleMonthCells(
     val weeks = ((offset + month.lengthOfMonth()) + 6) / 7
     return (0 until weeks * 7).map { origin.plusDays(it.toLong()) }
 }
+
+/** Narrow enough to be a margin rather than a column, wide enough for two digits. */
+private val WeekNumberGutter = 22.dp
 
 @Composable
 private fun EmptyStateHint() {
