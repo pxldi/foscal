@@ -1,5 +1,6 @@
 package app.foscal.ui.home
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -50,11 +51,13 @@ import app.foscal.core.model.DayTapAction
 import app.foscal.ui.agenda.AgendaRoute
 import app.foscal.ui.agenda.AgendaViewModel
 import app.foscal.ui.calendars.CalendarsViewModel
+import app.foscal.ui.calendars.ImportIcsDialog
 import app.foscal.ui.common.TodayPill
 import app.foscal.ui.month.MonthRoute
 import app.foscal.ui.month.MonthViewModel
 import app.foscal.ui.week.TimelineRoute
 import app.foscal.ui.week.WeekViewModel
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import kotlinx.coroutines.launch
@@ -76,6 +79,12 @@ fun HomeRoute(
     onOpenEventDetail: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** A day another app asked to see; null when nobody has asked. */
+    focusDate: LocalDate? = null,
+    onFocusDateConsumed: () -> Unit = {},
+    /** An `.ics` file another app handed over; null when there is none. */
+    importIcsUri: String? = null,
+    onImportIcsFinished: () -> Unit = {},
 ) {
     // Null until the stored preference has been read. Rendering Month first and then snapping to
     // the real start view would flash the wrong screen on every cold start.
@@ -106,6 +115,18 @@ fun HomeRoute(
     var agendaHeaderHeight by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
+    // Another app asked to see a day. All three views move, not just the one on screen: switching
+    // views hands the focused day across, so leaving the other two behind would quietly undo the
+    // jump the moment the user changed view.
+    LaunchedEffect(focusDate, current) {
+        val date = focusDate ?: return@LaunchedEffect
+        monthViewModel.goToDate(date)
+        timelineViewModel.showFrom(date, timelineState.spanDays)
+        val index = agendaState.indexOnOrAfter(date)
+        if (index >= 0) agendaListState.scrollToItem(index, -agendaHeaderHeight)
+        onFocusDateConsumed()
+    }
+
     // Whichever day the current view is built around. Handing it to the next view is what stops a
     // switch from silently teleporting you back to today.
     val focusedDate = when (current) {
@@ -122,6 +143,22 @@ fun HomeRoute(
                 ?: visible.getOrNull(visible.size / 2)
                 ?: timelineState.anchor
         }
+    }
+
+    if (importIcsUri != null) {
+        ImportIcsDialog(
+            calendars = calendarsState.items.map { it.calendar },
+            transfer = calendarsState.transfer,
+            onImport = { calendarId ->
+                calendarsViewModel.importFrom(Uri.parse(importIcsUri), calendarId)
+            },
+            onDismiss = {
+                // The message belongs to the dialog that is going away; leaving it set would make
+                // it reappear on the Settings transfer page the next time that is opened.
+                calendarsViewModel.dismissTransferMessage()
+                onImportIcsFinished()
+            },
+        )
     }
 
     if (sheetOpen) {

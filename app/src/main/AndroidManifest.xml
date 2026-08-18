@@ -67,6 +67,89 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              How a launcher finds "the calendar app". Niagara, Lawnchair and the rest resolve
+              their calendar slot with ACTION_MAIN + CATEGORY_APP_CALENDAR, and an app that does
+              not declare it simply cannot be chosen, however it is named.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.APP_CALENDAR" />
+            </intent-filter>
+
+            <!--
+              "Show me this day" and "show me this event". Both arrive on the CalendarContract
+              authority and are told apart by the first path segment, so they share a filter.
+              Senders usually leave the MIME type off and let the system derive it from the
+              provider, which is why the URI is matched directly rather than by type alone.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:scheme="content"
+                    android:host="com.android.calendar"
+                    android:pathPrefix="/time" />
+                <data
+                    android:scheme="content"
+                    android:host="com.android.calendar"
+                    android:pathPrefix="/events" />
+            </intent-filter>
+
+            <!-- The same two, for senders that do set a type. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.item/event" />
+            </intent-filter>
+
+            <!--
+              "Add to calendar" from a browser, a mail app or a share sheet. ACTION_EDIT is here
+              as well because that is what a good many senders actually use for a new event.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.INSERT" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="vnd.android.cursor.dir/event" />
+            </intent-filter>
+
+            <!-- An .ics file opened from a file manager, a download, or a mail attachment. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="text/calendar" />
+                <data android:mimeType="text/x-vcalendar" />
+            </intent-filter>
+
+            <!--
+              The same file when nobody could name its type. Providers routinely report
+              application/octet-stream for anything they do not recognise, so without this the
+              app is missing from "Open with" for exactly the files it can read. Type and path
+              are both required, not either — claiming every octet-stream would put Foscal in
+              the "Open with" list for every unknown file on the phone. The repeated patterns
+              cover names with dots in them, which pathPattern does not handle on its own.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="*" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:pathPattern=".*\\.ics" />
+                <data android:pathPattern=".*\\..*\\.ics" />
+                <data android:pathPattern=".*\\..*\\..*\\.ics" />
+            </intent-filter>
         </activity>
 
         <receiver

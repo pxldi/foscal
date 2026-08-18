@@ -34,6 +34,24 @@ data class CalendarsUiState(
     val transfer: TransferState = TransferState(),
     /** Why the last attempt to add a calendar came to nothing, if it did. */
     val createError: String? = null,
+    /** The calendar the user is being asked to confirm deleting, and what it would take with it. */
+    val pendingDelete: PendingDelete? = null,
+    /** The calendar open for renaming and recolouring, if one is. */
+    val editing: EditingCalendar? = null,
+)
+
+/** A calendar open in the edit dialog, with the values it started from. */
+data class EditingCalendar(
+    val calendarId: Long,
+    val name: String,
+    val color: Int,
+)
+
+/** A delete waiting on confirmation. [eventCount] is read before asking, not after. */
+data class PendingDelete(
+    val calendarId: Long,
+    val displayName: String,
+    val eventCount: Int,
 )
 
 /** Progress and outcome of an `.ics` import or export, shown inline in Settings. */
@@ -78,6 +96,8 @@ class CalendarsViewModel @Inject constructor(
 
     private val transferState = MutableStateFlow(TransferState())
     private val createError = MutableStateFlow<String?>(null)
+    private val pendingDelete = MutableStateFlow<PendingDelete?>(null)
+    private val editing = MutableStateFlow<EditingCalendar?>(null)
 
     // combine() has no typed 6+-arg overload, so fold the extra preferences in with a nested combine.
     private val prefsFlow = combine(
@@ -117,11 +137,14 @@ class CalendarsViewModel @Inject constructor(
         repository.observeCalendars(),
         prefsFlow,
         transferState,
-        createError,
-    ) { all, p, transfer, error ->
+        combine(createError, pendingDelete, editing, ::Triple),
+    ) { all, p, transfer, dialogs ->
+        val (error, delete, edit) = dialogs
         CalendarsUiState(
             transfer = transfer,
             createError = error,
+            pendingDelete = delete,
+            editing = edit,
             items = all.map { cal ->
                 CalendarRow(
                     calendar = cal,
@@ -175,6 +198,57 @@ class CalendarsViewModel @Inject constructor(
 
     fun dismissCreateError() {
         createError.value = null
+    }
+
+    /**
+     * Asks the provider how much is about to be lost, then puts the question to the user.
+     *
+     * The count is read now rather than taken from the list already in hand: that list is what is
+     * visible in the calendar, so hidden or filtered events would make it an undercount in exactly
+     * the situation where the number is the whole point.
+     */
+    fun confirmDelete(calendarId: Long, displayName: String) {
+        viewModelScope.launch {
+            pendingDelete.value = PendingDelete(
+                calendarId = calendarId,
+                displayName = displayName,
+                eventCount = repository.countEvents(calendarId),
+            )
+        }
+    }
+
+    fun dismissDelete() {
+        pendingDelete.value = null
+    }
+
+    fun startEdit(calendarId: Long, name: String, color: Int) {
+        createError.value = null
+        editing.value = EditingCalendar(calendarId, name, color)
+    }
+
+    fun dismissEdit() {
+        editing.value = null
+        createError.value = null
+    }
+
+    fun saveCalendar(calendarId: Long, name: String, color: Int) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        editing.value = null
+        viewModelScope.launch {
+            if (!repository.updateLocalCalendar(calendarId, trimmed, color)) {
+                createError.value = "Couldn't change the calendar."
+            }
+        }
+    }
+
+    fun deleteCalendar(calendarId: Long) {
+        pendingDelete.value = null
+        viewModelScope.launch {
+            if (!repository.deleteLocalCalendar(calendarId)) {
+                createError.value = "Couldn't remove the calendar."
+            }
+        }
     }
 
     fun setDefaultReminder(minutes: Int?) {

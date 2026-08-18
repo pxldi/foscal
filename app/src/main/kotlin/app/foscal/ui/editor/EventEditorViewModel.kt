@@ -114,10 +114,31 @@ class EventEditorViewModel @Inject constructor(
         val startArg = savedStateHandle.get<String>("start")?.toLongOrNull()
         val endArg = savedStateHandle.get<String>("end")?.toLongOrNull()
         val calArg = savedStateHandle.get<String>("calendarId")?.toLongOrNull()
-        load(eventId, startArg, endArg, calArg)
+        // What another app supplied through an INSERT intent. Empty for every route the app
+        // navigates itself, and ignored entirely when an existing event is being edited.
+        val prefill = Prefill(
+            title = savedStateHandle.get<String>("title").orEmpty(),
+            location = savedStateHandle.get<String>("location").orEmpty(),
+            description = savedStateHandle.get<String>("description").orEmpty(),
+            allDay = savedStateHandle.get<String>("allDay").toBoolean(),
+        )
+        load(eventId, startArg, endArg, calArg, prefill)
     }
 
-    private fun load(eventId: Long, startArg: Long?, endArg: Long?, calArg: Long?) {
+    private data class Prefill(
+        val title: String = "",
+        val location: String = "",
+        val description: String = "",
+        val allDay: Boolean = false,
+    )
+
+    private fun load(
+        eventId: Long,
+        startArg: Long?,
+        endArg: Long?,
+        calArg: Long?,
+        prefill: Prefill = Prefill(),
+    ) {
         viewModelScope.launch {
             val hidden = prefs.hiddenCalendarIds.first()
             globalReminderDefault = prefs.defaultReminderMinutes.first()
@@ -193,12 +214,18 @@ class EventEditorViewModel @Inject constructor(
                 isEditing = false,
                 availableCalendars = visible,
                 selectedCalendarId = defaultCalendar,
+                title = prefill.title,
+                allDay = prefill.allDay,
                 startDate = defaultStart.toLocalDate(),
-                startTime = defaultStart.toLocalTime(),
+                // An all-day event has no time of day, and showing the clock at whatever hour the
+                // sender happened to stamp on it invites the user to save a time that is discarded.
+                startTime = if (prefill.allDay) LocalTime.MIDNIGHT else defaultStart.toLocalTime(),
                 endDate = defaultEnd.toLocalDate(),
-                endTime = defaultEnd.toLocalTime(),
+                endTime = if (prefill.allDay) LocalTime.MIDNIGHT else defaultEnd.toLocalTime(),
+                location = prefill.location,
                 recentLocations = recentLocations,
                 mapsEnabled = mapsEnabled,
+                description = prefill.description,
                 reminderMinutes = listOfNotNull(defaultReminderFor(defaultCalendar)),
             )
         }

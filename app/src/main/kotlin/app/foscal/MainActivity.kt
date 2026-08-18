@@ -8,7 +8,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,16 +30,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var permissionState: CalendarPermissionState
 
-    private var pendingEventId by mutableLongStateOf(-1L)
-    private var pendingInstanceStart by mutableLongStateOf(0L)
-    private var pendingQuickAdd by mutableStateOf(false)
+    private var pendingRoute by mutableStateOf<IntentRoute>(IntentRoute.None)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingEventId = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
-        pendingInstanceStart = intent.getLongExtra(EXTRA_OPEN_INSTANCE_START, 0L)
-        pendingQuickAdd = intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)
+        pendingRoute = routeFor(intent)
         setContent {
             val onboardingDone by prefs.onboardingCompleted
                 .collectAsStateWithLifecycle(initialValue = null)
@@ -54,9 +49,7 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = ThemeMode.Default)
             val use24Hour by prefs.use24HourClock
                 .collectAsStateWithLifecycle(initialValue = true)
-            val openEventId = pendingEventId
-            val openInstanceStart = pendingInstanceStart
-            val openQuickAdd = pendingQuickAdd
+            val route = pendingRoute
             val darkTheme = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
@@ -73,11 +66,8 @@ class MainActivity : ComponentActivity() {
                         null -> { /* splash while DataStore loads */ }
                         else -> FoscalNavHost(
                             startOnboarding = done.not(),
-                            openEventId = openEventId,
-                            openInstanceStartMillis = openInstanceStart,
-                            openQuickAdd = openQuickAdd,
-                            onEventConsumed = { pendingEventId = -1L },
-                            onQuickAddConsumed = { pendingQuickAdd = false },
+                            route = route,
+                            onRouteConsumed = { pendingRoute = IntentRoute.None },
                         )
                     }
                 }
@@ -88,12 +78,11 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val id = intent.getLongExtra(EXTRA_OPEN_EVENT_ID, -1L)
-        if (id > 0L) {
-            pendingEventId = id
-            pendingInstanceStart = intent.getLongExtra(EXTRA_OPEN_INSTANCE_START, 0L)
-        }
-        if (intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)) pendingQuickAdd = true
+        // Only when the new intent actually asks for something. The activity is singleTop, so a
+        // plain relaunch from the launcher arrives here too, and clearing the pending route on
+        // that would cancel a request the user has not seen carried out yet.
+        val next = routeFor(intent)
+        if (next != IntentRoute.None) pendingRoute = next
     }
 
     override fun onResume() {

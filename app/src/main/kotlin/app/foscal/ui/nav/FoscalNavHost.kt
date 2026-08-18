@@ -29,6 +29,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import app.foscal.IntentRoute
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.editor.EventEditorRoute
 import app.foscal.ui.event.EventDetailScreen
@@ -41,6 +42,9 @@ import app.foscal.ui.quickadd.QuickAddRoute
 import app.foscal.ui.search.SearchRoute
 import app.foscal.ui.settings.SettingsScreen
 import app.foscal.ui.settings.SettingsSection
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.hypot
 
 private const val OnboardingRevealDurationMillis = 1100
@@ -82,52 +86,96 @@ object Routes {
      * Editor supports both new and edit. `eventId`, `calendarId`, `start`, `end` are all
      * optional; if `eventId` is set it's edit mode, otherwise new with the given pre-fills.
      */
-    const val EVENT_EDITOR = "editor?eventId={eventId}&calendarId={calendarId}&start={start}&end={end}"
+    const val EVENT_EDITOR =
+        "editor?eventId={eventId}&calendarId={calendarId}&start={start}&end={end}" +
+            "&title={title}&location={location}&description={description}&allDay={allDay}"
 
     fun editorNew(
         calendarId: Long? = null,
         startMillis: Long? = null,
         endMillis: Long? = null,
+        title: String = "",
+        location: String = "",
+        description: String = "",
+        allDay: Boolean = false,
     ): String {
         val cal = calendarId?.toString() ?: ""
         val start = startMillis?.toString() ?: ""
         val end = endMillis?.toString() ?: ""
-        return "editor?eventId=&calendarId=$cal&start=$start&end=$end"
+        return "editor?eventId=&calendarId=$cal&start=$start&end=$end" +
+            "&title=${Uri.encode(title)}&location=${Uri.encode(location)}" +
+            "&description=${Uri.encode(description)}&allDay=$allDay"
     }
 
     fun editorEdit(eventId: Long, instanceStartMillis: Long): String =
-        "editor?eventId=$eventId&calendarId=&start=$instanceStartMillis&end="
+        "editor?eventId=$eventId&calendarId=&start=$instanceStartMillis&end=" +
+            "&title=&location=&description=&allDay=false"
 }
 
 @Composable
 fun FoscalNavHost(
     startOnboarding: Boolean,
-    openEventId: Long = -1L,
-    openInstanceStartMillis: Long = 0L,
-    openQuickAdd: Boolean = false,
-    onEventConsumed: () -> Unit = {},
-    onQuickAddConsumed: () -> Unit = {},
+    route: IntentRoute = IntentRoute.None,
+    onRouteConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     var onboardingRevealTick by remember { mutableIntStateOf(0) }
 
+    // The day another app asked for, held here rather than navigated to: the calendar is already
+    // on screen, so this moves it instead of pushing anything on top of it.
+    var focusDate by remember { mutableStateOf<LocalDate?>(null) }
+
+    // An .ics file another app handed over, waiting on the user to say which calendar it goes to.
+    var importIcsUri by remember { mutableStateOf<String?>(null) }
+
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
 
-    LaunchedEffect(openQuickAdd, startOnboarding) {
-        if (openQuickAdd && !startOnboarding) {
-            navController.navigate(Routes.QUICK_ADD) { launchSingleTop = true }
-            onQuickAddConsumed()
-        }
-    }
+    // Nothing is consumed while onboarding is up, so a request that arrives before the user has
+    // finished still lands once they have — the effect re-runs when startOnboarding flips.
+    LaunchedEffect(route, startOnboarding) {
+        if (startOnboarding) return@LaunchedEffect
+        when (route) {
+            IntentRoute.None -> return@LaunchedEffect
 
-    // A notification tap carries only the event id; open its detail screen.
-    LaunchedEffect(openEventId, openInstanceStartMillis, startOnboarding) {
-        if (openEventId > 0L && !startOnboarding) {
-            navController.navigate(Routes.detail(openEventId, openInstanceStartMillis)) {
-                launchSingleTop = true
+            IntentRoute.QuickAdd ->
+                navController.navigate(Routes.QUICK_ADD) { launchSingleTop = true }
+
+            is IntentRoute.Event ->
+                navController.navigate(Routes.detail(route.id, route.instanceStartMillis)) {
+                    launchSingleTop = true
+                }
+
+            is IntentRoute.EditEvent ->
+                navController.navigate(Routes.editorEdit(route.id, route.instanceStartMillis)) {
+                    launchSingleTop = true
+                }
+
+            is IntentRoute.NewEvent ->
+                navController.navigate(
+                    Routes.editorNew(
+                        startMillis = route.startMillis,
+                        endMillis = route.endMillis,
+                        title = route.title,
+                        location = route.location,
+                        description = route.description,
+                        allDay = route.allDay,
+                    ),
+                ) { launchSingleTop = true }
+
+            is IntentRoute.ImportIcs -> {
+                importIcsUri = route.uri
+                navController.popBackStack(Routes.MAIN, inclusive = false)
             }
-            onEventConsumed()
+
+            is IntentRoute.Day -> {
+                focusDate = Instant.ofEpochMilli(route.millis)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate()
+                // Whatever is stacked over the calendar would hide the day we were asked for.
+                navController.popBackStack(Routes.MAIN, inclusive = false)
+            }
         }
+        onRouteConsumed()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -186,6 +234,10 @@ fun FoscalNavHost(
                 ) {
                     PermissionGate {
                         HomeRoute(
+                            focusDate = focusDate,
+                            onFocusDateConsumed = { focusDate = null },
+                            importIcsUri = importIcsUri,
+                            onImportIcsFinished = { importIcsUri = null },
                             onOpenEditor = { calId, start, end ->
                                 navController.navigate(Routes.editorNew(calId, start, end))
                             },
@@ -219,6 +271,26 @@ fun FoscalNavHost(
                 navArgument("end") {
                     type = NavType.StringType
                     defaultValue = ""
+                    nullable = true
+                },
+                navArgument("title") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
+                navArgument("location") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
+                navArgument("description") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
+                navArgument("allDay") {
+                    type = NavType.StringType
+                    defaultValue = "false"
                     nullable = true
                 },
             ),

@@ -71,13 +71,19 @@ data class AgendaUiState(
     }
 
     /**
-     * Where to park the list on first load: the first day that is not in the past, or the last row
-     * when the whole agenda is behind us. -1 when there is nothing to show.
+     * The row for [date], or the first one after it.
+     *
+     * An agenda skips empty days, so the day asked for often has no row of its own; and the window
+     * only spans a couple of months either side of today, so a distant date has nothing near it at
+     * all. Both land on the last row rather than nowhere. -1 when there is nothing to show.
      */
-    val todayIndex: Int = items
-        .indexOfFirst { it is AgendaItem.Day && !it.day.date.isBefore(today) }
+    fun indexOnOrAfter(date: LocalDate): Int = items
+        .indexOfFirst { it is AgendaItem.Day && !it.day.date.isBefore(date) }
         .takeIf { it >= 0 }
         ?: items.lastIndex
+
+    /** Where to park the list on first load. */
+    val todayIndex: Int = indexOnOrAfter(today)
 
     val firstDate: LocalDate? = days.firstOrNull()?.date
     val lastDate: LocalDate? = days.lastOrNull()?.date

@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -28,6 +30,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
@@ -35,6 +39,7 @@ import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -80,6 +85,7 @@ import app.foscal.ui.CalendarColors
 import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.calendars.CalendarsUiState
 import app.foscal.ui.calendars.CalendarsViewModel
+import app.foscal.ui.calendars.PendingDelete
 import app.foscal.ui.calendars.TransferState
 import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
@@ -160,6 +166,8 @@ fun SettingsScreen(
                     expandedCalendarId = expandedCalendarId,
                     onExpand = { id -> expandedCalendarId = if (expandedCalendarId == id) null else id },
                     onAddCalendar = { addingCalendar = true },
+                    onEditCalendar = { cal -> viewModel.startEdit(cal.id, cal.displayName, cal.color) },
+                    onDeleteCalendar = { cal -> viewModel.confirmDelete(cal.id, cal.displayName) },
                 )
                 SettingsSection.Reminders -> remindersSection(state, viewModel)
                 SettingsSection.Transfer -> item {
@@ -177,16 +185,42 @@ fun SettingsScreen(
         }
 
         if (addingCalendar) {
-            AddCalendarDialog(
+            CalendarDialog(
+                title = "New calendar",
+                confirmLabel = "Add",
+                initialName = "",
+                initialColor = CalendarColors.pick(0),
                 error = state.createError,
                 onDismiss = {
                     addingCalendar = false
                     viewModel.dismissCreateError()
                 },
-                onCreate = { name, color ->
+                onConfirm = { name, color ->
                     viewModel.createCalendar(name, color)
                     addingCalendar = false
                 },
+            )
+        }
+
+        state.editing?.let { editing ->
+            CalendarDialog(
+                title = "Edit calendar",
+                confirmLabel = "Save",
+                initialName = editing.name,
+                initialColor = editing.color,
+                error = state.createError,
+                onDismiss = viewModel::dismissEdit,
+                onConfirm = { name, color ->
+                    viewModel.saveCalendar(editing.calendarId, name, color)
+                },
+            )
+        }
+
+        state.pendingDelete?.let { pending ->
+            DeleteCalendarDialog(
+                pending = pending,
+                onDismiss = viewModel::dismissDelete,
+                onConfirm = { viewModel.deleteCalendar(pending.calendarId) },
             )
         }
     }
@@ -269,6 +303,8 @@ private fun LazyListScope.calendarsSection(
     expandedCalendarId: Long?,
     onExpand: (Long) -> Unit,
     onAddCalendar: () -> Unit,
+    onEditCalendar: (Calendar) -> Unit,
+    onDeleteCalendar: (Calendar) -> Unit,
 ) {
     item {
         Text(
@@ -285,6 +321,8 @@ private fun LazyListScope.calendarsSection(
             expanded = expandedCalendarId == row.calendar.id,
             onExpand = { onExpand(row.calendar.id) },
             onToggleHidden = { viewModel.toggleHidden(row) },
+            onEdit = { onEditCalendar(row.calendar) },
+            onDelete = { onDeleteCalendar(row.calendar) },
             onSelectReminder = { selection ->
                 when (selection) {
                     ReminderSelection.Global -> viewModel.clearCalendarReminder(row.calendar.id)
@@ -305,6 +343,18 @@ private fun LazyListScope.calendarsSection(
             onClick = onAddCalendar,
             modifier = Modifier.padding(horizontal = 12.dp),
         )
+    }
+    // Here rather than only inside the dialogs: both of them close before the write comes back, so
+    // a failure reported into a dialog is a failure reported to nobody.
+    state.createError?.let { error ->
+        item {
+            Text(
+                error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
     }
 }
 
@@ -373,6 +423,8 @@ private fun CalendarRowCard(
     expanded: Boolean,
     onExpand: () -> Unit,
     onToggleHidden: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     onSelectReminder: (ReminderSelection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -444,6 +496,35 @@ private fun CalendarRowCard(
                             ?: "Default · none",
                         onSelect = onSelectReminder,
                     )
+                    // Only for calendars kept on this phone. One that syncs belongs to the account
+                    // it came from, and removing it here would either be undone by the next sync
+                    // or pushed to the server as the user deleting it on all their devices.
+                    if (calendar.isLocal) {
+                        HorizontalDivider(Modifier.padding(top = 6.dp))
+                        TextButton(onClick = onEdit) {
+                            Icon(
+                                Icons.Outlined.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Rename or recolour")
+                        }
+                        TextButton(
+                            onClick = onDelete,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Icon(
+                                Icons.Outlined.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Remove this calendar")
+                        }
+                    }
                 }
             }
         }
@@ -466,6 +547,45 @@ private fun ColorDot(colorArgb: Int) {
 }
 
 /**
+ * Asks before a calendar and everything on it goes.
+ *
+ * The event count is spelt out because the calendar list gives no sense of how much is on any one
+ * of them, and this is the one action in the app that cannot be undone: the provider deletes the
+ * events with the calendar, and nothing keeps a copy.
+ */
+@Composable
+private fun DeleteCalendarDialog(
+    pending: PendingDelete,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remove ${pending.displayName}?") },
+        text = {
+            Text(
+                when (pending.eventCount) {
+                    0 -> "It has no events on it. This cannot be undone."
+                    1 -> "Its one event goes with it. This cannot be undone."
+                    else -> "Its ${pending.eventCount} events go with it. This cannot be undone."
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text("Remove")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
  * Name and colour for a calendar to be created on this device.
  *
  * Two fields and nothing else on purpose. Everything else a calendar row carries — account, sync
@@ -478,16 +598,20 @@ private fun ColorDot(colorArgb: Int) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AddCalendarDialog(
+private fun CalendarDialog(
+    title: String,
+    confirmLabel: String,
+    initialName: String,
+    initialColor: Int,
     error: String?,
     onDismiss: () -> Unit,
-    onCreate: (String, Int) -> Unit,
+    onConfirm: (String, Int) -> Unit,
 ) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var color by rememberSaveable { mutableIntStateOf(CalendarColors.pick(0)) }
+    var name by rememberSaveable(initialName) { mutableStateOf(initialName) }
+    var color by rememberSaveable(initialColor) { mutableIntStateOf(initialColor) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New calendar") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
@@ -510,7 +634,8 @@ private fun AddCalendarDialog(
                     }
                 }
                 Text(
-                    "Kept on this phone. Calendars that sync are made where they sync from.",
+                    "Kept on this phone. Calendars that sync are named and coloured where they " +
+                        "sync from.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -525,10 +650,10 @@ private fun AddCalendarDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, color) },
+                onClick = { onConfirm(name, color) },
                 enabled = name.isNotBlank(),
             ) {
-                Text("Add")
+                Text(confirmLabel)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
