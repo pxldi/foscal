@@ -9,7 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Tells the home screen to redraw Foscal's widgets. Called whenever the calendar provider
+ * Tells the home screen to redraw Foscal's agenda widget. Called whenever the calendar provider
  * changes (so newly created/edited events show up promptly instead of waiting for the next
  * [android.appwidget.AppWidgetProvider] update period).
  */
@@ -26,8 +26,5 @@ class WidgetRefresher @Inject constructor(@param:ApplicationContext private val 
             manager.notifyAppWidgetViewDataChanged(agenda, R.id.widget_event_list)
             AgendaWidgetProvider.triggerUpdate(context, agenda)
         }
-
-        val month = manager.getAppWidgetIds(ComponentName(context, MonthWidgetProvider::class.java))
-        if (month.isNotEmpty()) MonthWidgetProvider.triggerUpdate(context, month)
     }
 }
