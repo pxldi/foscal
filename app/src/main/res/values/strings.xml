@@ -3,6 +3,8 @@
     <string name="app_name">Foscal</string>
     <string name="widget_description">Upcoming events at a glance, with quick-add.</string>
     <string name="widget_empty">No upcoming events</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_quick_add">New event</string>
     <string name="quick_add_hint">e.g. "Dentist friday 9:30am"</string>
     <string name="quick_add_save">Add event</string>
     <string name="quick_add_title">Quick add</string>

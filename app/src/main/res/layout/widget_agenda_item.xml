@@ -5,14 +5,45 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp">
+
+    <!-- Fixed width, and kept even on the second event of a day where its labels are blank, so
+         every colour bar in the list lines up in one column. -->
+    <LinearLayout
+        android:layout_width="42dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <TextView
+            android:id="@+id/widget_item_weekday"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/widget_subtitle"
+            android:fontFamily="@font/hanken_grotesque_variable"
+            android:textFontWeight="600"
+            android:textSize="11sp"
+            android:singleLine="true" />
+
+        <TextView
+            android:id="@+id/widget_item_day"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/widget_title"
+            android:fontFamily="@font/bricolage_grotesque_variable"
+            android:textFontWeight="700"
+            android:textSize="19sp"
+            android:singleLine="true" />
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/widget_item_color"
-        android:layout_width="10dp"
-        android:layout_height="10dp"
-        android:src="@drawable/widget_color_dot"
+        android:layout_width="3dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="8dp"
+        android:src="@drawable/widget_color_bar"
+        android:scaleType="fitXY"
         android:contentDescription="@null" />
 
     <LinearLayout
@@ -20,7 +51,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:paddingStart="10dp"
+        android:paddingStart="12dp"
         android:paddingEnd="4dp">
 
         <TextView
@@ -28,7 +59,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/widget_title"
-            android:textSize="14sp"
+            android:textSize="15sp"
             android:fontFamily="@font/hanken_grotesque_variable"
             android:textFontWeight="700"
             android:singleLine="true"
@@ -39,9 +70,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/widget_subtitle"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:fontFamily="@font/hanken_grotesque_variable"
-            android:singleLine="true" />
+            android:singleLine="true"
+            android:ellipsize="end" />
     </LinearLayout>
 
 </LinearLayout>
