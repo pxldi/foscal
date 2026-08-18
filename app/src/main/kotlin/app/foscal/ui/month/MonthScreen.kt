@@ -2,21 +2,12 @@ package app.foscal.ui.month
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,8 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -53,17 +43,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,7 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
-import app.foscal.ui.common.TodayPill
+import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
@@ -87,21 +73,19 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.TextStyle
+import java.time.temporal.WeekFields
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MonthRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
-    onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
-    onOpenSearch: () -> Unit,
     viewModel: MonthViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selectedDate = state.selectedDate ?: state.today
     val selectedEvents = state.eventsByDay[selectedDate].orEmpty()
     var showMonthPicker by remember { mutableStateOf(false) }
-    var monthTransitionAxis by remember { mutableStateOf(MonthSwipeAxis.Horizontal) }
 
     if (showMonthPicker) {
         MonthJumpDialog(
@@ -109,7 +93,6 @@ fun MonthRoute(
             onDismiss = { showMonthPicker = false },
             onSelect = { month ->
                 showMonthPicker = false
-                monthTransitionAxis = MonthSwipeAxis.Horizontal
                 viewModel.goToMonth(month)
             },
         )
@@ -130,27 +113,6 @@ fun MonthRoute(
                         onClick = { showMonthPicker = true },
                     )
                 },
-                actions = {
-                    TodayPill(
-                        onClick = {
-                            monthTransitionAxis = MonthSwipeAxis.Horizontal
-                            viewModel.goToMonth(YearMonth.now())
-                        },
-                    )
-                    Spacer(Modifier.size(6.dp))
-                    Surface(
-                        onClick = onOpenSearch,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(42.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Search, "Search")
-                        }
-                    }
-                    Spacer(Modifier.size(8.dp))
-                },
             )
         },
     ) { padding ->
@@ -159,57 +121,41 @@ fun MonthRoute(
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            WeekHeader()
+            WeekHeader(firstDayOfWeek = state.firstDayOfWeek, showWeekNumbers = state.showWeekNumbers)
             androidx.compose.foundation.layout.BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .pointerInput(Unit) {
-                        var total = Offset.Zero
-                        val threshold = 56.dp.toPx()
-                        detectDragGestures(
-                            onDragStart = { total = Offset.Zero },
-                            onDragEnd = {
-                                val swipe = monthSwipe(total, threshold)
-                                if (swipe != null) monthTransitionAxis = swipe.axis
-                                when (swipe?.direction) {
-                                    MonthSwipeDirection.Next -> viewModel.nextMonth()
-                                    MonthSwipeDirection.Previous -> viewModel.previousMonth()
-                                    null -> Unit
-                                }
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                total += dragAmount
-                            },
-                        )
-                    },
+                    .pageOnSwipe(
+                        onPrevious = viewModel::previousMonth,
+                        onNext = viewModel::nextMonth,
+                    ),
             ) {
                 AnimatedContent(
                     targetState = state.visibleMonth,
                     transitionSpec = {
-                        val direction = if (monthTransitionAxis == MonthSwipeAxis.Vertical) {
-                            if (targetState > initialState) {
-                                AnimatedContentTransitionScope.SlideDirection.Up
-                            } else {
-                                AnimatedContentTransitionScope.SlideDirection.Down
-                            }
+                        val direction = if (targetState > initialState) {
+                            AnimatedContentTransitionScope.SlideDirection.Start
                         } else {
-                            if (targetState > initialState) {
-                                AnimatedContentTransitionScope.SlideDirection.Start
-                            } else {
-                                AnimatedContentTransitionScope.SlideDirection.End
-                            }
+                            AnimatedContentTransitionScope.SlideDirection.End
                         }
-                        (slideIntoContainer(direction, tween(Motion.DurationMedium)) +
-                            fadeIn(tween(Motion.DurationMedium))) togetherWith
-                            (slideOutOfContainer(direction, tween(Motion.DurationMedium)) +
-                                fadeOut(tween(Motion.DurationMedium)))
+                        // Slide only. The fade that used to ride along dimmed both grids at once,
+                        // so for the length of the transition neither month was readable. The
+                        // movement already says which way the calendar went.
+                        //
+                        // Medium rather than short: this one travels the full width of the screen,
+                        // and at 90ms that distance reads as a jump cut — the grid is simply
+                        // different, with no sense of which way it went. A tab fade can be that
+                        // quick because it is not moving anywhere.
+                        slideIntoContainer(direction, tween(Motion.DurationMedium)) togetherWith
+                            slideOutOfContainer(direction, tween(Motion.DurationMedium))
                     },
                     label = "monthGrid",
                     modifier = Modifier.fillMaxSize(),
                 ) { visibleMonth ->
-                    val rows = remember(visibleMonth) { visibleMonthCells(visibleMonth).chunked(7) }
+                    val rows = remember(visibleMonth, state.firstDayOfWeek) {
+                        visibleMonthCells(visibleMonth, state.firstDayOfWeek).chunked(7)
+                    }
                     val rowHeight = maxHeight / rows.size.coerceAtLeast(1)
                     Column(
                         modifier = Modifier
@@ -225,6 +171,7 @@ fun MonthRoute(
                                 selectedDate = state.selectedDate,
                                 eventsByDay = state.eventsByDay,
                                 rowHeight = rowHeight,
+                                showWeekNumber = state.showWeekNumbers,
                                 onDayClick = { date ->
                                     viewModel.selectDate(date)
                                 },
@@ -237,12 +184,6 @@ fun MonthRoute(
                 date = selectedDate,
                 events = selectedEvents,
                 onEventClick = onEventClick,
-                onNewEvent = {
-                    val zone = ZoneId.systemDefault()
-                    val start = selectedDate.atStartOfDay(zone).plusHours(9)
-                    val end = start.plusHours(1)
-                    onNewEvent(start.toInstant().toEpochMilli(), end.toInstant().toEpochMilli())
-                },
                 modifier = Modifier.weight(1f),
             )
             if (!state.hasVisibleCalendars) {
@@ -262,13 +203,13 @@ private fun MonthTitle(month: YearMonth, onClick: () -> Unit) {
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedLetters(
+        TitleText(
             text = monthName,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.size(8.dp))
-        AnimatedLetters(
+        TitleText(
             text = month.year.toString(),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Normal,
@@ -360,41 +301,26 @@ private fun MonthJumpDialog(
 }
 
 /**
- * Renders [text] as individually animated glyphs: when the string changes, characters that stay
- * the same at a given position hold still while the ones that differ roll over, staggered left to
- * right. The row animates its own width so a shorter or longer month name glides the year across.
+ * The month title, plainly.
+ *
+ * This used to animate glyph by glyph, each letter rolling over on a 28ms stagger. A nine-letter
+ * month therefore took the transition duration *plus* a quarter of a second to finish settling —
+ * longer than the grid it was labelling, and a stack of nested `AnimatedContent`s competing for
+ * frames with the swipe that triggered it. The grid sliding already announces the month change.
  */
 @Composable
-private fun AnimatedLetters(text: String, color: Color, fontWeight: FontWeight) {
-    Row(modifier = Modifier.animateContentSize(tween(Motion.DurationMedium))) {
-        text.forEachIndexed { index, ch ->
-            key(index) {
-                AnimatedContent(
-                    targetState = ch,
-                    transitionSpec = {
-                        val delay = index * 28
-                        (slideInVertically(tween(Motion.DurationMedium, delayMillis = delay)) { it / 2 } +
-                            fadeIn(tween(Motion.DurationMedium, delayMillis = delay))) togetherWith
-                            (slideOutVertically(tween(Motion.DurationMedium)) { -it / 2 } +
-                                fadeOut(tween(Motion.DurationMedium)))
-                    },
-                    label = "letter",
-                ) { c ->
-                    Text(
-                        c.toString(),
-                        fontFamily = BricolageFamily,
-                        fontSize = 24.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = fontWeight,
-                        letterSpacing = (-0.01).em,
-                        color = color,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-            }
-        }
-    }
+private fun TitleText(text: String, color: Color, fontWeight: FontWeight) {
+    Text(
+        text,
+        fontFamily = BricolageFamily,
+        fontSize = 24.sp,
+        lineHeight = 28.sp,
+        fontWeight = fontWeight,
+        letterSpacing = (-0.01).em,
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+    )
 }
 
 @Composable
@@ -402,7 +328,6 @@ private fun DayPreviewPanel(
     date: LocalDate,
     events: List<Event>,
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
-    onNewEvent: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -475,21 +400,6 @@ private fun DayPreviewPanel(
                     }
                 }
             }
-            Surface(
-                onClick = onNewEvent,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 12.dp, end = 16.dp)
-                    .size(36.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Add, contentDescription = "New event")
-                }
-            }
         }
     }
 }
@@ -539,50 +449,19 @@ private fun previewTimeLabel(event: Event, is24Hour: Boolean, locale: Locale): S
             .format(timeFormatter(is24Hour, locale))
     }
 
-internal enum class MonthSwipeDirection {
-    Previous,
-    Next,
-}
-
-internal enum class MonthSwipeAxis {
-    Horizontal,
-    Vertical,
-}
-
-internal data class MonthSwipe(
-    val direction: MonthSwipeDirection,
-    val axis: MonthSwipeAxis,
-)
-
-internal fun monthSwipe(totalDrag: Offset, threshold: Float): MonthSwipe? {
-    val absX = kotlin.math.abs(totalDrag.x)
-    val absY = kotlin.math.abs(totalDrag.y)
-    return when {
-        absX >= absY && absX >= threshold -> {
-            MonthSwipe(
-                direction = if (totalDrag.x < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous,
-                axis = MonthSwipeAxis.Horizontal,
-            )
-        }
-        absY > absX && absY >= threshold -> {
-            MonthSwipe(
-                direction = if (totalDrag.y < 0f) MonthSwipeDirection.Next else MonthSwipeDirection.Previous,
-                axis = MonthSwipeAxis.Vertical,
-            )
-        }
-        else -> null
-    }
-}
-
 @Composable
-private fun WeekHeader() {
+private fun WeekHeader(firstDayOfWeek: DayOfWeek, showWeekNumbers: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
+        // Matches the gutter the rows draw their week numbers in, so the columns line up.
+        if (showWeekNumbers) Spacer(Modifier.width(WeekNumberGutter))
         val locale = currentLocale()
-        val labels = remember(locale) { Dates.weekStartLabels(locale) }
+        val labels = remember(locale, firstDayOfWeek) {
+            Dates.weekStartLabels(locale, firstDayOfWeek)
+        }
         labels.forEachIndexed { index, label ->
             Text(
                 label,
@@ -608,6 +487,7 @@ private fun MonthWeekRow(
     selectedDate: LocalDate?,
     eventsByDay: Map<LocalDate, List<Event>>,
     rowHeight: Dp,
+    showWeekNumber: Boolean,
     onDayClick: (LocalDate) -> Unit,
 ) {
     val weekDates = remember(weekStart) { (0L..6L).map { weekStart.plusDays(it) } }
@@ -621,6 +501,21 @@ private fun MonthWeekRow(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
+            if (showWeekNumber) {
+                Box(
+                    modifier = Modifier.width(WeekNumberGutter).fillMaxHeight(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    Text(
+                        // ISO week, which is the one printed on European calendars and the only
+                        // definition that does not change with the week's first day.
+                        weekStart.get(WeekFields.ISO.weekOfWeekBasedYear()).toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
+            }
             weekDates.forEach { date ->
                 Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                     DayCell(
@@ -649,28 +544,17 @@ private fun DayCell(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(12.dp)
-    val primary = MaterialTheme.colorScheme.primary
     val onSurface = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-    // 1f = the focused month (crisp/black), 0f = an adjacent month (greyed). Animating it means
-    // days entering the focused month fade to black and departing days fade to grey.
-    val fraction by animateFloatAsState(
-        targetValue = if (isInFocusedMonth) 1f else 0f,
-        animationSpec = tween(Motion.DurationMedium),
-        label = "inMonthFraction",
-    )
-    val dayNumberColor = lerp(muted, onSurface, fraction)
-    // Today reads as a filled accent disc; a tapped (but not-today) day gets a soft tonal disc so
-    // both states are legible without competing with the accent. Today keeps an animated fill so it
-    // eases in/out as months slide past; selection is a direct tap, so it snaps instantly — animating
-    // it would leave the previously selected day glowing through the crossfade.
-    val todayDisc by animateColorAsState(
-        targetValue = if (isToday) primary else Color.Transparent,
-        animationSpec = tween(Motion.DurationMedium),
-        label = "todayDisc",
-    )
+    // Both of these were animated, and neither could ever animate: AnimatedContent gives each month
+    // its own subtree, so a cell's month membership and its today-ness are fixed for its whole
+    // lifetime. The animations snapped to their targets on the first frame and charged 42 cells x 2
+    // running animations per swipe for the privilege — spent during the exact frames the slide
+    // needs. Today reads as a filled accent disc; a tapped day gets a soft tonal one, so both are
+    // legible without competing.
+    val dayNumberColor = if (isInFocusedMonth) onSurface else muted
     val discColor = when {
-        isToday -> todayDisc
+        isToday -> MaterialTheme.colorScheme.primary
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         else -> Color.Transparent
     }
@@ -706,14 +590,14 @@ private fun DayCell(
                     maxLines = 1,
                 )
             }
-            EventDots(events.take(4), inMonthFraction = fraction)
+            EventDots(events.take(4), inFocusedMonth = isInFocusedMonth)
         }
     }
 }
 
 @Composable
-private fun EventDots(events: List<Event>, inMonthFraction: Float = 1f) {
-    val f = inMonthFraction
+private fun EventDots(events: List<Event>, inFocusedMonth: Boolean = true) {
+    val alpha = if (inFocusedMonth) 1f else 0.4f
     // Keep the dot size fixed and small enough that the cell content fits even in a six-row month;
     // otherwise Compose squeezes the overflowing dots and they render smaller in taller months than
     // in shorter ones. See DayCell's vertical padding, which is tuned to leave room for this row.
@@ -725,16 +609,13 @@ private fun EventDots(events: List<Event>, inMonthFraction: Float = 1f) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         events.forEach { event ->
-            val color = Color(event.color).copy(alpha = lerpFloat(0.4f, 1f, f))
+            val color = Color(event.color).copy(alpha = alpha)
             Canvas(modifier = Modifier.size(5.dp)) {
                 drawCircle(color = color)
             }
         }
     }
 }
-
-private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float =
-    start + (stop - start) * fraction
 
 internal fun visibleMonthCells(
     month: YearMonth,
@@ -748,6 +629,9 @@ internal fun visibleMonthCells(
     val weeks = ((offset + month.lengthOfMonth()) + 6) / 7
     return (0 until weeks * 7).map { origin.plusDays(it.toLong()) }
 }
+
+/** Narrow enough to be a margin rather than a column, wide enough for two digits. */
+private val WeekNumberGutter = 22.dp
 
 @Composable
 private fun EmptyStateHint() {

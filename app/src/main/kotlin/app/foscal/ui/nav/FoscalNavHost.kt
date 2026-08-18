@@ -225,6 +225,12 @@ fun FoscalNavHost(
                     tween(Motion.DurationMedium),
                 )
             },
+            // The screen underneath holds still. It used to fade out as this one slid over it and
+            // fade back in as it slid away, so opening an editor blanked the page behind it and
+            // saving made that page reappear out of nothing — the glitch was two transitions
+            // playing at once, not one bad one.
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
         ) { backStackEntry ->
             val pickedLocation by backStackEntry.savedStateHandle
                 .getStateFlow<String?>(Routes.PICKED_LOCATION_KEY, null)
@@ -259,6 +265,12 @@ fun FoscalNavHost(
                     tween(Motion.DurationMedium),
                 )
             },
+            // The screen underneath holds still. It used to fade out as this one slid over it and
+            // fade back in as it slid away, so opening an editor blanked the page behind it and
+            // saving made that page reappear out of nothing — the glitch was two transitions
+            // playing at once, not one bad one.
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
         ) {
             LocationPickerRoute(
                 onCancel = { navController.popBackStack() },
@@ -290,6 +302,12 @@ fun FoscalNavHost(
                     tween(Motion.DurationMedium),
                 )
             },
+            // The screen underneath holds still. It used to fade out as this one slid over it and
+            // fade back in as it slid away, so opening an editor blanked the page behind it and
+            // saving made that page reappear out of nothing — the glitch was two transitions
+            // playing at once, not one bad one.
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
         ) {
             LocationViewerRoute(onBack = { navController.popBackStack() })
         }
@@ -325,6 +343,8 @@ fun FoscalNavHost(
                     tween(Motion.DurationMedium),
                 )
             },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
         ) { backStackEntry ->
             val eventId = backStackEntry.arguments?.getLong("eventId") ?: -1L
             val start = backStackEntry.arguments?.getLong("start") ?: 0L
@@ -354,6 +374,12 @@ fun FoscalNavHost(
                     tween(Motion.DurationMedium),
                 )
             },
+            // The screen underneath holds still. It used to fade out as this one slid over it and
+            // fade back in as it slid away, so opening an editor blanked the page behind it and
+            // saving made that page reappear out of nothing — the glitch was two transitions
+            // playing at once, not one bad one.
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
         ) {
             QuickAddRoute(onBack = { navController.popBackStack() })
         }

@@ -45,6 +45,17 @@ data class AgendaUiState(
     val days: List<AgendaDay> = emptyList(),
     val hasVisibleCalendars: Boolean = true,
     val today: LocalDate = LocalDate.now(),
+    /**
+     * The edges of the loaded window, which are *not* [firstDate] and [lastDate].
+     *
+     * Paging has to be gated on how far has been asked for, not on how far the events happen to
+     * reach: an agenda skips empty days, so once you scroll past the last event those two stop
+     * moving even as the window keeps growing. Gating on them made the list refuse to load any
+     * further the moment it ran out of events — which looked like a hard limit but was really the
+     * paging guard latching shut.
+     */
+    val windowStart: LocalDate = today,
+    val windowEnd: LocalDate = today,
 ) {
     /** [days] with a [AgendaItem.MonthHeader] inserted wherever the month changes. */
     val items: List<AgendaItem> = buildList {
@@ -72,6 +83,14 @@ data class AgendaUiState(
     val lastDate: LocalDate? = days.lastOrNull()?.date
 }
 
+/**
+ * How far the agenda may page in each direction.
+ *
+ * Ten years is past the point of usefulness for scrolling — you would jump with the month picker
+ * long before — but the window is re-queried whole each time it grows, so it does need an end.
+ */
+private const val AGENDA_MAX_DAYS = 3650L
+
 private data class AgendaWindow(val pastDays: Long = 60L, val futureDays: Long = 60L)
 
 private data class AgendaBounds(
@@ -81,7 +100,14 @@ private data class AgendaBounds(
     val to: Instant,
 )
 
-private const val AGENDA_PAGE_DAYS = 60L
+/**
+ * How much further each page reaches.
+ *
+ * Generous because a page is not guaranteed to contain anything: across a quiet stretch of calendar
+ * the list keeps asking until it finds days with events, and a small page turns that into a long
+ * run of provider queries.
+ */
+private const val AGENDA_PAGE_DAYS = 120L
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -122,6 +148,8 @@ class AgendaViewModel @Inject constructor(
                 .map { (date, list) -> AgendaDay(date, list.sortedBy { it.start }) },
             hasVisibleCalendars = ids.isNotEmpty(),
             today = currentDate,
+            windowStart = firstVisible,
+            windowEnd = lastVisible,
         )
     }.stateIn(
         viewModelScope,
@@ -130,10 +158,12 @@ class AgendaViewModel @Inject constructor(
     )
 
     fun loadOlder() {
-        window.value = window.value.copy(pastDays = window.value.pastDays + AGENDA_PAGE_DAYS)
+        val next = (window.value.pastDays + AGENDA_PAGE_DAYS).coerceAtMost(AGENDA_MAX_DAYS)
+        window.value = window.value.copy(pastDays = next)
     }
 
     fun loadNewer() {
-        window.value = window.value.copy(futureDays = window.value.futureDays + AGENDA_PAGE_DAYS)
+        val next = (window.value.futureDays + AGENDA_PAGE_DAYS).coerceAtMost(AGENDA_MAX_DAYS)
+        window.value = window.value.copy(futureDays = next)
     }
 }

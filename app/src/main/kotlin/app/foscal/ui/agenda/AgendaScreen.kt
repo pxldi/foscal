@@ -25,11 +25,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -44,13 +41,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,17 +79,22 @@ private val AgendaGutterWidth = 56.dp
 @Composable
 fun AgendaRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
-    onOpenSearch: () -> Unit,
+    /**
+     * Hoisted because the Today button lives in the bottom bar now, and scrolling this list is the
+     * only thing Today can mean here — the agenda has no page to jump to.
+     */
+    listState: LazyListState,
+    /**
+     * A sticky header is drawn *over* the list, so scrolling a day to index 0 hides it behind the
+     * month header. Offsetting by the header's own measured height puts the day just below it —
+     * measured rather than a dp constant so it stays right at any font scale.
+     */
+    headerHeightPx: Int,
+    onHeaderHeight: (Int) -> Unit,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     var positionedAtToday by remember { mutableStateOf(false) }
-    // A sticky header is drawn *over* the list, so scrolling a day to index 0 hides it behind the
-    // month header. Offsetting by the header's own measured height puts the day just below it —
-    // measured rather than a dp constant so it stays right at any font scale.
-    var headerHeightPx by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(state.items, headerHeightPx) {
         if (!positionedAtToday && state.todayIndex >= 0 && headerHeightPx > 0) {
@@ -102,13 +105,6 @@ fun AgendaRoute(
 
     AgendaPaging(listState, state, viewModel::loadOlder, viewModel::loadNewer)
 
-    // Only worth offering once today is off screen; on it, it would just be a no-op button.
-    val todayVisible by remember(state.todayIndex) {
-        derivedStateOf {
-            state.todayIndex in listState.layoutInfo.visibleItemsInfo.map { it.index }
-        }
-    }
-
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -118,34 +114,6 @@ fun AgendaRoute(
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
                 title = { Text("Agenda", fontWeight = FontWeight.SemiBold) },
-                actions = {
-                    AnimatedVisibility(
-                        visible = !todayVisible && state.todayIndex >= 0,
-                        enter = fadeIn() + scaleIn(initialScale = 0.85f),
-                        exit = fadeOut() + scaleOut(targetScale = 0.85f),
-                    ) {
-                        TodayPill(
-                            onClick = {
-                                scope.launch {
-                                    listState.animateScrollToItem(state.todayIndex, -headerHeightPx)
-                                }
-                            },
-                        )
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Surface(
-                        onClick = onOpenSearch,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(42.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Search, "Search")
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                },
             )
         },
     ) { padding ->
@@ -166,7 +134,7 @@ fun AgendaRoute(
                         AgendaMonthHeader(
                             yearMonth = item.yearMonth,
                             today = state.today,
-                            modifier = Modifier.onSizeChanged { headerHeightPx = it.height },
+                            modifier = Modifier.onSizeChanged { onHeaderHeight(it.height) },
                         )
                     }
 
@@ -184,12 +152,29 @@ fun AgendaRoute(
     }
 }
 
+/** How many rows from either end the next page starts loading. */
+private const val AgendaPrefetchRows = 5
+
+/** One sample of "where are we, and how much is loaded" — the input the paging decision needs. */
+private data class AgendaEdges(
+    val first: Int,
+    val last: Int,
+    val total: Int,
+    val windowStart: LocalDate,
+    val windowEnd: LocalDate,
+)
+
 /**
  * Extends the loaded window when either end of the list comes into view.
  *
- * Each direction remembers the boundary date it last asked about, so a request is made once per
- * window rather than on every frame the edge stays visible — the new page arrives asynchronously
- * and the edge is still on screen until it does.
+ * The tricky part is that a page arriving is not guaranteed to add any rows — an agenda skips empty
+ * days, so widening the window by two months across a quiet stretch can produce nothing at all. The
+ * sample therefore includes the window edges as well as the scroll position, which means a page
+ * landing re-runs the decision by itself and the next page is requested immediately. Without that,
+ * loading only ever happened in response to a scroll: you would reach the bottom, the page would
+ * arrive empty, and nothing would ask again until you scrolled up and back down. Each direction
+ * still remembers the window it last asked about, so one page is requested per window rather than
+ * one per frame, and the request stops for good once the window hits its cap and stops moving.
  */
 @Composable
 private fun AgendaPaging(
@@ -198,28 +183,33 @@ private fun AgendaPaging(
     loadOlder: () -> Unit,
     loadNewer: () -> Unit,
 ) {
-    var olderRequestedAt by remember { mutableStateOf<LocalDate?>(null) }
-    var newerRequestedAt by remember { mutableStateOf<LocalDate?>(null) }
+    val current by rememberUpdatedState(state)
+    val older by rememberUpdatedState(loadOlder)
+    val newer by rememberUpdatedState(loadNewer)
 
-    LaunchedEffect(listState, state.items.size) {
+    LaunchedEffect(listState) {
+        var requestedStart: LocalDate? = null
+        var requestedEnd: LocalDate? = null
         snapshotFlow {
-            val visible = listState.layoutInfo.visibleItemsInfo
-            Triple(
-                visible.firstOrNull()?.index ?: -1,
-                visible.lastOrNull()?.index ?: -1,
-                listState.isScrollInProgress,
+            val info = listState.layoutInfo
+            AgendaEdges(
+                first = info.visibleItemsInfo.firstOrNull()?.index ?: 0,
+                last = info.visibleItemsInfo.lastOrNull()?.index ?: 0,
+                total = info.totalItemsCount,
+                windowStart = current.windowStart,
+                windowEnd = current.windowEnd,
             )
-        }.distinctUntilChanged().collect { (first, last, isScrolling) ->
-            if (!isScrolling) return@collect
-            val firstDate = state.firstDate ?: return@collect
-            val lastDate = state.lastDate ?: return@collect
-            if (first in 0..2 && olderRequestedAt != firstDate) {
-                olderRequestedAt = firstDate
-                loadOlder()
+        }.distinctUntilChanged().collect { edges ->
+            if (edges.total == 0) return@collect
+            if (edges.first <= AgendaPrefetchRows && requestedStart != edges.windowStart) {
+                requestedStart = edges.windowStart
+                older()
             }
-            if (last >= state.items.lastIndex - 2 && newerRequestedAt != lastDate) {
-                newerRequestedAt = lastDate
-                loadNewer()
+            if (edges.last >= edges.total - 1 - AgendaPrefetchRows &&
+                requestedEnd != edges.windowEnd
+            ) {
+                requestedEnd = edges.windowEnd
+                newer()
             }
         }
     }

@@ -6,7 +6,11 @@ import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
 import app.foscal.timedEvent
-import androidx.compose.ui.geometry.Offset
+import app.foscal.ui.common.SwipeDirection
+import app.foscal.ui.common.swipeDirection
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -20,9 +24,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.time.DayOfWeek
-import java.time.LocalDate
-import java.time.YearMonth
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MonthViewModelTest {
@@ -97,39 +98,22 @@ class MonthViewModelTest {
     }
 
     @Test
-    fun `month swipe direction supports horizontal and vertical navigation`() {
+    fun `swipe navigates left and right`() {
         val threshold = 56f
 
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Horizontal),
-            monthSwipe(Offset(-80f, 12f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Horizontal),
-            monthSwipe(Offset(80f, -12f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Vertical),
-            monthSwipe(Offset(8f, -80f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Vertical),
-            monthSwipe(Offset(-8f, 80f), threshold),
-        )
+        assertEquals(SwipeDirection.Next, swipeDirection(-80f, threshold))
+        assertEquals(SwipeDirection.Previous, swipeDirection(80f, threshold))
     }
 
     @Test
-    fun `month swipe direction ignores short or non-dominant diagonal drags`() {
+    fun `swipe ignores drags that have not travelled far enough`() {
         val threshold = 56f
 
-        assertTrue(monthSwipe(Offset(40f, 4f), threshold) == null)
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Next, MonthSwipeAxis.Horizontal),
-            monthSwipe(Offset(-80f, 78f), threshold),
-        )
-        assertEquals(
-            MonthSwipe(MonthSwipeDirection.Previous, MonthSwipeAxis.Vertical),
-            monthSwipe(Offset(-78f, 80f), threshold),
-        )
+        assertTrue(swipeDirection(0f, threshold) == null)
+        assertTrue(swipeDirection(-55f, threshold) == null)
+        assertTrue(swipeDirection(55f, threshold) == null)
+        // Exactly on the threshold counts, so a drag cannot stall one pixel short of committing.
+        assertEquals(SwipeDirection.Next, swipeDirection(-56f, threshold))
+        assertEquals(SwipeDirection.Previous, swipeDirection(56f, threshold))
     }
 }

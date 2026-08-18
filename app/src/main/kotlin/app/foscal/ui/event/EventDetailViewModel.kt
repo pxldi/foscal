@@ -20,6 +20,7 @@ data class EventDetailUiState(
     val calendar: Calendar? = null,
     /** Whether the opt-in map is on, deciding in-app OSM viewer vs external geo: intent. */
     val mapsEnabled: Boolean = false,
+    val reminderMinutes: List<Int> = emptyList(),
 )
 
 @HiltViewModel
@@ -45,7 +46,17 @@ class EventDetailViewModel @Inject constructor(
             // row when there isn't one (e.g. opened from a notification, which carries only the id).
             val event = repository.getEventOccurrence(eventId, instanceStartMillis)
             val cal = calendars.firstOrNull { it.id == event?.calendarId }
-            _state.update { it.copy(loading = false, event = event, calendar = cal) }
+            val reminders = if (event == null) emptyList() else {
+                repository.getReminderMinutes(eventId).distinct().sorted()
+            }
+            _state.update {
+                it.copy(
+                    loading = false,
+                    event = event,
+                    calendar = cal,
+                    reminderMinutes = reminders,
+                )
+            }
         }
     }
 }

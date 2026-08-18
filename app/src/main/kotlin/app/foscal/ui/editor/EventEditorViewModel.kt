@@ -147,9 +147,13 @@ class EventEditorViewModel @Inject constructor(
                         availableCalendars = visible,
                         selectedCalendarId = cal,
                         allDay = event.allDay,
-                        startDate = startZ.toLocalDate(),
+                        // The provider stores an all-day END as exclusive UTC midnight of the day
+                        // *after* the last covered day, and save() already adds that day back on.
+                        // Reading the raw value straight into the field therefore showed a one-day
+                        // event as spanning two — and, worse, every save pushed the end a day out.
+                        startDate = if (event.allDay) event.startLocalDate(zone) else startZ.toLocalDate(),
                         startTime = if (event.allDay) LocalTime.MIDNIGHT else startZ.toLocalTime(),
-                        endDate = endZ.toLocalDate(),
+                        endDate = if (event.allDay) event.lastLocalDate(zone) else endZ.toLocalDate(),
                         endTime = if (event.allDay) LocalTime.MIDNIGHT else endZ.toLocalTime(),
                         location = event.location.orEmpty(),
                         recentLocations = recentLocations,
@@ -172,8 +176,10 @@ class EventEditorViewModel @Inject constructor(
             // new event
             val defaultStart = startArg?.let { Instant.ofEpochMilli(it).atZone(zone) }
                 ?: nextHourFromNow()
+            // Only when the caller did not say: a `+` on a specific slot already knows the length
+            // the user dragged out, and the preference is the answer for the case with no slot.
             val defaultEnd = endArg?.let { Instant.ofEpochMilli(it).atZone(zone) }
-                ?: defaultStart.plusHours(1)
+                ?: defaultStart.plusMinutes(prefs.defaultEventMinutes.first().toLong())
             val defaultCalendar = calArg ?: visible.firstOrNull()?.id
             _state.value = EditorUiState(
                 loading = false,

@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
@@ -39,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -78,13 +80,17 @@ import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.calendars.CalendarsViewModel
 import app.foscal.ui.calendars.TransferState
 import app.foscal.ui.common.ReminderDurationDialog
+import app.foscal.ui.home.BehaviourViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    onBack: (() -> Unit)? = null,
     viewModel: CalendarsViewModel = hiltViewModel(),
+    behaviourViewModel: BehaviourViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val behaviour by behaviourViewModel.state.collectAsStateWithLifecycle()
     // One calendar open at a time: the per-calendar panel is tall, and several expanded at once
     // turns the list into something you have to scroll to find anything in.
     var expandedCalendarId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -104,6 +110,17 @@ fun SettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
+                navigationIcon = {
+                    // Settings is no longer a tab you switch to, so it needs its own way out.
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                            )
+                        }
+                    }
+                },
             )
         },
     ) { padding ->
@@ -183,6 +200,11 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
+            item {
+                Spacer(Modifier.height(12.dp))
+                SectionHeader("Behaviour")
+            }
+            item { BehaviourSettings(state = behaviour, viewModel = behaviourViewModel) }
             item {
                 Spacer(Modifier.height(12.dp))
                 SectionHeader("Date & time")
@@ -651,7 +673,7 @@ private fun ActionRow(
 }
 
 @Composable
-private fun ToggleRow(
+internal fun ToggleRow(
     title: String,
     subtitle: String,
     checked: Boolean,

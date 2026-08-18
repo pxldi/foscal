@@ -106,11 +106,23 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
             event.start.atZone(zone).toLocalTime()
                 .format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
         }
-        return listOf(dayLabel, timeLabel).filter { it.isNotBlank() }.joinToString("  •  ")
+        // Location last, on the same separator as the rest: it is the thing you check second,
+        // after "when", and it is also the part most likely to be missing.
+        val place = event.location?.trim().orEmpty()
+        return listOf(dayLabel, timeLabel, place)
+            .filter { it.isNotBlank() }
+            .joinToString("  •  ")
     }
 
     companion object {
-        private const val HORIZON_DAYS = 14L
+        /**
+         * How far ahead to look, and how much of it to show.
+         *
+         * The widget answers "what is next", so the row cap is the real limit and the horizon is
+         * only there to stop an unbounded query. A fortnight was too short for a sparse calendar —
+         * it left the widget empty while there were perfectly good events three weeks out.
+         */
+        private const val HORIZON_DAYS = 90L
         private const val MAX_ROWS = 20
         private const val DAYS_AS_WEEKDAY = 7L
     }

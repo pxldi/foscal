@@ -28,8 +28,19 @@ import java.time.ZoneId
 import javax.inject.Inject
 
 data class WeekUiState(
-    val weekStart: LocalDate,
+    /** The first day on screen. Snapped to the week's first day only when the span is a whole week. */
+    val anchor: LocalDate,
+    val spanDays: Int = 7,
     val days: List<TimelineDay> = emptyList(),
+    /**
+     * Every loaded day, not just the visible ones.
+     *
+     * The screen slides one page over another, and during that slide the outgoing page has to keep
+     * drawing the events it had. Handing it a prebuilt list for the *current* anchor would repaint
+     * the page on its way out with the incoming page's events, so it looks up its own days here
+     * instead — the same trick the month grid uses.
+     */
+    val eventsByDay: Map<LocalDate, List<Event>> = emptyMap(),
     val hasVisibleCalendars: Boolean = true,
     val today: LocalDate = LocalDate.now(),
 )
@@ -42,59 +53,111 @@ class WeekViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
-    private val _weekStart = MutableStateFlow(startOfWeek(LocalDate.now(zone)))
+    private val _anchor = MutableStateFlow(startOfWeek(LocalDate.now(zone)))
+    private val _spanDays = MutableStateFlow(7)
+
+    /**
+     * Mirrored out of the flow so the navigation methods can snap synchronously.
+     *
+     * They are plain functions called from a click, not suspending ones, and re-snapping a whole
+     * week is not something to do a frame late.
+     */
+    private var weekStart: DayOfWeek = Preferences.DEFAULT_FIRST_DAY
+
+    init {
+        viewModelScope.launch {
+            prefs.firstDayOfWeek.collect { day ->
+                weekStart = day
+                // A week already on screen has to re-snap, or it keeps starting on the old day
+                // until the user pages away from it.
+                if (_spanDays.value == 7) _anchor.value = startOfWeek(_anchor.value, day)
+            }
+        }
+    }
+
     private val today = Dates.todayFlow(zone)
 
     private val calendarIds = visibleCalendarIds(repository, prefs)
 
-    private val weekBounds = _weekStart.map { start ->
-        // Look back far enough that multi-day events which started before this week but are
+    private val bounds = combine(_anchor, _spanDays) { start, span ->
+        // Look back far enough that multi-day events which started before this window but are
         // still running get returned by the provider; pad the end for UTC all-day edge cases.
-        val from = start.minusDays(31).atStartOfDay(zone).toInstant()
-        val to = start.plusDays(8).atStartOfDay(zone).toInstant()
+        // A page either side of the visible one as well, so the page sliding out during a swipe
+        // still has its events and the one sliding in already has its own.
+        val from = start.minusDays(31L + span).atStartOfDay(zone).toInstant()
+        val to = start.plusDays(2L * span + 1L).atStartOfDay(zone).toInstant()
         from to to
     }
 
-    private val events = combine(calendarIds, weekBounds) { ids, range -> ids to range }
+    private val events = combine(calendarIds, bounds) { ids, range -> ids to range }
         .flatMapLatest { (ids, range) ->
             repository.observeEvents(ids, range.first, range.second)
         }
 
     val state: StateFlow<WeekUiState> = combine(
-        _weekStart,
+        combine(_anchor, _spanDays) { anchor, span -> anchor to span },
         events,
         calendarIds,
         today,
-    ) { start, evts, ids, currentDate ->
+    ) { (start, span), evts, ids, currentDate ->
         val byDate = evts
             .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
             .groupBy({ it.first }, { it.second })
-        val days = (0 until 7).map { offset ->
+            .mapValues { (_, list) -> list.sortedBy { it.start } }
+        val days = (0 until span).map { offset ->
             val date = start.plusDays(offset.toLong())
-            TimelineDay(date, byDate[date].orEmpty().sortedBy { it.start })
+            TimelineDay(date, byDate[date].orEmpty())
         }
         WeekUiState(
-            weekStart = start,
+            anchor = start,
+            spanDays = span,
             days = days,
+            eventsByDay = byDate,
             hasVisibleCalendars = ids.isNotEmpty(),
             today = currentDate,
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        WeekUiState(weekStart = startOfWeek(LocalDate.now(zone)), today = LocalDate.now(zone)),
+        WeekUiState(anchor = startOfWeek(LocalDate.now(zone)), today = LocalDate.now(zone)),
     )
 
-    fun nextWeek() {
-        _weekStart.value = _weekStart.value.plusWeeks(1)
+    /**
+     * Switches how many days are on screen, keeping the date you were looking at on screen.
+     *
+     * Widening to a whole week snaps back to that day's Monday, because a week that starts on a
+     * Thursday is not a week. Narrowing keeps the anchor as-is: the first column stays put and the
+     * later ones fall away, which is far less disorienting than jumping to today.
+     */
+    fun setSpan(days: Int) {
+        if (days == _spanDays.value) return
+        _spanDays.value = days
+        if (days == 7) _anchor.value = startOfWeek(_anchor.value, weekStart)
     }
 
-    fun previousWeek() {
-        _weekStart.value = _weekStart.value.minusWeeks(1)
+    /**
+     * Opens [spanDays] days beginning at [date], so arriving from another view lands on the day the
+     * user was already looking at rather than on today.
+     *
+     * A week still snaps to that day's Monday — a week that begins on a Thursday is not a week —
+     * but Day and 3 Days start exactly where they were told to.
+     */
+    fun showFrom(date: LocalDate, spanDays: Int) {
+        _spanDays.value = spanDays
+        _anchor.value = if (spanDays == 7) startOfWeek(date, weekStart) else date
     }
 
-    fun goToThisWeek() {
-        _weekStart.value = startOfWeek(LocalDate.now(zone))
+    fun next() {
+        _anchor.value = _anchor.value.plusDays(_spanDays.value.toLong())
+    }
+
+    fun previous() {
+        _anchor.value = _anchor.value.minusDays(_spanDays.value.toLong())
+    }
+
+    fun goToToday() {
+        val now = LocalDate.now(zone)
+        _anchor.value = if (_spanDays.value == 7) startOfWeek(now, weekStart) else now
     }
 
     fun moveEvent(event: Event, newStartMillis: Long, newEndMillis: Long) {
