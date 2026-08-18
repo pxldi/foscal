@@ -39,6 +39,7 @@ import app.foscal.ui.onboarding.OnboardingRoute
 import app.foscal.ui.permission.PermissionGate
 import app.foscal.ui.quickadd.QuickAddRoute
 import app.foscal.ui.search.SearchRoute
+import app.foscal.ui.settings.SettingsScreen
 import kotlin.math.hypot
 
 private const val OnboardingRevealDurationMillis = 1100
@@ -48,6 +49,7 @@ object Routes {
     const val MAIN = "main"
     const val SEARCH = "search"
     const val QUICK_ADD = "quick_add"
+    const val SETTINGS = "settings"
 
     /** On-demand OpenStreetMap picker. `query` pre-centers the map on any existing location text. */
     const val LOCATION_PICKER = "location_picker?query={query}"
@@ -185,6 +187,7 @@ fun FoscalNavHost(
                             onOpenEventDetail = { id, instanceStart ->
                                 navController.navigate(Routes.detail(id, instanceStart))
                             },
+                            onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         )
                     }
                 }
@@ -310,6 +313,28 @@ fun FoscalNavHost(
             popEnterTransition = { EnterTransition.None },
         ) {
             LocationViewerRoute(onBack = { navController.popBackStack() })
+        }
+        // A destination rather than a flag on the home screen. As a flag it had no back stack
+        // entry, so the system back gesture found nothing to pop and closed the app instead of
+        // returning to the calendar.
+        composable(
+            route = Routes.SETTINGS,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+        ) {
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.SEARCH) {
             SearchRoute(

@@ -53,7 +53,6 @@ import app.foscal.ui.calendars.CalendarsViewModel
 import app.foscal.ui.common.TodayPill
 import app.foscal.ui.month.MonthRoute
 import app.foscal.ui.month.MonthViewModel
-import app.foscal.ui.settings.SettingsScreen
 import app.foscal.ui.week.TimelineRoute
 import app.foscal.ui.week.WeekViewModel
 import java.time.YearMonth
@@ -76,11 +75,11 @@ fun HomeRoute(
     onOpenEditor: (calendarId: Long?, startMillis: Long?, endMillis: Long?) -> Unit,
     onOpenEventDetail: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     // Null until the stored preference has been read. Rendering Month first and then snapping to
     // the real start view would flash the wrong screen on every cold start.
     var view by rememberSaveable { mutableStateOf<CalendarView?>(null) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
 
     // Hoisted so the bottom bar can drive them: the Today button belongs to the bar now, but the
@@ -91,11 +90,6 @@ fun HomeRoute(
     val calendarsViewModel: CalendarsViewModel = hiltViewModel()
     val settings: BehaviourViewModel = hiltViewModel()
     val prefs by settings.state.collectAsStateWithLifecycle()
-
-    if (showSettings) {
-        SettingsScreen(onBack = { showSettings = false }, viewModel = calendarsViewModel)
-        return
-    }
 
     LaunchedEffect(prefs.resolvedStartView) {
         if (view == null) view = prefs.resolvedStartView
@@ -147,7 +141,7 @@ fun HomeRoute(
             onToggleCalendar = calendarsViewModel::toggleHidden,
             onOpenSettings = {
                 sheetOpen = false
-                showSettings = true
+                onOpenSettings()
             },
             onDismiss = { sheetOpen = false },
         )
