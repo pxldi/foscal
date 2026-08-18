@@ -41,6 +41,10 @@ class FakePreferences(
     override val dayTapAction: MutableStateFlow<DayTapAction> =
         MutableStateFlow(DayTapAction.Default)
 
+    override val defaultCalendarId: MutableStateFlow<Long?> = MutableStateFlow(null)
+
+    override suspend fun setDefaultCalendarId(id: Long?) { defaultCalendarId.value = id }
+
     override suspend fun setStartView(view: String) { startView.value = view }
     override suspend fun setLastUsedView(view: String) { lastUsedView.value = view }
     override suspend fun setFirstDayOfWeek(day: DayOfWeek) { firstDayOfWeek.value = day }

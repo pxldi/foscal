@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the launcher shows in the widget picker.
+
+  A preview cannot run the RemoteViewsFactory that fills the real widget, so pointing the picker at
+  the live layout showed an empty box with today's date on it, which reads as a broken widget rather
+  than an empty one. This is the same design with sample rows written into it, which is how widgets
+  that list something are previewed. Nothing here is ever shown on a placed widget.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:paddingStart="16dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="10dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_weekday"
+                android:textColor="@color/widget_subtitle"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="600"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_date"
+                android:textColor="@color/widget_title"
+                android:fontFamily="@font/bricolage_grotesque_variable"
+                android:textFontWeight="700"
+                android:textSize="22sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:padding="1dp"
+            android:src="@drawable/ic_widget_refresh"
+            android:contentDescription="@null" />
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="14dp"
+            android:src="@drawable/ic_widget_add"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+
+        <LinearLayout
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row1_weekday"
+                android:textColor="@color/widget_subtitle"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="600"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row1_day"
+                android:textColor="@color/widget_title"
+                android:fontFamily="@font/bricolage_grotesque_variable"
+                android:textFontWeight="700"
+                android:textSize="19sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="3dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/widget_color_bar"
+            android:tint="#7A6FF0"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row1_title"
+                android:textColor="@color/widget_title"
+                android:textSize="15sp"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="700"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row1_subtitle"
+                android:textColor="@color/widget_subtitle"
+                android:textSize="13sp"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:singleLine="true" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+
+        <LinearLayout
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_blank"
+                android:textColor="@color/widget_subtitle"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="600"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_blank"
+                android:textColor="@color/widget_title"
+                android:fontFamily="@font/bricolage_grotesque_variable"
+                android:textFontWeight="700"
+                android:textSize="19sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="3dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/widget_color_bar"
+            android:tint="#E08A4B"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row2_title"
+                android:textColor="@color/widget_title"
+                android:textSize="15sp"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="700"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row2_subtitle"
+                android:textColor="@color/widget_subtitle"
+                android:textSize="13sp"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:singleLine="true" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp">
+
+        <LinearLayout
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row3_weekday"
+                android:textColor="@color/widget_subtitle"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="600"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row3_day"
+                android:textColor="@color/widget_title"
+                android:fontFamily="@font/bricolage_grotesque_variable"
+                android:textFontWeight="700"
+                android:textSize="19sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="3dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/widget_color_bar"
+            android:tint="#3DA98F"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row3_title"
+                android:textColor="@color/widget_title"
+                android:textSize="15sp"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:textFontWeight="700"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_preview_row3_subtitle"
+                android:textColor="@color/widget_subtitle"
+                android:textSize="13sp"
+                android:fontFamily="@font/hanken_grotesque_variable"
+                android:singleLine="true" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

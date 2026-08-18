@@ -75,6 +75,17 @@ interface Preferences {
     /** What tapping a day header in Week or 3 Days does. */
     val dayTapAction: Flow<DayTapAction>
 
+    /**
+     * Which calendar a new event lands on, or null to use the first visible one.
+     *
+     * Held as an id rather than a position because calendars come and go with the accounts on the
+     * phone, and a position would quietly start meaning a different calendar.
+     */
+    val defaultCalendarId: Flow<Long?>
+
+    /** Null clears the choice, putting new events back on the first visible calendar. */
+    suspend fun setDefaultCalendarId(id: Long?)
+
     suspend fun setOnboardingCompleted()
     suspend fun setHiddenCalendars(ids: Set<String>)
     suspend fun setDefaultReminder(minutes: Int?)

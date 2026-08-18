@@ -56,6 +56,7 @@ class FakeCalendarRepository(
         created.clear()
         instanceUpdates.clear()
         instanceDeletes.clear()
+        observedWindows.clear()
     }
 
     override fun getCalendarUri(calendarId: Long): Uri = Uri.EMPTY
@@ -99,15 +100,35 @@ class FakeCalendarRepository(
 
     override fun observeCalendars(): Flow<List<Calendar>> = MutableStateFlow(calendars)
 
+    /**
+     * Every window [observeEvents] was asked for, in order.
+     *
+     * Recorded because the cost of paging is not what the screen shows but how often it goes back
+     * to the provider for it: a real Instances query expands recurrences across every calendar,
+     * and a page turn that triggers one lands the result partway through its own animation.
+     */
+    val observedWindows = mutableListOf<Pair<Instant, Instant>>()
+
     override fun observeEvents(
         calendarIds: Set<Long>,
         from: Instant,
         to: Instant,
-    ): Flow<List<Event>> = MutableStateFlow(
-        events.filter { it.calendarId in calendarIds && it.start <= to && it.end >= from },
-    )
+    ): Flow<List<Event>> {
+        observedWindows += from to to
+        return MutableStateFlow(
+            events.filter { it.calendarId in calendarIds && it.start <= to && it.end >= from },
+        )
+    }
 
     override suspend fun ensureLocalCalendar(name: String, color: Int): Long? = 1L
+
+    /** Names handed to [createLocalCalendar], in order. */
+    val createdCalendars = mutableListOf<Pair<String, Int>>()
+
+    override suspend fun createLocalCalendar(name: String, color: Int): Long? {
+        createdCalendars += name to color
+        return 100L + createdCalendars.size
+    }
 
     override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) = Unit
 

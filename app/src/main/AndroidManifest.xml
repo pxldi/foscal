@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets the reminder fixes ask about this app directly instead of dropping the user
+         into a list of every app on the phone. Restricted to apps whose core function is
+         alarms and reminders, which is the same basis as USE_EXACT_ALARM above. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!--
       INTERNET is used ONLY by the opt-in "Pick on map" location picker (OpenStreetMap tiles +
       Nominatim reverse-geocoding). No other feature touches the network; the app is otherwise

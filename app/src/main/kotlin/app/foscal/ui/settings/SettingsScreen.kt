@@ -5,7 +5,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,18 +14,20 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FileDownload
@@ -42,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -53,6 +55,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,30 +65,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.BuildConfig
-import app.foscal.R
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Ics
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.model.ThemeMode
-import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.ics.IcsTransfer
+import app.foscal.ui.CalendarColors
 import app.foscal.ui.calendars.CalendarRow
+import app.foscal.ui.calendars.CalendarsUiState
 import app.foscal.ui.calendars.CalendarsViewModel
 import app.foscal.ui.calendars.TransferState
 import app.foscal.ui.common.ReminderDurationDialog
+import app.foscal.ui.contrastColor
 import app.foscal.ui.home.BehaviourViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onBack: (() -> Unit)? = null,
+    section: SettingsSection?,
+    onOpenSection: (SettingsSection) -> Unit,
+    onBack: () -> Unit,
     viewModel: CalendarsViewModel = hiltViewModel(),
     behaviourViewModel: BehaviourViewModel = hiltViewModel(),
 ) {
@@ -94,6 +99,7 @@ fun SettingsScreen(
     // One calendar open at a time: the per-calendar panel is tall, and several expanded at once
     // turns the list into something you have to scroll to find anything in.
     var expandedCalendarId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var addingCalendar by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -101,7 +107,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Settings",
+                        section?.title ?: "Settings",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -111,14 +117,11 @@ fun SettingsScreen(
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
                 navigationIcon = {
-                    // Settings is no longer a tab you switch to, so it needs its own way out.
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                            )
-                        }
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
                     }
                 },
             )
@@ -131,223 +134,216 @@ fun SettingsScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { SettingsHeader() }
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ),
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            "Fully local · no account",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            "Your calendars come from this phone. Nothing leaves it.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
+            when (section) {
+                null -> settingsIndex(onOpenSection)
+                SettingsSection.Appearance -> appearanceSection(state, viewModel)
+                SettingsSection.CalendarView -> item {
+                    CalendarViewSettings(
+                        state = behaviour,
+                        viewModel = behaviourViewModel,
+                        use24HourClock = state.use24HourClock,
+                        onUse24HourClock = viewModel::setUse24HourClock,
+                    )
                 }
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Appearance")
-            }
-            // Material You needs a wallpaper-derived palette the platform only exposes from
-            // Android 12 on, so on anything older the toggle would be a switch that cannot do
-            // anything and is left out entirely.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                item {
-                    ToggleRow(
-                        title = "Use wallpaper colors",
-                        subtitle = if (state.dynamicColor) {
-                            "On · Material You"
-                        } else {
-                            "Off · Foscal's own accent"
-                        },
-                        checked = state.dynamicColor,
-                        onToggle = { viewModel.setDynamicColor(it) },
+                SettingsSection.NewEvents -> item {
+                    NewEventSettings(
+                        state = behaviour,
+                        viewModel = behaviourViewModel,
+                        calendars = state.items,
+                        mapsEnabled = state.osmMapsEnabled,
+                        onMapsEnabled = viewModel::setOsmMapsEnabled,
+                    )
+                }
+                SettingsSection.Calendars -> calendarsSection(
+                    state = state,
+                    viewModel = viewModel,
+                    expandedCalendarId = expandedCalendarId,
+                    onExpand = { id -> expandedCalendarId = if (expandedCalendarId == id) null else id },
+                    onAddCalendar = { addingCalendar = true },
+                )
+                SettingsSection.Reminders -> remindersSection(state, viewModel)
+                SettingsSection.Transfer -> item {
+                    ImportExportSection(
+                        calendars = state.items.map { it.calendar },
+                        transfer = state.transfer,
+                        onExport = { viewModel.exportTo(it) },
+                        onImport = { uri, calendarId -> viewModel.importFrom(uri, calendarId) },
+                        onDismissMessage = { viewModel.dismissTransferMessage() },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                 }
+                SettingsSection.About -> item { AboutSection() }
             }
-            // The accent is what wallpaper colors replace, so showing the picker alongside them
-            // would offer a choice that changes nothing on screen.
-            if (!state.dynamicColor) {
-                item {
-                    AccentPicker(
-                        selected = state.accentColor,
-                        customColor = state.accentCustomColor,
-                        onSelectPreset = { viewModel.setAccentColor(it) },
-                        onPickCustom = { viewModel.setCustomAccentColor(it) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
-                }
-            }
-            item {
-                Spacer(Modifier.height(4.dp))
-                ThemeModePicker(
-                    selected = state.themeMode,
-                    onSelect = { viewModel.setThemeMode(it) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Behaviour")
-            }
-            item { BehaviourSettings(state = behaviour, viewModel = behaviourViewModel) }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Date & time")
-            }
-            item {
-                ToggleRow(
-                    title = "24-hour time",
-                    subtitle = if (state.use24HourClock) "13:00" else "1:00 PM",
-                    checked = state.use24HourClock,
-                    onToggle = { viewModel.setUse24HourClock(it) },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Location")
-            }
-            item {
-                ToggleRow(
-                    title = "Pick locations on a map",
-                    subtitle = if (state.osmMapsEnabled) {
-                        "On · uses OpenStreetMap"
-                    } else {
-                        "Off · fully offline"
-                    },
-                    checked = state.osmMapsEnabled,
-                    onToggle = { viewModel.setOsmMapsEnabled(it) },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Calendars")
-            }
-            item {
-                Text(
-                    "Tap a calendar to give it its own reminder.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
-                )
-            }
-            items(state.items, key = { it.calendar.id }) { row ->
-                CalendarRowCard(
-                    row = row,
-                    globalReminderMinutes = state.defaultReminderMinutes,
-                    expanded = expandedCalendarId == row.calendar.id,
-                    onExpand = {
-                        expandedCalendarId =
-                            if (expandedCalendarId == row.calendar.id) null else row.calendar.id
-                    },
-                    onToggleHidden = { viewModel.toggleHidden(row) },
-                    onSelectReminder = { selection ->
-                        when (selection) {
-                            ReminderSelection.Global -> viewModel.clearCalendarReminder(row.calendar.id)
-                            ReminderSelection.None -> viewModel.setCalendarReminder(row.calendar.id, null)
-                            is ReminderSelection.Minutes ->
-                                viewModel.setCalendarReminder(row.calendar.id, selection.value)
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Import & export")
-            }
-            item {
-                ImportExportSection(
-                    calendars = state.items.map { it.calendar },
-                    transfer = state.transfer,
-                    onExport = { viewModel.exportTo(it) },
-                    onImport = { uri, calendarId -> viewModel.importFrom(uri, calendarId) },
-                    onDismissMessage = { viewModel.dismissTransferMessage() },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            }
-            item {
-                Spacer(Modifier.height(12.dp))
-                SectionHeader("Notifications")
-            }
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        "Default reminder",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    ReminderChips(
-                        selection = state.defaultReminderMinutes
-                            ?.let { ReminderSelection.Minutes(it) }
-                            ?: ReminderSelection.None,
-                        // Nothing above the app-wide default to fall back to.
-                        globalLabel = null,
-                        onSelect = { selection ->
-                            viewModel.setDefaultReminder(
-                                (selection as? ReminderSelection.Minutes)?.value,
-                            )
-                        },
-                    )
-                }
-            }
-            item {
-                Spacer(Modifier.height(4.dp))
-                ReminderDiagnosticsCard(modifier = Modifier.padding(horizontal = 12.dp))
-            }
-            item {
-                Text(
-                    "Foscal doesn't sync by itself. DAVx₅ or your account app keeps calendars current.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                )
-            }
+        }
+
+        if (addingCalendar) {
+            AddCalendarDialog(
+                error = state.createError,
+                onDismiss = {
+                    addingCalendar = false
+                    viewModel.dismissCreateError()
+                },
+                onCreate = { name, color ->
+                    viewModel.createCalendar(name, color)
+                    addingCalendar = false
+                },
+            )
         }
     }
 }
 
+private fun LazyListScope.settingsIndex(onOpen: (SettingsSection) -> Unit) {
+    items(SettingsSection.entries, key = { it.name }) { section ->
+        SectionRow(section = section, onClick = { onOpen(section) })
+    }
+}
+
 @Composable
-private fun SettingsHeader() {
-    Column(
+private fun SectionRow(section: SettingsSection, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            painter = painterResource(R.drawable.ic_foscal_badge),
+        Column(modifier = Modifier.weight(1f)) {
+            Text(section.title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                section.summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            "Foscal",
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = BricolageFamily),
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 10.dp),
+    }
+}
+
+private fun LazyListScope.appearanceSection(
+    state: CalendarsUiState,
+    viewModel: CalendarsViewModel,
+) {
+    // Material You needs a wallpaper-derived palette the platform only exposes from Android 12
+    // on, so on anything older the toggle would be a switch that cannot do anything and is left
+    // out entirely.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        item {
+            ToggleRow(
+                title = "Use wallpaper colours",
+                subtitle = if (state.dynamicColor) "On" else "Off",
+                checked = state.dynamicColor,
+                onToggle = { viewModel.setDynamicColor(it) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+        }
+    }
+    // The accent is what wallpaper colours replace, so showing the picker alongside them would
+    // offer a choice that changes nothing on screen.
+    if (!state.dynamicColor) {
+        item {
+            AccentPicker(
+                selected = state.accentColor,
+                customColor = state.accentCustomColor,
+                onSelectPreset = { viewModel.setAccentColor(it) },
+                onPickCustom = { viewModel.setCustomAccentColor(it) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+    }
+    item {
+        ThemeModePicker(
+            selected = state.themeMode,
+            onSelect = { viewModel.setThemeMode(it) },
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
+    }
+}
+
+private fun LazyListScope.calendarsSection(
+    state: CalendarsUiState,
+    viewModel: CalendarsViewModel,
+    expandedCalendarId: Long?,
+    onExpand: (Long) -> Unit,
+    onAddCalendar: () -> Unit,
+) {
+    item {
         Text(
-            "Version ${BuildConfig.VERSION_NAME}",
+            "Tap a calendar to give it its own reminder.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+        )
+    }
+    items(state.items, key = { it.calendar.id }) { row ->
+        CalendarRowCard(
+            row = row,
+            globalReminderMinutes = state.defaultReminderMinutes,
+            expanded = expandedCalendarId == row.calendar.id,
+            onExpand = { onExpand(row.calendar.id) },
+            onToggleHidden = { viewModel.toggleHidden(row) },
+            onSelectReminder = { selection ->
+                when (selection) {
+                    ReminderSelection.Global -> viewModel.clearCalendarReminder(row.calendar.id)
+                    ReminderSelection.None -> viewModel.setCalendarReminder(row.calendar.id, null)
+                    is ReminderSelection.Minutes ->
+                        viewModel.setCalendarReminder(row.calendar.id, selection.value)
+                }
+            },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+    }
+    item {
+        ActionRow(
+            title = "Add a calendar",
+            subtitle = "Kept on this phone",
+            icon = Icons.Outlined.Add,
+            enabled = true,
+            onClick = onAddCalendar,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+    }
+}
+
+private fun LazyListScope.remindersSection(
+    state: CalendarsUiState,
+    viewModel: CalendarsViewModel,
+) {
+    item {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Default reminder", style = MaterialTheme.typography.bodyMedium)
+            ReminderChips(
+                selection = state.defaultReminderMinutes
+                    ?.let { ReminderSelection.Minutes(it) }
+                    ?: ReminderSelection.None,
+                // Nothing above the app-wide default to fall back to.
+                globalLabel = null,
+                onSelect = { selection ->
+                    viewModel.setDefaultReminder(
+                        (selection as? ReminderSelection.Minutes)?.value,
+                    )
+                },
+            )
+        }
+    }
+    item { ReminderDiagnosticsCard(modifier = Modifier.padding(horizontal = 12.dp)) }
+}
+
+@Composable
+private fun AboutSection() {
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("Foscal ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Foscal doesn't sync by itself. DAVx\u2085 or your account app keeps calendars current.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -467,6 +463,97 @@ private fun ColorDot(colorArgb: Int) {
             .clip(CircleShape)
             .background(Color(colorArgb)),
     )
+}
+
+/**
+ * Name and colour for a calendar to be created on this device.
+ *
+ * Two fields and nothing else on purpose. Everything else a calendar row carries — account, sync
+ * setting, time zone — has exactly one possible answer for a calendar that lives only here, so
+ * asking would turn a two-second action into a form.
+ *
+ * The note about syncing is there because this is where someone comes looking to add their work
+ * calendar, and the honest answer is that no app can create that one for them: it is made on the
+ * server, and DAVx5 or the account's own app brings it down.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AddCalendarDialog(
+    error: String?,
+    onDismiss: () -> Unit,
+    onCreate: (String, Int) -> Unit,
+) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var color by rememberSaveable { mutableIntStateOf(CalendarColors.pick(0)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New calendar") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CalendarColors.presets.forEach { swatch ->
+                        ColorSwatch(
+                            colorArgb = swatch,
+                            selected = swatch == color,
+                            onClick = { color = swatch },
+                        )
+                    }
+                }
+                Text(
+                    "Kept on this phone. Calendars that sync are made where they sync from.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (error != null) {
+                    Text(
+                        error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onCreate(name, color) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun ColorSwatch(colorArgb: Int, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Color(colorArgb))
+            .clickable(role = Role.RadioButton, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = null,
+                tint = contrastColor(colorArgb),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -633,9 +720,10 @@ private fun ActionRow(
     icon: ImageVector,
     enabled: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,

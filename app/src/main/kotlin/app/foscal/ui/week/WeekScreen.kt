@@ -104,9 +104,10 @@ fun TimelineRoute(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                // Safe over the grid below: horizontal drag detection only starts once the
-                // *horizontal* slop is crossed, so scrolling the timeline up and down and dragging
-                // an event block around both still reach the children untouched.
+                // Safe over the grid below: it arbitrates the axis before the grid sees the
+                // drag, and hands anything that is not a sideways swipe straight back — so
+                // scrolling the timeline and dragging an event block around still work, and a
+                // sideways swipe no longer loses to the scroller it happens to start on top of.
                 .pageOnSwipe(onPrevious = viewModel::previous, onNext = viewModel::next),
         ) {
             AnimatedContent(

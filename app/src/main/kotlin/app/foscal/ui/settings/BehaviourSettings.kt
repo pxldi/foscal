@@ -12,9 +12,9 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.foscal.core.model.DayTapAction
 import app.foscal.core.model.ReminderDuration
+import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.home.BehaviourState
 import app.foscal.ui.home.BehaviourViewModel
 import app.foscal.ui.home.CalendarView
@@ -31,100 +32,150 @@ import java.time.DayOfWeek
 import java.time.format.TextStyle
 
 /**
- * The settings that decide how the calendar behaves rather than how it looks.
+ * How the calendar reads: which view it opens on, where a week begins, what a tap does.
  *
- * Deliberately short. Every one of these is something people genuinely differ on and the app has no
- * way to work out on its own — which view you live in, which day your week starts, how long your
- * meetings are. Anything we could reasonably decide ourselves stays decided, and nothing here
- * appears during onboarding: a first run should get you to your calendar, not to a questionnaire.
+ * Deliberately short. Every one of these is something people genuinely differ on and the app has
+ * no way to work out on its own. Anything we could reasonably decide ourselves stays decided, and
+ * none of it appears during onboarding: a first run should get you to your calendar.
  */
 @Composable
-fun BehaviourSettings(state: BehaviourState, viewModel: BehaviourViewModel) {
-    var picker by remember { mutableStateOf<BehaviourPicker?>(null) }
+fun CalendarViewSettings(
+    state: BehaviourState,
+    viewModel: BehaviourViewModel,
+    use24HourClock: Boolean,
+    onUse24HourClock: (Boolean) -> Unit,
+) {
+    var picker by remember { mutableStateOf<ViewPicker?>(null) }
 
     when (picker) {
-        BehaviourPicker.StartView -> ChoiceDialog(
-            title = "Open on",
+        ViewPicker.StartView -> ChoiceDialog(
+            title = "Opens on",
             options = startViewOptions(),
             selected = state.startView,
-            onSelect = {
-                viewModel.setStartView(it)
-                picker = null
-            },
+            onSelect = { viewModel.setStartView(it); picker = null },
             onDismiss = { picker = null },
         )
-        BehaviourPicker.FirstDay -> ChoiceDialog(
+        ViewPicker.FirstDay -> ChoiceDialog(
             title = "Week starts on",
             options = DayOfWeek.entries.map {
                 it.name to it.getDisplayName(TextStyle.FULL, currentLocale())
             },
             selected = state.firstDayOfWeek.name,
-            onSelect = {
-                viewModel.setFirstDayOfWeek(DayOfWeek.valueOf(it))
-                picker = null
-            },
+            onSelect = { viewModel.setFirstDayOfWeek(DayOfWeek.valueOf(it)); picker = null },
             onDismiss = { picker = null },
         )
-        BehaviourPicker.EventLength -> ChoiceDialog(
-            title = "New event length",
-            options = EventLengths.map { it.toString() to ReminderDuration.label(it) },
-            selected = state.defaultEventMinutes.toString(),
-            onSelect = {
-                viewModel.setDefaultEventMinutes(it.toInt())
-                picker = null
-            },
-            onDismiss = { picker = null },
-        )
-        BehaviourPicker.DayTap -> ChoiceDialog(
-            title = "Tapping a day header",
+        ViewPicker.DayTap -> ChoiceDialog(
+            title = "Tapping a day",
             options = listOf(
                 DayTapAction.OPEN_DAY.name to "Open that day",
                 DayTapAction.NEW_EVENT.name to "Start a new event",
             ),
             selected = state.dayTapAction.name,
-            onSelect = {
-                viewModel.setDayTapAction(DayTapAction.valueOf(it))
-                picker = null
-            },
+            onSelect = { viewModel.setDayTapAction(DayTapAction.valueOf(it)); picker = null },
             onDismiss = { picker = null },
         )
         null -> Unit
     }
 
-    ValueRow(
-        title = "Open on",
-        value = startViewOptions().firstOrNull { it.first == state.startView }?.second
-            ?: "Last used",
-        onClick = { picker = BehaviourPicker.StartView },
-    )
-    ValueRow(
-        title = "Week starts on",
-        value = state.firstDayOfWeek.getDisplayName(TextStyle.FULL, currentLocale()),
-        onClick = { picker = BehaviourPicker.FirstDay },
-    )
-    ValueRow(
-        title = "New event length",
-        value = ReminderDuration.label(state.defaultEventMinutes),
-        onClick = { picker = BehaviourPicker.EventLength },
-    )
-    ValueRow(
-        title = "Tapping a day header",
-        value = when (state.dayTapAction) {
-            DayTapAction.OPEN_DAY -> "Opens that day"
-            DayTapAction.NEW_EVENT -> "Starts a new event"
-        },
-        onClick = { picker = BehaviourPicker.DayTap },
-    )
-    ToggleRow(
-        title = "Week numbers",
-        subtitle = if (state.showWeekNumbers) "Shown in Month" else "Hidden",
-        checked = state.showWeekNumbers,
-        onToggle = viewModel::setShowWeekNumbers,
-        modifier = Modifier.padding(horizontal = 12.dp),
-    )
+    Column {
+        ValueRow(
+            title = "Opens on",
+            value = startViewOptions().firstOrNull { it.first == state.startView }?.second
+                ?: "Last used",
+            onClick = { picker = ViewPicker.StartView },
+        )
+        ValueRow(
+            title = "Week starts on",
+            value = state.firstDayOfWeek.getDisplayName(TextStyle.FULL, currentLocale()),
+            onClick = { picker = ViewPicker.FirstDay },
+        )
+        ValueRow(
+            title = "Tapping a day",
+            value = when (state.dayTapAction) {
+                DayTapAction.OPEN_DAY -> "Opens that day"
+                DayTapAction.NEW_EVENT -> "Starts a new event"
+            },
+            onClick = { picker = ViewPicker.DayTap },
+        )
+        ToggleRow(
+            title = "Week numbers",
+            subtitle = if (state.showWeekNumbers) "Shown in Month" else "Hidden",
+            checked = state.showWeekNumbers,
+            onToggle = viewModel::setShowWeekNumbers,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+        ToggleRow(
+            title = "24-hour time",
+            subtitle = if (use24HourClock) "13:00" else "1:00 PM",
+            checked = use24HourClock,
+            onToggle = onUse24HourClock,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+    }
 }
 
-private enum class BehaviourPicker { StartView, FirstDay, EventLength, DayTap }
+/** What a new event starts out as, before you have typed anything into it. */
+@Composable
+fun NewEventSettings(
+    state: BehaviourState,
+    viewModel: BehaviourViewModel,
+    calendars: List<CalendarRow>,
+    mapsEnabled: Boolean,
+    onMapsEnabled: (Boolean) -> Unit,
+) {
+    var picker by remember { mutableStateOf<EventPicker?>(null) }
+    // Hidden calendars are left out: nominating one would put new events somewhere you cannot see
+    // them. "First available" leads, because it is the default and needs no decision.
+    val options = listOf("" to "First available") +
+        calendars.filterNot { it.isHidden }.map { it.calendar.id.toString() to it.calendar.displayName }
+
+    when (picker) {
+        EventPicker.Calendar -> ChoiceDialog(
+            title = "Default calendar",
+            options = options,
+            selected = state.defaultCalendarId?.toString() ?: "",
+            onSelect = { viewModel.setDefaultCalendarId(it.toLongOrNull()); picker = null },
+            onDismiss = { picker = null },
+        )
+        EventPicker.Length -> ChoiceDialog(
+            title = "Length",
+            options = EventLengths.map { it.toString() to ReminderDuration.label(it) },
+            selected = state.defaultEventMinutes.toString(),
+            onSelect = { viewModel.setDefaultEventMinutes(it.toInt()); picker = null },
+            onDismiss = { picker = null },
+        )
+        null -> Unit
+    }
+
+    Column {
+        ValueRow(
+            title = "Default calendar",
+            value = options.firstOrNull { it.first == (state.defaultCalendarId?.toString() ?: "") }
+                ?.second ?: "First available",
+            onClick = { picker = EventPicker.Calendar },
+        )
+        ValueRow(
+            title = "Length",
+            value = ReminderDuration.label(state.defaultEventMinutes),
+            onClick = { picker = EventPicker.Length },
+        )
+        ToggleRow(
+            title = "Pick locations on a map",
+            subtitle = if (mapsEnabled) {
+                "Searches OpenStreetMap"
+            } else {
+                "Type addresses by hand"
+            },
+            checked = mapsEnabled,
+            onToggle = onMapsEnabled,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+    }
+}
+
+private enum class ViewPicker { StartView, FirstDay, DayTap }
+
+private enum class EventPicker { Calendar, Length }
 
 /** Lengths worth offering. Anything else is a drag on the grid away. */
 private val EventLengths = listOf(15, 30, 45, 60, 90, 120)

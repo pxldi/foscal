@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.DayOfWeek
@@ -28,6 +29,51 @@ class WeekViewModelTest {
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `paging inside the loaded window never goes back to the provider`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = WeekViewModel(repo, FakePreferences())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+        assertEquals(1, repo.observedWindows.size)
+
+        repeat(4) { vm.next(); advanceUntilIdle() }
+        repeat(8) { vm.previous(); advanceUntilIdle() }
+
+        assertEquals(1, repo.observedWindows.size)
+    }
+
+    @Test
+    fun `paging off the end of the window loads a new one`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = WeekViewModel(repo, FakePreferences())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        repeat(20) { vm.next(); advanceUntilIdle() }
+
+        assertTrue(repo.observedWindows.size > 1)
+    }
+
+    @Test
+    fun `a week several pages ahead already has its events`() = runTest(dispatcher) {
+        val monday = WeekViewModel.startOfWeek(today)
+        val faraway = monday.plusWeeks(4)
+        val repo = FakeCalendarRepository(
+            calendars = listOf(testCalendar()),
+            events = listOf(timedEvent(1, at(faraway, 9), at(faraway, 10), title = "Later")),
+        )
+        val vm = WeekViewModel(repo, FakePreferences())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        repeat(4) { vm.next(); advanceUntilIdle() }
+
+        assertEquals(faraway, vm.state.value.anchor)
+        assertEquals(listOf("Later"), vm.state.value.days[0].events.map { it.title })
+        assertEquals(1, repo.observedWindows.size)
+    }
 
     @Test
     fun `startOfWeek snaps any day back to its Monday`() {

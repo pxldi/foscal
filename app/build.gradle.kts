@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -22,8 +23,8 @@ android {
         applicationId = "app.foscal"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.10.1"
+        versionCode = 13
+        versionName = "0.11.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -97,11 +98,16 @@ android {
 }
 
 dependencies {
+    // Feeds :app the profile recorded by the macrobenchmark journey.
+    baselineProfile(project(":benchmark"))
+
     implementation(project(":core:core-model"))
     implementation(project(":core:core-ui"))
     implementation(project(":core:core-data"))
 
     implementation(libs.androidx.core.ktx)
+    // Installs the baseline profile on Android 8 to 11, where the platform will not do it itself.
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)

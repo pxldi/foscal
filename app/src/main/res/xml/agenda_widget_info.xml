@@ -8,5 +8,5 @@
     android:initialLayout="@layout/widget_agenda"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewLayout="@layout/widget_agenda"
+    android:previewLayout="@layout/widget_agenda_preview"
     android:description="@string/widget_description" />

@@ -5,6 +5,20 @@
     <string name="widget_empty">No upcoming events</string>
     <string name="widget_refresh">Refresh</string>
     <string name="widget_quick_add">New event</string>
+    <!-- Sample content for the widget picker's preview; never shown on a placed widget. -->
+    <string name="widget_preview_weekday" translatable="false">Tuesday</string>
+    <string name="widget_preview_date" translatable="false">August 18</string>
+    <string name="widget_preview_blank" translatable="false"></string>
+    <string name="widget_preview_row1_weekday" translatable="false">Tue</string>
+    <string name="widget_preview_row1_day" translatable="false">18</string>
+    <string name="widget_preview_row1_title" translatable="false">Standup</string>
+    <string name="widget_preview_row1_subtitle" translatable="false">09:30 - 09:45</string>
+    <string name="widget_preview_row2_title" translatable="false">Design review</string>
+    <string name="widget_preview_row2_subtitle" translatable="false">11:00 - 12:00  •  Studio</string>
+    <string name="widget_preview_row3_weekday" translatable="false">Wed</string>
+    <string name="widget_preview_row3_day" translatable="false">19</string>
+    <string name="widget_preview_row3_title" translatable="false">Dentist</string>
+    <string name="widget_preview_row3_subtitle" translatable="false">08:30 - 09:15</string>
     <string name="quick_add_hint">e.g. "Dentist friday 9:30am"</string>
     <string name="quick_add_save">Add event</string>
     <string name="quick_add_title">Quick add</string>

@@ -40,6 +40,7 @@ import app.foscal.ui.permission.PermissionGate
 import app.foscal.ui.quickadd.QuickAddRoute
 import app.foscal.ui.search.SearchRoute
 import app.foscal.ui.settings.SettingsScreen
+import app.foscal.ui.settings.SettingsSection
 import kotlin.math.hypot
 
 private const val OnboardingRevealDurationMillis = 1100
@@ -50,6 +51,11 @@ object Routes {
     const val SEARCH = "search"
     const val QUICK_ADD = "quick_add"
     const val SETTINGS = "settings"
+
+    /** One page of Settings. `section` is a [app.foscal.ui.settings.SettingsSection] name. */
+    const val SETTINGS_SECTION = "settings/{section}"
+
+    fun settingsSection(section: String): String = "settings/$section"
 
     /** On-demand OpenStreetMap picker. `query` pre-centers the map on any existing location text. */
     const val LOCATION_PICKER = "location_picker?query={query}"
@@ -334,7 +340,35 @@ fun FoscalNavHost(
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
         ) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                section = null,
+                onOpenSection = { navController.navigate(Routes.settingsSection(it.name)) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(
+            route = Routes.SETTINGS_SECTION,
+            arguments = listOf(navArgument("section") { type = NavType.StringType }),
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    tween(Motion.DurationMedium),
+                )
+            },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+        ) { backStackEntry ->
+            SettingsScreen(
+                section = SettingsSection.fromName(backStackEntry.arguments?.getString("section")),
+                onOpenSection = { navController.navigate(Routes.settingsSection(it.name)) },
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(Routes.SEARCH) {
             SearchRoute(

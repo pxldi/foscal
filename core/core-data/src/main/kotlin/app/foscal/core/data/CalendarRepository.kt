@@ -99,6 +99,18 @@ interface CalendarRepository {
      */
     suspend fun ensureLocalCalendar(name: String, color: Int): Long?
 
+    /**
+     * Adds a new calendar on this device, returning its id.
+     *
+     * Local by necessity rather than by choice: a calendar that belongs to an account is created by
+     * whatever syncs that account, and one this app invented on someone's Google or CalDAV account
+     * would either be rejected or live only on the phone under a name that promises otherwise.
+     *
+     * Unlike [ensureLocalCalendar] this always adds one, because here a second calendar is exactly
+     * what the user asked for.
+     */
+    suspend fun createLocalCalendar(name: String, color: Int): Long?
+
     suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean)
 
     suspend fun createEvent(input: EventInput): Long?
@@ -375,26 +387,33 @@ class CalendarContractRepository @Inject constructor(
 
     override suspend fun ensureLocalCalendar(name: String, color: Int): Long? =
         withContext(Dispatchers.IO) {
-            existingLocalCalendarId()?.let { return@withContext it }
-            val values = ContentValues().apply {
-                put(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
-                put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
-                put(CalendarContract.Calendars.NAME, name)
-                put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, name)
-                put(CalendarContract.Calendars.CALENDAR_COLOR, color)
-                put(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.CAL_ACCESS_OWNER)
-                put(CalendarContract.Calendars.OWNER_ACCOUNT, LOCAL_ACCOUNT_NAME)
-                put(CalendarContract.Calendars.SYNC_EVENTS, 1)
-                put(CalendarContract.Calendars.VISIBLE, 1)
-                put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, TimeZone.getDefault().id)
-            }
-            val uri = CalendarContract.Calendars.CONTENT_URI.buildUpon()
-                .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
-                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
-                .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
-                .build()
-            safeInsert(uri, values)?.let { ContentUris.parseId(it) }
+            existingLocalCalendarId() ?: insertLocalCalendar(name, color)
         }
+
+    override suspend fun createLocalCalendar(name: String, color: Int): Long? =
+        withContext(Dispatchers.IO) { insertLocalCalendar(name, color) }
+
+    /** Inserts a calendar on this app's own local account, whether or not one is already there. */
+    private fun insertLocalCalendar(name: String, color: Int): Long? {
+        val values = ContentValues().apply {
+            put(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+            put(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+            put(CalendarContract.Calendars.NAME, name)
+            put(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, name)
+            put(CalendarContract.Calendars.CALENDAR_COLOR, color)
+            put(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.CAL_ACCESS_OWNER)
+            put(CalendarContract.Calendars.OWNER_ACCOUNT, LOCAL_ACCOUNT_NAME)
+            put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+            put(CalendarContract.Calendars.VISIBLE, 1)
+            put(CalendarContract.Calendars.CALENDAR_TIME_ZONE, TimeZone.getDefault().id)
+        }
+        val uri = CalendarContract.Calendars.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CalendarContract.CALLER_IS_SYNCADAPTER, "true")
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_NAME, LOCAL_ACCOUNT_NAME)
+            .appendQueryParameter(CalendarContract.Calendars.ACCOUNT_TYPE, CalendarContract.ACCOUNT_TYPE_LOCAL)
+            .build()
+        return safeInsert(uri, values)?.let { ContentUris.parseId(it) }
+    }
 
     /** Oldest calendar on our own local account, so repeated calls always resolve to the same one. */
     private fun existingLocalCalendarId(): Long? = safeQuery(

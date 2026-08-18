@@ -1,43 +1,82 @@
 package app.foscal.notifications
 
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ReminderTextTest {
 
-    private val now = 1_700_000_000_000L
-    private fun minutes(n: Long) = n * 60_000L
+    private val zone: ZoneId = ZoneId.of("Europe/Berlin")
+    private val locale: Locale = Locale.UK
+    private val now: LocalDateTime = LocalDateTime.of(2026, 8, 18, 11, 15)
+
+    private fun millis(at: LocalDateTime): Long =
+        at.atZone(zone).toInstant().toEpochMilli()
+
+    private fun label(
+        start: LocalDateTime,
+        allDay: Boolean = false,
+        use24Hour: Boolean = true,
+    ): String? = reminderWhen(
+        startMillis = millis(start),
+        nowMillis = millis(now),
+        allDay = allDay,
+        use24Hour = use24Hour,
+        zone = zone,
+        locale = locale,
+    )
 
     @Test
-    fun `lead keeps the second unit instead of truncating to one`() {
-        assertEquals("1h 30m", formatLead(90))
-        assertEquals("1d 1h", formatLead(1500))
-        assertEquals("10m", formatLead(10))
-        assertEquals("2h", formatLead(120))
-        assertEquals("7d", formatLead(10080))
+    fun `close to the event it says how long you have`() {
+        assertEquals("In 15 min", label(now.plusMinutes(15)))
+        assertEquals("In 59 min", label(now.plusMinutes(59)))
+        assertEquals("Now", label(now))
+        assertEquals("5 min ago", label(now.minusMinutes(5)))
     }
 
     @Test
-    fun `label is measured from now, not from the configured offset`() {
-        // The alarm for a 10-minute reminder fired 11 days early. The notification must expose the
-        // real distance to the event rather than restating the offset it was scheduled with.
-        val start = now + minutes(11 * 24 * 60)
-        assertEquals("In 11d", leadLabel(start, now))
+    fun `further out it says when the event is instead`() {
+        // An hour is where "how long you have" stops being the useful half.
+        assertEquals("Today at 14:00", label(now.with(LocalTime.of(14, 0))))
+        assertEquals("Tomorrow at 09:00", label(now.plusDays(1).with(LocalTime.of(9, 0))))
+        assertEquals("Friday at 09:00", label(now.plusDays(3).with(LocalTime.of(9, 0))))
     }
 
     @Test
-    fun `label reports the delay when an alarm arrives late`() {
-        assertEquals("5m ago", leadLabel(now - minutes(5), now))
+    fun `beyond a week the weekday alone no longer places it`() {
+        assertEquals("Tue, Sept 1 at 09:00", label(now.plusDays(14).with(LocalTime.of(9, 0))))
     }
 
     @Test
-    fun `label says now at the moment the event starts`() {
-        assertEquals("Now", leadLabel(now, now))
+    fun `a late alarm admits it rather than repeating its offset`() {
+        assertEquals("Yesterday at 09:00", label(now.minusDays(1).with(LocalTime.of(9, 0))))
     }
 
     @Test
-    fun `label is absent when the occurrence start is unknown`() {
-        assertNull(leadLabel(0L, now))
+    fun `an all-day event has no clock time to show`() {
+        assertEquals("Today", label(now.with(LocalTime.MIDNIGHT), allDay = true))
+        assertEquals("Tomorrow", label(now.plusDays(1).with(LocalTime.MIDNIGHT), allDay = true))
+        assertEquals(
+            "Tue, Sept 1",
+            label(LocalDate.of(2026, 9, 1).atStartOfDay(), allDay = true),
+        )
+    }
+
+    @Test
+    fun `twelve-hour clocks get twelve-hour times`() {
+        assertEquals(
+            "Tomorrow at 9:00 am",
+            label(now.plusDays(1).with(LocalTime.of(9, 0)), use24Hour = false),
+        )
+    }
+
+    @Test
+    fun `an event with no start has nothing to say`() {
+        assertNull(reminderWhen(0L, millis(now), false, true, zone, locale))
     }
 }

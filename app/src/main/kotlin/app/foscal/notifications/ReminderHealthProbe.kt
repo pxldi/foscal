@@ -129,7 +129,7 @@ object ReminderFixIntents {
         ReminderFix.GRANT_CALENDAR, ReminderFix.RESYNC -> null // handled in-app, not by an Intent
         ReminderFix.OPEN_NOTIFICATION_SETTINGS -> notificationSettings(context)
         ReminderFix.REQUEST_EXACT_ALARMS -> exactAlarmSettings(context)
-        ReminderFix.OPEN_BATTERY_OPTIMIZATION -> batteryOptimizationSettings()
+        ReminderFix.OPEN_BATTERY_OPTIMIZATION -> batteryOptimization(context)
         ReminderFix.OPEN_APP_SETTINGS -> appSettings(context)
         ReminderFix.OPEN_VENDOR_AUTOSTART -> VendorSettings.autostartIntent(context)
     }
@@ -147,15 +147,36 @@ object ReminderFixIntents {
     }
 
     /**
-     * The battery-optimization *list*, not `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+     * Asks about *this* app, falling back to screens that only get you near it.
      *
-     * The direct request shows a one-tap system dialog, which is why it is tempting — but it needs
-     * the `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission, which store policy treats as
-     * restricted and grants only to a narrow set of app categories. The list screen needs no
-     * permission at all; the user picks Foscal from it, which is one extra tap and no policy risk.
+     * This used to open the battery-optimization list and leave the user to find Foscal in a list
+     * of every app on the phone — which is where a person tapping "fix my reminders" gives up. The
+     * direct action puts one dialog on screen naming the app and answering the question; it needs
+     * the `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission, which is a restricted permission
+     * granted to apps whose core function is alarms and reminders. This app already declares
+     * `USE_EXACT_ALARM` on exactly that basis, so it is the same claim made twice rather than a
+     * new one.
+     *
+     * Resolved rather than assumed at each step: the direct dialog is missing from some heavily
+     * customised ROMs, the list screen from a few more, and the app's own settings page is the
+     * last thing that always exists.
      */
-    private fun batteryOptimizationSettings(): Intent =
-        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    private fun batteryOptimization(context: Context): Intent {
+        // Lint objects on Play's behalf. Play's policy allows this for apps whose core function is
+        // alarms and reminders, which is the category this app already claims for USE_EXACT_ALARM,
+        // and the primary distribution channel here is F-Droid in any case.
+        @Suppress("BatteryLife")
+        val direct = Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            "package:${context.packageName}".toUri(),
+        )
+        if (direct.resolveActivity(context.packageManager) != null) return direct
+
+        val list = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        if (list.resolveActivity(context.packageManager) != null) return list
+
+        return appSettings(context)
+    }
 
     private fun appSettings(context: Context): Intent =
         Intent(

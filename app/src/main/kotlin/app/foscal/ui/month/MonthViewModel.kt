@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
+import app.foscal.ui.util.DayWindow
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,11 +14,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import java.time.DayOfWeek
-import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -47,12 +49,34 @@ class MonthViewModel @Inject constructor(
 
     private val calendarIds = visibleCalendarIds(repository, prefs)
 
-    private val monthBounds = _visibleMonth.mapMonthToRange(zone)
+    /**
+     * The loaded range, which deliberately does not follow the visible month. Paging inside it
+     * costs nothing at all; only running out of it goes back to the provider.
+     */
+    private val window = _visibleMonth
+        .map { month -> month.atDay(1) to month.atEndOfMonth() }
+        .scan(
+            DayWindow.around(
+                _visibleMonth.value.atDay(1),
+                _visibleMonth.value.atEndOfMonth(),
+            ),
+        ) { current, (first, last) -> DayWindow.keepOrMove(current, first, last) }
+        .distinctUntilChanged()
 
-    private val events = combine(calendarIds, monthBounds) { ids, range ->
-        Triple(ids, range.first, range.second)
-    }.flatMapLatest { (ids, from, to) ->
-        repository.observeEvents(ids, from, to)
+    private val events = combine(calendarIds, window) { ids, w -> ids to w }
+        .flatMapLatest { (ids, w) ->
+            repository.observeEvents(ids, w.startInstant(zone), w.endInstant(zone))
+        }
+
+    /**
+     * Grouped once per load rather than once per month change. The map is handed to the screen
+     * as-is, so keeping the same instance across a page turn is what stops both the outgoing and
+     * incoming grids rebuilding in the middle of the slide.
+     */
+    private val eventsByDay = events.map { evts ->
+        evts
+            .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
+            .groupBy({ it.first }, { it.second })
     }
 
     private val gridPrefs = combine(
@@ -62,17 +86,15 @@ class MonthViewModel @Inject constructor(
 
     val state: StateFlow<MonthUiState> = combine(
         combine(_visibleMonth, _selectedDate) { month, selected -> month to selected },
-        events,
+        eventsByDay,
         calendarIds,
         today,
         gridPrefs,
-    ) { (month, selected), evts, ids, currentDate, grid ->
+    ) { (month, selected), byDate, ids, currentDate, grid ->
         MonthUiState(
             visibleMonth = month,
             selectedDate = selected,
-            eventsByDay = evts
-                .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
-                .groupBy({ it.first }, { it.second }),
+            eventsByDay = byDate,
             hasVisibleCalendars = ids.isNotEmpty(),
             today = currentDate,
             firstDayOfWeek = grid.first,
@@ -112,14 +134,3 @@ class MonthViewModel @Inject constructor(
     }
 }
 
-private fun kotlinx.coroutines.flow.Flow<YearMonth>.mapMonthToRange(
-    zone: ZoneId,
-): kotlinx.coroutines.flow.Flow<Pair<Instant, Instant>> =
-    map { month ->
-        // Cover a wider window than the visible month so the neighbouring grids AnimatedContent
-        // slides in are already populated when the user swipes (and to absorb grid spillover).
-        val start = month.minusMonths(2).atDay(1).atStartOfDay(zone).toInstant()
-        val end = month.plusMonths(2).atEndOfMonth()
-            .atTime(23, 59, 59).atZone(zone).toInstant()
-        start to end
-    }

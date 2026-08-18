@@ -179,8 +179,14 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   legitimate callers of `isSystemInDarkTheme()` are `MainActivity`, where `ThemeMode.SYSTEM`
   is resolved into the `darkTheme` argument, and that parameter's own default.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
-  and the in-app onboarding hero (`OnboardingScreen.FoscalMark`). Keep them
-  in sync if you change one.
+  and the in-app onboarding hero (`OnboardingScreen.FoscalMark`, which draws
+  `ic_foscal_badge.xml`). Keep them in sync if you change one, and redraw
+  `ic_launcher_monochrome.xml` alongside — the themed-icon layer is a silhouette, so
+  the grid has to be punched out with `fillType="evenOdd"` rather than drawn in a
+  second colour. Brand palette: ink `#101C36`, card `#A8CBFF`, band `#FFC963`,
+  tab `#2B4FA8`. These are the mark's own colours and are deliberately separate from
+  the Material scheme in `:core-ui` and from the per-calendar colours in
+  `ui/CalendarColors.kt`.
 - Time is **24-hour by default** (`HH:mm`), but the user can switch to 12-hour in
   Settings. Never hardcode a time pattern in UI: read the ambient
   `LocalUse24HourClock` (in `ui/util/TimeFormat.kt`) and format via

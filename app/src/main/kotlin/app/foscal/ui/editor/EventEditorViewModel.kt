@@ -180,7 +180,14 @@ class EventEditorViewModel @Inject constructor(
             // the user dragged out, and the preference is the answer for the case with no slot.
             val defaultEnd = endArg?.let { Instant.ofEpochMilli(it).atZone(zone) }
                 ?: defaultStart.plusMinutes(prefs.defaultEventMinutes.first().toLong())
-            val defaultCalendar = calArg ?: visible.firstOrNull()?.id
+            // The caller wins, then the calendar the user nominated, then whatever is first.
+            // The nominated one is checked against the visible list because accounts get removed
+            // and calendars get hidden, and a preference pointing at neither must not strand new
+            // events on a calendar that is no longer there.
+            val preferred = prefs.defaultCalendarId.first()?.takeIf { id ->
+                visible.any { it.id == id }
+            }
+            val defaultCalendar = calArg ?: preferred ?: visible.firstOrNull()?.id
             _state.value = EditorUiState(
                 loading = false,
                 isEditing = false,

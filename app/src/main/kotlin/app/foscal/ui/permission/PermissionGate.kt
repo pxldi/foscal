@@ -91,12 +91,6 @@ fun PermissionGate(content: @Composable () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(vertical = 16.dp),
             )
-            Text(
-                "Your data never leaves this app and the system Calendar Provider.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
             Button(onClick = {
                 launcher.launch(CalendarPermissionState.REQUIRED_PERMISSIONS)
             }) { Text("Grant access") }

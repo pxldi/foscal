@@ -21,6 +21,8 @@ data class BehaviourState(
     val defaultEventMinutes: Int = Preferences.DEFAULT_EVENT_MINUTES,
     val showWeekNumbers: Boolean = false,
     val dayTapAction: DayTapAction = DayTapAction.Default,
+    /** Null means new events land on the first visible calendar. */
+    val defaultCalendarId: Long? = null,
 ) {
     /**
      * The view to actually open on.
@@ -43,7 +45,11 @@ class BehaviourViewModel @Inject constructor(
 ) : ViewModel() {
 
     val state: StateFlow<BehaviourState> = combine(
-        combine(prefs.startView, prefs.lastUsedView) { start, last -> start to last },
+        combine(
+            prefs.startView,
+            prefs.lastUsedView,
+            prefs.defaultCalendarId,
+        ) { start, last, calendar -> Triple(start, last, calendar) },
         prefs.firstDayOfWeek,
         prefs.defaultEventMinutes,
         prefs.showWeekNumbers,
@@ -52,6 +58,7 @@ class BehaviourViewModel @Inject constructor(
         BehaviourState(
             startView = views.first,
             lastUsedView = views.second,
+            defaultCalendarId = views.third,
             firstDayOfWeek = firstDay,
             defaultEventMinutes = minutes,
             showWeekNumbers = weekNumbers,
@@ -88,5 +95,9 @@ class BehaviourViewModel @Inject constructor(
 
     fun setDayTapAction(action: DayTapAction) {
         viewModelScope.launch { prefs.setDayTapAction(action) }
+    }
+
+    fun setDefaultCalendarId(id: Long?) {
+        viewModelScope.launch { prefs.setDefaultCalendarId(id) }
     }
 }

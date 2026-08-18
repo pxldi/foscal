@@ -4,7 +4,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 
 object CalendarColors {
-    private val defaults = listOf(
+    /** The palette offered when the user picks a colour for a calendar they are creating. */
+    val presets = listOf(
         0xFF1976D2.toInt(),
         0xFFD81B60.toInt(),
         0xFF43A047.toInt(),
@@ -15,7 +16,7 @@ object CalendarColors {
         0xFF6D4C41.toInt(),
     )
 
-    fun pick(index: Int): Int = defaults[index % defaults.size]
+    fun pick(index: Int): Int = presets[index % presets.size]
 }
 
 fun Int.toComposeColor(): Color = Color(this)

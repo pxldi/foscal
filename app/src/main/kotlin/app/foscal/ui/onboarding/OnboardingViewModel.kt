@@ -15,6 +15,8 @@ import app.foscal.core.data.UserPreferencesRepository
 import app.foscal.core.model.AccentColor
 import app.foscal.core.model.ThemeMode
 import app.foscal.ui.CalendarColors
+import app.foscal.notifications.ReminderFix
+import app.foscal.notifications.ReminderFixIntents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,13 +105,14 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Opens the battery-optimization *list*, not the one-tap `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
-     * dialog: that one needs a restricted permission granted only to a narrow set of app
-     * categories, while the list screen needs none. One more tap, no policy exposure.
+     * Opens the exemption prompt for this app, sharing the diagnostics panel's choice of screen so
+     * both routes land in the same place rather than each picking their own.
      */
     fun openBatterySettings(): Boolean {
-        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = ReminderFixIntents
+            .intentFor(context, ReminderFix.OPEN_BATTERY_OPTIMIZATION)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ?: return false
         return try {
             context.startActivity(intent)
             true

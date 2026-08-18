@@ -83,6 +83,32 @@ class MonthViewModelTest {
     }
 
     @Test
+    fun `paging inside the loaded window never goes back to the provider`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = MonthViewModel(repo, FakePreferences())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+        assertEquals(1, repo.observedWindows.size)
+
+        vm.nextMonth(); advanceUntilIdle()
+        vm.previousMonth(); vm.previousMonth(); advanceUntilIdle()
+
+        assertEquals(1, repo.observedWindows.size)
+    }
+
+    @Test
+    fun `paging off the end of the window loads a new one`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = MonthViewModel(repo, FakePreferences())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        repeat(6) { vm.nextMonth(); advanceUntilIdle() }
+
+        assertTrue(repo.observedWindows.size > 1)
+    }
+
+    @Test
     fun `visible month cells span only the weeks the month occupies`() {
         val july = visibleMonthCells(YearMonth.of(2026, 7), firstDayOfWeek = DayOfWeek.MONDAY)
         val august = visibleMonthCells(YearMonth.of(2026, 8), firstDayOfWeek = DayOfWeek.MONDAY)

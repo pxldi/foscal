@@ -133,6 +133,52 @@ Install on a connected device:
 ./gradlew :app:installDebug
 ```
 
+### Baseline profile
+
+Release builds ship a baseline profile: a list of the classes and methods the app runs on the way
+to a usable calendar, which ART compiles ahead of time at install. Without it every one of those
+methods is interpreted and JIT-compiled during someone's first few sessions, which is why a fresh
+install can feel janky on a phone that is otherwise fine.
+
+The profile is generated on a device and **committed**, so ordinary release builds — CI included —
+never need one. Regenerate it when the startup path or the paging code changes meaningfully.
+
+It needs a device where ART will hand back its profile, which means `ro.debuggable=1`: an emulator
+running an **AOSP or `google_apis`** image, *not* a `google_apis_playstore` one, or a rooted phone.
+
+```bash
+sdkmanager "system-images;android-34;aosp_atd;x86_64"
+avdmanager create avd -n foscal-baseline -k "system-images;android-34;aosp_atd;x86_64"
+emulator -avd foscal-baseline -no-window -no-audio &
+adb wait-for-device && adb shell getprop ro.debuggable   # must print 1
+
+./gradlew :app:generateReleaseBaselineProfile
+```
+
+The run installs an unminified release build, walks it through onboarding and a few page turns, and
+writes the result to `app/src/release/generated/baselineProfiles/`. Commit what lands there.
+
+Give the device a phone-shaped screen before running. Some test images default to something far
+smaller — an `aosp_atd` image here reported 320x640 — and a profile recorded on a screen nothing
+like a phone is a profile of the wrong app:
+
+```bash
+adb shell wm size 1080x2400 && adb shell wm density 420
+```
+
+Afterwards, check the profile actually covers the calendar rather than just the way in:
+
+```bash
+grep -o 'app/foscal/ui/[a-z]*' app/src/release/generated/baselineProfiles/baseline-prof.txt \
+  | sort | uniq -c | sort -rn
+```
+
+If `onboarding` dominates and `month` / `week` / `agenda` have only a handful of rules each, the
+journey never reached the calendar and the profile is not worth committing.
+
+Expect it to take a while — it builds the app twice and runs the journey several times over. The
+journey itself lives in `benchmark/`, which is a test-only module and is never part of the APK.
+
 ## Syncing with Nextcloud / ownCloud
 
 Foscal itself is a calendar *client* and intentionally does not ship its

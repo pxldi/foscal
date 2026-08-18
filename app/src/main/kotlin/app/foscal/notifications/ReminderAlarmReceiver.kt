@@ -21,10 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class ReminderAlarmReceiver : BroadcastReceiver() {
@@ -82,23 +79,15 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             zone = ZoneId.systemDefault(),
         )
 
-        val absolute = whenMillis.takeIf { it > 0L }?.let {
-            // All-day events are stored at UTC midnight, so they must be read back in UTC and shown
-            // without a time. Rendering one in the device zone printed "Tue, Aug 18 · 02:00" for a
-            // holiday that has no clock time at all — and a day earlier than that west of UTC.
-            if (allDay) {
-                val date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
-                DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault()).format(date)
-            } else {
-                val zdt = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
-                val pattern =
-                    if (use24HourClock(context)) "EEE, MMM d · HH:mm" else "EEE, MMM d · h:mm a"
-                DateTimeFormatter.ofPattern(pattern, Locale.getDefault()).format(zdt)
-            }
-        }
         val contentText = listOfNotNull(
-            leadLabel(displayStart, System.currentTimeMillis()),
-            absolute,
+            reminderWhen(
+                startMillis = displayStart,
+                nowMillis = System.currentTimeMillis(),
+                allDay = allDay,
+                use24Hour = use24HourClock(context),
+                zone = ZoneId.systemDefault(),
+                locale = Locale.getDefault(),
+            ),
             location.takeIf { it.isNotBlank() },
         ).joinToString(" · ")
 

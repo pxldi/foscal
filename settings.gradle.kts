@@ -23,6 +23,7 @@ dependencyResolutionManagement {
 rootProject.name = "Foscal"
 
 include(":app")
+include(":benchmark")
 include(":core:core-model")
 include(":core:core-ui")
 include(":core:core-data")

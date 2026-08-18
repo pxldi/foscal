@@ -32,6 +32,8 @@ data class CalendarsUiState(
     val use24HourClock: Boolean = true,
     val osmMapsEnabled: Boolean = false,
     val transfer: TransferState = TransferState(),
+    /** Why the last attempt to add a calendar came to nothing, if it did. */
+    val createError: String? = null,
 )
 
 /** Progress and outcome of an `.ics` import or export, shown inline in Settings. */
@@ -75,6 +77,7 @@ class CalendarsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val transferState = MutableStateFlow(TransferState())
+    private val createError = MutableStateFlow<String?>(null)
 
     // combine() has no typed 6+-arg overload, so fold the extra preferences in with a nested combine.
     private val prefsFlow = combine(
@@ -114,9 +117,11 @@ class CalendarsViewModel @Inject constructor(
         repository.observeCalendars(),
         prefsFlow,
         transferState,
-    ) { all, p, transfer ->
+        createError,
+    ) { all, p, transfer, error ->
         CalendarsUiState(
             transfer = transfer,
+            createError = error,
             items = all.map { cal ->
                 CalendarRow(
                     calendar = cal,
@@ -147,6 +152,29 @@ class CalendarsViewModel @Inject constructor(
             val next = if (row.isHidden) current - id else current + id
             prefs.setHiddenCalendars(next)
         }
+    }
+
+    /**
+     * Adds a calendar on this device under [name], drawn in [color].
+     *
+     * Local only, because that is the only kind an app can create: a calendar belonging to a
+     * Google or CalDAV account is created by whatever syncs that account, and one invented here
+     * would never reach the server. Nothing is written to preferences — the new calendar arrives
+     * through [CalendarRepository.observeCalendars] like any other, visible by default.
+     */
+    fun createCalendar(name: String, color: Int) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        createError.value = null
+        viewModelScope.launch {
+            if (repository.createLocalCalendar(trimmed, color) == null) {
+                createError.value = "Couldn't add the calendar."
+            }
+        }
+    }
+
+    fun dismissCreateError() {
+        createError.value = null
     }
 
     fun setDefaultReminder(minutes: Int?) {

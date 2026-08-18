@@ -9,6 +9,7 @@ import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.resolveEventTimezone
 import app.foscal.ui.common.TimelineDay
+import app.foscal.ui.util.DayWindow
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,8 +17,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -79,31 +82,39 @@ class WeekViewModel @Inject constructor(
 
     private val calendarIds = visibleCalendarIds(repository, prefs)
 
-    private val bounds = combine(_anchor, _spanDays) { start, span ->
-        // Look back far enough that multi-day events which started before this window but are
-        // still running get returned by the provider; pad the end for UTC all-day edge cases.
-        // A page either side of the visible one as well, so the page sliding out during a swipe
-        // still has its events and the one sliding in already has its own.
-        val from = start.minusDays(31L + span).atStartOfDay(zone).toInstant()
-        val to = start.plusDays(2L * span + 1L).atStartOfDay(zone).toInstant()
-        from to to
-    }
+    /**
+     * The loaded range, which deliberately does not follow the anchor swipe for swipe. Paging
+     * inside it costs nothing at all; only running out of it goes back to the provider.
+     */
+    private val window = combine(_anchor, _spanDays) { start, span ->
+        start to start.plusDays(span - 1L)
+    }.scan(DayWindow.around(_anchor.value, _anchor.value.plusDays(6))) { current, (first, last) ->
+        DayWindow.keepOrMove(current, first, last)
+    }.distinctUntilChanged()
 
-    private val events = combine(calendarIds, bounds) { ids, range -> ids to range }
-        .flatMapLatest { (ids, range) ->
-            repository.observeEvents(ids, range.first, range.second)
+    private val events = combine(calendarIds, window) { ids, w -> ids to w }
+        .flatMapLatest { (ids, w) ->
+            repository.observeEvents(ids, w.startInstant(zone), w.endInstant(zone))
         }
 
-    val state: StateFlow<WeekUiState> = combine(
-        combine(_anchor, _spanDays) { anchor, span -> anchor to span },
-        events,
-        calendarIds,
-        today,
-    ) { (start, span), evts, ids, currentDate ->
-        val byDate = evts
+    /**
+     * Grouped once per load rather than once per swipe. The map is handed to the screen as-is, so
+     * keeping the same instance across a page turn is what stops both the outgoing and incoming
+     * pages rebuilding their day lists in the middle of the slide.
+     */
+    private val eventsByDay = events.map { evts ->
+        evts
             .flatMap { e -> e.spannedDays(zone).map { d -> d to e } }
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, list) -> list.sortedBy { it.start } }
+    }
+
+    val state: StateFlow<WeekUiState> = combine(
+        combine(_anchor, _spanDays) { anchor, span -> anchor to span },
+        eventsByDay,
+        calendarIds,
+        today,
+    ) { (start, span), byDate, ids, currentDate ->
         val days = (0 until span).map { offset ->
             val date = start.plusDays(offset.toLong())
             TimelineDay(date, byDate[date].orEmpty())

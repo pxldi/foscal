@@ -46,7 +46,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.fromHtml
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -200,7 +205,7 @@ private fun DetailContent(
                 )
             }
             event.description?.takeIf { it.isNotBlank() }?.let {
-                DetailRow(Icons.Outlined.Description, it)
+                DetailRow(Icons.Outlined.Description, noteText(it))
             }
         }
 
@@ -276,8 +281,36 @@ private fun Header(event: Event, calendarName: String, accent: Color) {
     }
 }
 
+/**
+ * An event's notes, as HTML when they are HTML.
+ *
+ * Only the detail screen renders them. The editor keeps showing the raw text, because it writes
+ * the description back on save: rendering it there would mean saving the flattened version over
+ * whatever the sync source put in, quietly stripping the formatting — and the meeting link — for
+ * everyone else invited to the same event.
+ */
 @Composable
-private fun DetailRow(icon: ImageVector, text: String, onClick: (() -> Unit)? = null) {
+private fun noteText(raw: String): AnnotatedString =
+    if (looksLikeHtml(raw)) {
+        AnnotatedString.fromHtml(
+            htmlString = raw,
+            linkStyles = TextLinkStyles(
+                style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline,
+                ),
+            ),
+        )
+    } else {
+        AnnotatedString(raw)
+    }
+
+@Composable
+private fun DetailRow(icon: ImageVector, text: String, onClick: (() -> Unit)? = null) =
+    DetailRow(icon = icon, text = AnnotatedString(text), onClick = onClick)
+
+@Composable
+private fun DetailRow(icon: ImageVector, text: AnnotatedString, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

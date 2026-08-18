@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -86,8 +87,17 @@ class UserPreferencesRepository @Inject constructor(
     override val dayTapAction: Flow<DayTapAction> =
         context.dataStore.data.map { DayTapAction.fromName(it[DAY_TAP_ACTION]) }
 
+    override val defaultCalendarId: Flow<Long?> =
+        context.dataStore.data.map { it[DEFAULT_CALENDAR_ID] }
+
     override val osmMapsEnabled: Flow<Boolean> =
         context.dataStore.data.map { it[OSM_MAPS_ENABLED] ?: false }
+
+    override suspend fun setDefaultCalendarId(id: Long?) {
+        context.dataStore.edit { prefs ->
+            if (id == null) prefs.remove(DEFAULT_CALENDAR_ID) else prefs[DEFAULT_CALENDAR_ID] = id
+        }
+    }
 
     override suspend fun setOnboardingCompleted() {
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
@@ -189,5 +199,6 @@ class UserPreferencesRepository @Inject constructor(
         private val DEFAULT_EVENT_MINUTES = intPreferencesKey("default_event_minutes")
         private val SHOW_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         private val DAY_TAP_ACTION = stringPreferencesKey("day_tap_action")
+        private val DEFAULT_CALENDAR_ID = longPreferencesKey("default_calendar_id")
     }
 }
