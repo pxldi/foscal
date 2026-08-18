@@ -5,6 +5,10 @@ import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -17,9 +21,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class EventEditorViewModelTest {
@@ -406,5 +407,47 @@ class EventEditorViewModelTest {
         c.resolveScope(RecurrenceScope.ALL_EVENTS)
         advanceUntilIdle()
         assertEquals(FakeCalendarRepository.Op.DELETE, repo.lastOp)
+    }
+
+    @Test
+    fun `a one-day all-day event survives an edit without growing a day`() = runTest(dispatcher) {
+        // The provider stores an all-day END as exclusive UTC midnight of the day after the last
+        // covered day, so this one-day event on the 19th is stored as 19th -> 20th.
+        val day = LocalDate.of(2026, 8, 19)
+        val allDay = Event(
+            id = 20,
+            calendarId = 1,
+            title = "Holiday",
+            location = null,
+            description = null,
+            start = day.atStartOfDay(ZoneOffset.UTC).toInstant(),
+            end = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(),
+            allDay = true,
+            timezone = "UTC",
+            color = 0xFF1976D2.toInt(),
+        )
+        repo = FakeCalendarRepository(calendars = listOf(calendar), events = listOf(allDay))
+        val handle = SavedStateHandle(
+            mapOf(
+                "eventId" to "20",
+                "start" to allDay.start.toEpochMilli().toString(),
+                "calendarId" to "",
+                "end" to "",
+            ),
+        )
+        val vm = EventEditorViewModel(handle, repo, FakePreferences())
+        advanceUntilIdle()
+
+        // The editor shows the last covered day, not the exclusive end.
+        assertEquals(day, vm.state.value.startDate)
+        assertEquals(day, vm.state.value.endDate)
+
+        // And saving it straight back writes the same instants it read, rather than pushing the
+        // end out by a day on every visit to the editor.
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(allDay.start, repo.lastWritten?.start)
+        assertEquals(allDay.end, repo.lastWritten?.end)
     }
 }
