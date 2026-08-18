@@ -164,13 +164,13 @@ fun FoscalNavHost(
                         fadeIn(tween(Motion.DurationMedium))
                     }
                 },
-                exitTransition = {
-                    if (targetState.destination.route == Routes.ONBOARDING) {
-                        ExitTransition.None
-                    } else {
-                        fadeOut(tween(Motion.DurationMedium))
-                    }
-                },
+                // The calendar never animates itself away. Everything reachable from here is an
+                // overlay that slides over it, and Navigation reads the outgoing screen's
+                // transition from *this* destination — so a fade here is the screen underneath
+                // blanking out while the overlay is still sliding in, which is the doubled-up
+                // motion the editor used to show on save.
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None },
             ) {
                 OnboardingMainReveal(
                     trigger = onboardingRevealTick,
