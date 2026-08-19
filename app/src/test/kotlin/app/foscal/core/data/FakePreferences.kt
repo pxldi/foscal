@@ -2,6 +2,7 @@ package app.foscal.core.data
 
 import app.foscal.core.model.AccentColor
 import app.foscal.core.model.DayTapAction
+import app.foscal.core.model.EventColorStrength
 import app.foscal.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +12,8 @@ import java.time.DayOfWeek
 class FakePreferences(
     onboardingDone: Boolean = true,
     hidden: Set<String> = emptySet(),
+    monthHidden: Set<String> = emptySet(),
+    monthMinimum: Int = 0,
     private val defaultReminder: Int? = 15,
     calendarReminders: Map<Long, Int?> = emptyMap(),
     accent: AccentColor = AccentColor.COBALT,
@@ -23,6 +26,8 @@ class FakePreferences(
 
     override val onboardingCompleted: Flow<Boolean> = MutableStateFlow(onboardingDone)
     override val hiddenCalendarIds: Flow<Set<String>> = MutableStateFlow(hidden)
+    override val monthHiddenCalendarIds: Flow<Set<String>> = MutableStateFlow(monthHidden)
+    override val monthMinimumMinutes: Flow<Int> = MutableStateFlow(monthMinimum)
     override val defaultReminderMinutes: Flow<Int?> = MutableStateFlow(defaultReminder)
     override val calendarReminderDefaults: MutableStateFlow<Map<Long, Int?>> =
         MutableStateFlow(calendarReminders)
@@ -41,6 +46,12 @@ class FakePreferences(
     override val dayTapAction: MutableStateFlow<DayTapAction> =
         MutableStateFlow(DayTapAction.Default)
 
+    override val eventColorStrength: MutableStateFlow<EventColorStrength> =
+        MutableStateFlow(EventColorStrength.Default)
+    override val eventTextScalePercent: MutableStateFlow<Int> =
+        MutableStateFlow(Preferences.DEFAULT_EVENT_TEXT_SCALE)
+    override val wrapEventTitles: MutableStateFlow<Boolean> = MutableStateFlow(true)
+
     override val defaultCalendarId: MutableStateFlow<Long?> = MutableStateFlow(null)
 
     override suspend fun setDefaultCalendarId(id: Long?) { defaultCalendarId.value = id }
@@ -52,8 +63,20 @@ class FakePreferences(
     override suspend fun setShowWeekNumbers(enabled: Boolean) { showWeekNumbers.value = enabled }
     override suspend fun setDayTapAction(action: DayTapAction) { dayTapAction.value = action }
 
+    override suspend fun setEventColorStrength(strength: EventColorStrength) {
+        eventColorStrength.value = strength
+    }
+
+    override suspend fun setEventTextScalePercent(percent: Int) {
+        eventTextScalePercent.value = percent
+    }
+
+    override suspend fun setWrapEventTitles(wrap: Boolean) { wrapEventTitles.value = wrap }
+
     override suspend fun setOnboardingCompleted() = Unit
     override suspend fun setHiddenCalendars(ids: Set<String>) = Unit
+    override suspend fun setMonthHiddenCalendars(ids: Set<String>) = Unit
+    override suspend fun setMonthMinimumMinutes(minutes: Int) = Unit
     override suspend fun setDefaultReminder(minutes: Int?) = Unit
 
     override suspend fun setCalendarReminderDefault(calendarId: Long, minutes: Int?) {

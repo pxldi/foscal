@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -46,6 +47,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.BricolageFamily
+import app.foscal.core.ui.theme.amberTextColor
+import app.foscal.core.ui.theme.onTodayDiscColor
+import app.foscal.core.ui.theme.todayDiscColor
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
@@ -82,7 +86,10 @@ fun AgendaRoute(
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var positionedAtToday by remember { mutableStateOf(false) }
+    // Saved rather than merely remembered: opening an event takes the agenda out of composition,
+    // and a plain `remember` would forget it had already parked and snap the list back to today,
+    // throwing away the position `listState` itself restores perfectly well.
+    var positionedAtToday by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.items, headerHeightPx) {
         if (!positionedAtToday && state.todayIndex >= 0 && headerHeightPx > 0) {
@@ -296,7 +303,7 @@ private fun AgendaDateGutter(date: LocalDate, isToday: Boolean) {
                     if (isToday) {
                         Modifier
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(todayDiscColor())
                     } else {
                         Modifier
                     },
@@ -308,7 +315,7 @@ private fun AgendaDateGutter(date: LocalDate, isToday: Boolean) {
                 style = MaterialTheme.typography.titleLarge,
                 fontFamily = BricolageFamily,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isToday) MaterialTheme.colorScheme.onPrimary
+                color = if (isToday) onTodayDiscColor()
                 else MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -316,7 +323,8 @@ private fun AgendaDateGutter(date: LocalDate, isToday: Boolean) {
             text = date.format(rememberDateFormatter("EEE")),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (isToday) MaterialTheme.colorScheme.primary
+            // Amber as text, so the darkened form: the disc colour is 1.5:1 on this surface.
+            color = if (isToday) amberTextColor()
             else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

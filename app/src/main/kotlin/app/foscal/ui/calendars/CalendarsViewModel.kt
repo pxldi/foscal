@@ -64,6 +64,8 @@ data class TransferState(
 data class CalendarRow(
     val calendar: Calendar,
     val isHidden: Boolean,
+    /** Kept out of the month grid, while still showing in Day, Week and Agenda. */
+    val isHiddenInMonth: Boolean = false,
     /**
      * The reminder this calendar pre-fills, and whether that is its own choice.
      *
@@ -84,6 +86,7 @@ private data class PrefsSnapshot(
     val accentCustom: Int,
     val dynamicColor: Boolean,
     val calendarReminders: Map<Long, Int?>,
+    val monthHidden: Set<String>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -118,18 +121,22 @@ class CalendarsViewModel @Inject constructor(
                 accentCustom = 0,
                 dynamicColor = false,
                 calendarReminders = emptyMap(),
+                monthHidden = emptySet(),
             )
         },
         prefs.osmMapsEnabled,
         prefs.accentCustomColor,
         prefs.dynamicColor,
-        prefs.calendarReminderDefaults,
-    ) { snapshot, osmMaps, accentCustom, dynamicColor, calendarReminders ->
+        // Paired because the outer combine is already at its five-argument overload.
+        combine(prefs.calendarReminderDefaults, prefs.monthHiddenCalendarIds, ::Pair),
+    ) { snapshot, osmMaps, accentCustom, dynamicColor, remindersAndMonth ->
+        val (calendarReminders, monthHidden) = remindersAndMonth
         snapshot.copy(
             osmMaps = osmMaps,
             accentCustom = accentCustom,
             dynamicColor = dynamicColor,
             calendarReminders = calendarReminders,
+            monthHidden = monthHidden,
         )
     }
 
@@ -149,6 +156,7 @@ class CalendarsViewModel @Inject constructor(
                 CalendarRow(
                     calendar = cal,
                     isHidden = cal.id.toString() in p.hidden,
+                    isHiddenInMonth = cal.id.toString() in p.monthHidden,
                     reminderOverride = p.calendarReminders[cal.id],
                     usesGlobalReminder = !p.calendarReminders.containsKey(cal.id),
                 )
@@ -174,6 +182,15 @@ class CalendarsViewModel @Inject constructor(
             val id = row.calendar.id.toString()
             val next = if (row.isHidden) current - id else current + id
             prefs.setHiddenCalendars(next)
+        }
+    }
+
+    fun toggleHiddenInMonth(row: CalendarRow) {
+        viewModelScope.launch {
+            val current = prefs.monthHiddenCalendarIds.first()
+            val id = row.calendar.id.toString()
+            val next = if (row.isHiddenInMonth) current - id else current + id
+            prefs.setMonthHiddenCalendars(next)
         }
     }
 

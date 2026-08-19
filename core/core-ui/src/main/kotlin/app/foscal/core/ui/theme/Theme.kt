@@ -20,10 +20,10 @@ private fun lightColorsFor(accent: AccentTokens) = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = accent.primaryContainerLight,
     onPrimaryContainer = accent.onPrimaryContainerLight,
-    secondary = accent.primaryLight,
+    secondary = accent.secondaryLight,
     onSecondary = Color.White,
-    secondaryContainer = accent.primaryContainerLight,
-    onSecondaryContainer = accent.onPrimaryContainerLight,
+    secondaryContainer = accent.secondaryContainerLight,
+    onSecondaryContainer = accent.onSecondaryContainerLight,
     background = FoscalLightBackground,
     onBackground = Color(0xFF1F2328),
     surface = FoscalLightSurface,
@@ -44,10 +44,10 @@ private fun darkColorsFor(accent: AccentTokens) = darkColorScheme(
     onPrimary = accent.onPrimaryDark,
     primaryContainer = accent.primaryContainerDark,
     onPrimaryContainer = accent.onPrimaryContainerDark,
-    secondary = accent.primaryDark,
+    secondary = accent.secondaryDark,
     onSecondary = accent.onPrimaryDark,
-    secondaryContainer = accent.primaryContainerDark,
-    onSecondaryContainer = accent.onPrimaryContainerDark,
+    secondaryContainer = accent.secondaryContainerDark,
+    onSecondaryContainer = accent.onSecondaryContainerDark,
     background = FoscalDarkBackground,
     onBackground = Color(0xFFE7EAEE),
     surface = FoscalDarkSurface,
@@ -122,9 +122,40 @@ fun customAccentTokens(seed: Color): AccentTokens = AccentTokens(
     onPrimaryDark = lerp(seed, Color.Black, 0.82f),
     primaryContainerDark = lerp(seed, Color.Black, 0.58f),
     onPrimaryContainerDark = lerp(seed, Color.White, 0.80f),
+    // A step off the seed rather than a second hue: the presets pair their primary with a chosen
+    // companion, and there is no way to choose one on the user's behalf from a single colour that
+    // would not be a guess. Lighter and quieter is the safe reading of "secondary".
+    secondaryLight = lerp(seed, Color.Black, 0.24f),
+    secondaryContainerLight = lerp(seed, Color.White, 0.80f),
+    onSecondaryContainerLight = lerp(seed, Color.Black, 0.70f),
+    secondaryDark = lerp(seed, Color.White, 0.42f),
+    secondaryContainerDark = lerp(seed, Color.Black, 0.66f),
+    onSecondaryContainerDark = lerp(seed, Color.White, 0.72f),
 )
 
-/** Weekend day-of-week label color, adjusted so the gold stays legible on the dark surface. */
+/**
+ * Amber where it is drawn as text rather than as a fill — weekend labels, today's weekday.
+ *
+ * The light form is the brand amber darkened until it clears 4.5:1 on white. The gold this
+ * replaced sat at 2.5:1, which was both off-palette and not actually readable.
+ */
+@Composable
+fun amberTextColor(darkTheme: Boolean = LocalIsDarkTheme.current): Color =
+    if (darkTheme) AmberTextDark else AmberTextLight
+
+/** Weekend day-of-week label colour. */
 @Composable
 fun weekendLabelColor(darkTheme: Boolean = LocalIsDarkTheme.current): Color =
-    if (darkTheme) WeekendGoldDark else WeekendGoldLight
+    amberTextColor(darkTheme)
+
+/**
+ * The filled disc marking today, and the ink on it.
+ *
+ * Amber rather than the accent, so the icon on the home screen is a literal preview of the app —
+ * and so that today stops looking like a selected day, which was the other blue disc.
+ */
+@Composable
+fun todayDiscColor(): Color = FoscalAmber
+
+@Composable
+fun onTodayDiscColor(): Color = AmberInk

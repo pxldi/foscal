@@ -25,3 +25,19 @@ fun visibleCalendarIds(
         .map { it.id }
         .toSet()
 }
+
+/**
+ * [visibleCalendarIds] minus the ones taken out of the month grid.
+ *
+ * Layered rather than folded in, so a calendar switched off everywhere stays off: the month
+ * setting can only ever remove, never bring one back.
+ */
+fun monthCalendarIds(
+    repository: CalendarRepository,
+    prefs: Preferences,
+): Flow<Set<Long>> = combine(
+    visibleCalendarIds(repository, prefs),
+    prefs.monthHiddenCalendarIds,
+) { visible, hiddenInMonth ->
+    visible - hiddenInMonth.mapNotNull(String::toLongOrNull).toSet()
+}

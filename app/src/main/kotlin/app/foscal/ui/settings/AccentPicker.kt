@@ -44,7 +44,7 @@ fun AccentPicker(
     onPickCustom: (Int) -> Unit,
     modifier: Modifier = Modifier,
     // Null where the surrounding card already names the setting, so it isn't labelled twice.
-    label: String? = "Accent color",
+    label: String? = "Accent colour",
 ) {
     val dark = LocalIsDarkTheme.current
     var showPicker by remember { mutableStateOf(false) }

@@ -1,5 +1,7 @@
 package app.foscal.ics
 
+import app.foscal.core.model.Attendee
+import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Event
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.IcsEvent
@@ -26,6 +28,19 @@ class IcsMappingTest {
         timezone = timezone,
         rrule = rrule,
         reminderMinutes = reminders,
+    )
+
+    private val exportable = Event(
+        id = 1,
+        calendarId = 2,
+        title = "Standup",
+        location = null,
+        description = null,
+        start = Instant.parse("2026-07-26T09:00:00Z"),
+        end = Instant.parse("2026-07-26T09:30:00Z"),
+        allDay = false,
+        timezone = "Europe/Berlin",
+        color = 0,
     )
 
     @Test
@@ -117,5 +132,39 @@ class IcsMappingTest {
         assertEquals(original.end, input.end)
         assertEquals(Frequency.DAILY, input.frequency)
         assertEquals(listOf(15), input.reminderMinutes)
+    }
+
+    // A file with no ATTENDEE lines must leave whatever the event already has alone: writing a
+    // guest list is a clear-and-reinsert, so an empty list here would strip the guests off a
+    // series an override is being imported onto.
+    @Test
+    fun `a file that names nobody leaves the guest list untouched`() {
+        assertNull(icsEvent().toEventInput(1L, berlin).attendees)
+    }
+
+    @Test
+    fun `an imported guest list carries the organizer at its head`() {
+        val input = icsEvent().copy(
+            organizer = Attendee("chair@example.org", "Ada", isOrganizer = true),
+            attendees = listOf(Attendee("bob@example.org", status = AttendeeStatus.ACCEPTED)),
+        ).toEventInput(1L, berlin)
+
+        assertEquals(listOf("chair@example.org", "bob@example.org"), input.attendees?.map { it.email })
+        assertEquals(true, input.attendees?.first()?.isOrganizer)
+    }
+
+    // The provider keeps organizer and guests in one table, told apart only by RELATIONSHIP;
+    // RFC 5545 gives the organizer its own property and allows just one.
+    @Test
+    fun `exporting splits the organizer out of the attendee rows`() {
+        val ics = exportable.toIcsEvent(
+            reminderMinutes = emptyList(),
+            attendees = listOf(
+                Attendee("bob@example.org", status = AttendeeStatus.DECLINED),
+                Attendee("chair@example.org", "Ada", isOrganizer = true),
+            ),
+        )
+        assertEquals("chair@example.org", ics.organizer?.email)
+        assertEquals(listOf("bob@example.org"), ics.attendees.map { it.email })
     }
 }

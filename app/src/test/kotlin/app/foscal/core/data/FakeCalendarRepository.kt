@@ -1,6 +1,8 @@
 package app.foscal.core.data
 
 import android.net.Uri
+import app.foscal.core.model.Attendee
+import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
@@ -19,6 +21,7 @@ class FakeCalendarRepository(
     private val calendars: List<Calendar> = emptyList(),
     private val events: List<Event> = emptyList(),
     private val reminderMinutes: List<Int> = emptyList(),
+    private val attendees: List<Attendee> = emptyList(),
 ) : CalendarRepository {
 
     enum class Op { CREATE, UPDATE, UPDATE_INSTANCE, UPDATE_FOLLOWING, DELETE, DELETE_INSTANCE, DELETE_FOLLOWING }
@@ -125,6 +128,19 @@ class FakeCalendarRepository(
     /** Names handed to [createLocalCalendar], in order. */
     val createdCalendars = mutableListOf<Pair<String, Int>>()
 
+    /** What [getEventColor] should answer, per event id. */
+    val eventColors = mutableMapOf<Long, Int>()
+
+    override suspend fun getEventColor(eventId: Long): Int? = eventColors[eventId]
+
+    /** Replies handed to [setSelfAttendeeStatus], in order. */
+    val replies = mutableListOf<Pair<Long, AttendeeStatus>>()
+
+    override suspend fun setSelfAttendeeStatus(eventId: Long, status: AttendeeStatus): Boolean {
+        replies += eventId to status
+        return true
+    }
+
     /** Every edit handed to [updateLocalCalendar], in order. */
     val updatedCalendars = mutableListOf<Triple<Long, String, Int>>()
 
@@ -214,6 +230,12 @@ class FakeCalendarRepository(
     override suspend fun getReminderMinutesFor(
         eventIds: Collection<Long>,
     ): Map<Long, List<Int>> = eventIds.associateWith { reminderMinutes }
+
+    override suspend fun getAttendees(eventId: Long): List<Attendee> = attendees
+
+    override suspend fun getAttendeesFor(
+        eventIds: Collection<Long>,
+    ): Map<Long, List<Attendee>> = eventIds.associateWith { attendees }
 
     // Mirrors the real read: master rows only, so a recurring series contributes one event and not
     // one per occurrence. Test fixtures hold masters already, so this is just the id filter.

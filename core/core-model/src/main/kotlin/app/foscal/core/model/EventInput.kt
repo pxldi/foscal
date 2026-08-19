@@ -47,4 +47,25 @@ data class EventInput(
      * silently drop the rest. Empty means no reminders.
      */
     val reminderMinutes: List<Int> = listOf(15),
+    /**
+     * The complete guest list to write, or null to leave whatever the event already has alone.
+     *
+     * Attendees are all-or-nothing for the same reason reminders are — the provider has no partial
+     * update for the `Attendees` table, so writing means clearing and reinserting. Unlike
+     * reminders, though, most callers have no guest list at all (quick add, a drag-to-move on the
+     * week grid, an `.ics` file with no ATTENDEE lines), and passing an empty list from those would
+     * silently drop every guest DAVx⁵ synced down. Null is that "don't touch" case; only a caller
+     * that actually loaded the guests may pass a list, empty or not.
+     */
+    val attendees: List<Attendee>? = null,
+    /**
+     * A colour for this one event, or null to follow its calendar's.
+     *
+     * Written straight to `EVENT_COLOR`, which the provider takes from an ordinary app and which
+     * `Instances.DISPLAY_COLOR` already prefers over the calendar's — so nothing downstream has to
+     * know this exists. What a *sync adapter* then does with it is its own business: CalDAV has a
+     * per-event COLOR (RFC 7986) that not every server or client round-trips, and palette-based
+     * accounts may snap it to their nearest swatch or drop it.
+     */
+    val color: Int? = null,
 )

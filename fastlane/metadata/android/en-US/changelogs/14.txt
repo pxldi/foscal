@@ -1,0 +1,6 @@
+0.12.0
+
+* Other apps can open Foscal: a launcher's calendar slot, a day, an event, an
+  add-to-calendar, and .ics files from a file manager, a download or a mail
+  attachment.
+* Rename, recolour and remove calendars kept on this phone.

@@ -44,11 +44,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.ui.theme.Motion
+import app.foscal.core.ui.theme.onTodayDiscColor
+import app.foscal.core.ui.theme.todayDiscColor
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.common.TimelineEndInset
 import app.foscal.ui.common.TimelineGutterWidth
 import app.foscal.ui.common.TimelineLayout
 import app.foscal.ui.common.pageOnSwipe
+import app.foscal.ui.home.BehaviourViewModel
 import app.foscal.ui.util.currentLocale
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -69,9 +72,11 @@ fun TimelineRoute(
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     viewModel: WeekViewModel = hiltViewModel(),
+    behaviourViewModel: BehaviourViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(span) { viewModel.setSpan(span) }
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val behaviour by behaviourViewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -160,6 +165,7 @@ fun TimelineRoute(
                         onEventClick = onEventClick,
                         onNewEvent = onNewEvent,
                         onEventMove = viewModel::moveEvent,
+                        newEventMinutes = behaviour.defaultEventMinutes,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -175,6 +181,7 @@ private fun WeekScheduleList(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
     onEventMove: (app.foscal.core.model.Event, Long, Long) -> Unit,
+    newEventMinutes: Int,
     modifier: Modifier = Modifier,
 ) {
     TimelineLayout(
@@ -182,6 +189,7 @@ private fun WeekScheduleList(
         onEventClick = onEventClick,
         onTimeRangeSelected = onNewEvent,
         onEventMove = onEventMove,
+        newEventMinutes = newEventMinutes,
         modifier = modifier,
         compact = compact,
     )
@@ -231,7 +239,7 @@ private fun TimelineDayHeader(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .background(if (isToday) todayDiscColor() else Color.Transparent)
                         .padding(horizontal = 11.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -239,7 +247,7 @@ private fun TimelineDayHeader(
                         date.dayOfMonth.toString(),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isToday) MaterialTheme.colorScheme.onPrimary
+                        color = if (isToday) onTodayDiscColor()
                         else MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                     )

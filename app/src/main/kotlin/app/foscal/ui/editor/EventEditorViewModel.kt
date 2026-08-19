@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
+import app.foscal.core.model.Attendee
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.CalendarReminderDefaults
 import app.foscal.core.model.EventInput
@@ -75,6 +76,15 @@ data class EditorUiState(
      */
     val remindersTouched: Boolean = false,
     /**
+     * Everyone on the event, organizer included. Loaded in full because saving replaces the whole
+     * list — the editor has to be able to write back the guests it did not add itself.
+     */
+    val attendees: List<Attendee> = emptyList(),
+    /** What the user has typed into the "Add guest" field, before it is committed as a chip. */
+    val guestDraft: String = "",
+    /** A colour for this one event, or null to follow its calendar's. */
+    val color: Int? = null,
+    /**
      * The `EVENT_TIMEZONE` of the event being edited, or null for a new one. Preserved on save so
      * editing an event authored in another zone (CalDAV, travel) does not re-anchor it to the
      * device zone and shift it for every other client.
@@ -85,6 +95,37 @@ data class EditorUiState(
     val scopePrompt: RecurrenceScopePrompt? = null,
 ) {
     val canSave: Boolean get() = title.isNotBlank() && selectedCalendarId != null && !saving
+
+    /**
+     * Whether the guest list on this event is the user's to change.
+     *
+     * Rewriting the `ATTENDEE` rows of an event someone else organized is not an edit — it is a
+     * scheduling message. What a CalDAV server does with one varies (ignore it, reject it, mail
+     * every guest a spurious update), so the editor only offers the field for events that are
+     * plainly the user's own:
+     *
+     * - a **new** event — the user is about to organize it;
+     * - anything on a **local** calendar — there is no server and no scheduling to get wrong;
+     * - an event with **no organizer**, which is what a plain CalDAV event created by a
+     *   non-scheduling client looks like; there is nobody whose event it is instead;
+     * - an event whose organizer **is** the calendar's owner account.
+     */
+    val canEditGuests: Boolean
+        get() {
+            if (!isEditing) return true
+            val calendar = availableCalendars.firstOrNull { it.id == selectedCalendarId }
+                ?: return true
+            if (calendar.isLocal) return true
+            val organizer = attendees.firstOrNull { it.isOrganizer } ?: return true
+            val owner = calendar.ownerName?.removePrefix("mailto:")?.trim()
+            return !owner.isNullOrEmpty() && organizer.email.equals(owner, ignoreCase = true)
+        }
+
+    /** Whether the current draft is a new, well-formed address the guest list does not have yet. */
+    val canAddGuest: Boolean
+        get() = canEditGuests &&
+            Attendee.isValidEmail(guestDraft) &&
+            attendees.none { it.email.equals(guestDraft.trim(), ignoreCase = true) }
 }
 
 @HiltViewModel
@@ -152,6 +193,7 @@ class EventEditorViewModel @Inject constructor(
                 // begin time of the specific occurrence the user tapped so we edit the right one.
                 val event = repository.getEventOccurrence(eventId, startArg ?: 0L)
                 val reminders = repository.getReminderMinutes(eventId)
+                val attendees = repository.getAttendees(eventId)
                 if (event != null) {
                     val cal = event.calendarId
                     val startZ = event.start.atZone(zone)
@@ -189,6 +231,8 @@ class EventEditorViewModel @Inject constructor(
                         // so the user sees the real interval/end/by-weekday rather than a bare chip.
                         showCustomRecurrence = spec.isCustom,
                         reminderMinutes = reminders.distinct().sorted(),
+                        attendees = attendees,
+                        color = repository.getEventColor(eventId),
                         originalTimezone = event.timezone,
                     )
                     return@launch
@@ -237,6 +281,9 @@ class EventEditorViewModel @Inject constructor(
             .withMinute(0)
             .withSecond(0)
             .withNano(0)
+
+    /** [color] of null puts the event back on its calendar's colour. */
+    fun updateColor(color: Int?) = mutate { it.copy(color = color) }
 
     fun updateTitle(value: String) = mutate { it.copy(title = value) }
     fun updateLocation(value: String) = mutate { it.copy(location = value) }
@@ -303,7 +350,38 @@ class EventEditorViewModel @Inject constructor(
         global = globalReminderDefault,
     )
 
+    fun updateGuestDraft(value: String) = mutate { it.copy(guestDraft = value) }
+
+    /** Commits the draft address as a guest. No-op unless it is a new, well-formed one. */
+    fun addGuest() = mutate { current ->
+        if (!current.canAddGuest) return@mutate current
+        current.copy(
+            attendees = current.attendees + Attendee(email = current.guestDraft.trim()),
+            guestDraft = "",
+        )
+    }
+
+    /**
+     * Removes one guest.
+     *
+     * The organizer is deliberately not removable: they are the event's owner in both RFC 5545 and
+     * the provider, and dropping that row does not un-invite anyone — it just loses which of the
+     * remaining addresses the invitation came from.
+     */
+    fun removeGuest(email: String) = mutate { current ->
+        if (!current.canEditGuests) return@mutate current
+        current.copy(
+            attendees = current.attendees.filterNot {
+                !it.isOrganizer && it.email.equals(email, ignoreCase = true)
+            },
+        )
+    }
+
     fun save() {
+        // An address typed into the guest field but never committed is still one the user meant to
+        // invite: tapping Save straight from the field is the obvious flow, and it does not go
+        // through the field's own Done action. Commit it before reading the state.
+        addGuest()
         val current = _state.value
         if (!current.canSave) return
         // Editing one occurrence of a series: ask whether to change just it or the whole series.
@@ -384,6 +462,12 @@ class EventEditorViewModel @Inject constructor(
                 frequency = current.frequency,
                 rrule = rrule,
                 reminderMinutes = current.reminderMinutes,
+                // The editor loaded the full guest list, so it may write the full guest list —
+                // including an empty one, which is how removing the last guest takes effect. On
+                // an event the user did not organize, null instead: writing the list back even
+                // unchanged re-sends it to the server, and it is not ours to re-send.
+                attendees = current.attendees.takeIf { current.canEditGuests },
+                color = current.color,
             )
             when {
                 !current.isEditing -> repository.createEvent(input)

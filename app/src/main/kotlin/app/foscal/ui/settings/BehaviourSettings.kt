@@ -64,6 +64,13 @@ fun CalendarViewSettings(
             onSelect = { viewModel.setFirstDayOfWeek(DayOfWeek.valueOf(it)); picker = null },
             onDismiss = { picker = null },
         )
+        ViewPicker.MonthMinimum -> ChoiceDialog(
+            title = "Skip short events in Month",
+            options = MonthMinimumOptions.map { (minutes, label) -> minutes.toString() to label },
+            selected = state.monthMinimumMinutes.toString(),
+            onSelect = { viewModel.setMonthMinimumMinutes(it.toInt()); picker = null },
+            onDismiss = { picker = null },
+        )
         ViewPicker.DayTap -> ChoiceDialog(
             title = "Tapping a day",
             options = listOf(
@@ -96,6 +103,12 @@ fun CalendarViewSettings(
                 DayTapAction.NEW_EVENT -> "Starts a new event"
             },
             onClick = { picker = ViewPicker.DayTap },
+        )
+        ValueRow(
+            title = "Skip short events in Month",
+            value = MonthMinimumOptions.firstOrNull { it.first == state.monthMinimumMinutes }?.second
+                ?: "Show all",
+            onClick = { picker = ViewPicker.MonthMinimum },
         )
         ToggleRow(
             title = "Week numbers",
@@ -173,7 +186,20 @@ fun NewEventSettings(
     }
 }
 
-private enum class ViewPicker { StartView, FirstDay, DayTap }
+private enum class ViewPicker { StartView, FirstDay, DayTap, MonthMinimum }
+
+/**
+ * Thresholds for thinning the month grid.
+ *
+ * Coarse on purpose: the point is "stop drawing the ten-minute things", not a dial. All-day
+ * events are never skipped whatever is chosen here — being all day is what earns a month cell.
+ */
+private val MonthMinimumOptions = listOf(
+    0 to "Show all",
+    30 to "Skip under 30 min",
+    60 to "Skip under 1 hour",
+    120 to "Skip under 2 hours",
+)
 
 private enum class EventPicker { Calendar, Length }
 

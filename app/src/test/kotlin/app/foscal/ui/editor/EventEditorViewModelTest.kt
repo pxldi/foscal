@@ -3,6 +3,8 @@ package app.foscal.ui.editor
 import androidx.lifecycle.SavedStateHandle
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
+import app.foscal.core.model.Attendee
+import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import java.time.Instant
@@ -18,7 +20,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -52,6 +56,18 @@ class EventEditorViewModelTest {
         rrule = "FREQ=WEEKLY",
     )
 
+    private val organizer =
+        Attendee("chair@example.org", "Ada Chair", AttendeeStatus.ACCEPTED, isOrganizer = true)
+    private val guest = Attendee("bob@example.org", status = AttendeeStatus.INVITED)
+
+    private val caldav = calendar.copy(
+        id = 2,
+        displayName = "Work",
+        accountName = "me@example.org",
+        accountType = "bitfire.at.davdroid",
+        ownerName = "me@example.org",
+    )
+
     private lateinit var repo: FakeCalendarRepository
 
     @Before
@@ -61,6 +77,7 @@ class EventEditorViewModelTest {
             calendars = listOf(calendar),
             events = listOf(recurring),
             reminderMinutes = listOf(15),
+            attendees = listOf(organizer, guest),
         )
     }
 
@@ -450,4 +467,208 @@ class EventEditorViewModelTest {
         assertEquals(allDay.start, repo.lastWritten?.start)
         assertEquals(allDay.end, repo.lastWritten?.end)
     }
+
+    @Test
+    fun `a new event writes an empty guest list rather than leaving it untouched`() =
+        runTest(dispatcher) {
+            val vm = newEventVm()
+            advanceUntilIdle()
+            vm.updateTitle("Solo")
+            vm.save()
+            advanceUntilIdle()
+
+            assertEquals(emptyList<Attendee>(), repo.lastCreated?.attendees)
+        }
+
+    // The editor loads the whole guest list precisely so that saving an unrelated edit writes it
+    // back intact: [EventInput.attendees] replaces the list wholesale, so anything not carried
+    // through here is a guest silently un-invited.
+    @Test
+    fun `an unrelated edit preserves guests the editor did not add`() = runTest(dispatcher) {
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+        assertEquals(listOf(organizer, guest), vm.state.value.attendees)
+
+        vm.updateTitle("Standup (moved)")
+        vm.save()
+        advanceUntilIdle()
+        vm.resolveScope(RecurrenceScope.ALL_EVENTS)
+        advanceUntilIdle()
+
+        assertEquals(listOf(organizer, guest), repo.lastWritten?.attendees)
+    }
+
+    @Test
+    fun `adding a guest requires a well-formed address the list does not already have`() =
+        runTest(dispatcher) {
+            val vm = recurringEditVm()
+            advanceUntilIdle()
+
+            vm.updateGuestDraft("not-an-email")
+            assertFalse(vm.state.value.canAddGuest)
+            vm.addGuest()
+            assertEquals(2, vm.state.value.attendees.size)
+
+            vm.updateGuestDraft("BOB@example.org")
+            assertFalse(vm.state.value.canAddGuest)
+
+            vm.updateGuestDraft(" carol@example.org ")
+            assertTrue(vm.state.value.canAddGuest)
+            vm.addGuest()
+            assertEquals(
+                listOf("chair@example.org", "bob@example.org", "carol@example.org"),
+                vm.state.value.attendees.map { it.email },
+            )
+            assertEquals("", vm.state.value.guestDraft)
+        }
+
+    // Tapping Save straight from the guest field never fires the field's own Done action, so an
+    // address typed there would otherwise be dropped on the floor.
+    @Test
+    fun `saving commits an address still sitting in the guest field`() = runTest(dispatcher) {
+        val vm = newEventVm()
+        advanceUntilIdle()
+        vm.updateTitle("Lunch")
+        vm.updateGuestDraft("dana@example.org")
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(listOf("dana@example.org"), repo.lastCreated?.attendees?.map { it.email })
+    }
+
+    // The organizer is the event's owner in both RFC 5545 and the provider; removing that row
+    // un-invites nobody, it only loses which address the invitation came from.
+    @Test
+    fun `the organizer cannot be removed but a guest can`() = runTest(dispatcher) {
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+
+        vm.removeGuest(organizer.email)
+        assertEquals(listOf(organizer, guest), vm.state.value.attendees)
+
+        vm.removeGuest("BOB@example.org")
+        assertEquals(listOf(organizer), vm.state.value.attendees)
+    }
+
+    /** An editor over [event], on the calendars and with the guest list given. */
+    private fun editorFor(
+        event: Event,
+        calendars: List<Calendar>,
+        attendees: List<Attendee>,
+    ): EventEditorViewModel {
+        repo = FakeCalendarRepository(
+            calendars = calendars,
+            events = listOf(event),
+            reminderMinutes = emptyList(),
+            attendees = attendees,
+        )
+        val handle = SavedStateHandle(
+            mapOf(
+                "eventId" to event.id.toString(),
+                "start" to event.start.toEpochMilli().toString(),
+                "calendarId" to "",
+                "end" to "",
+            ),
+        )
+        return EventEditorViewModel(handle, repo, FakePreferences())
+    }
+
+    // Rewriting the ATTENDEE rows of an event somebody else organized is a scheduling message, not
+    // an edit, and what a CalDAV server does with one varies. The editor does not offer it.
+    @Test
+    fun `guests are not editable on an event organized by someone else`() = runTest(dispatcher) {
+        val vm = editorFor(
+            event = recurring.copy(calendarId = caldav.id),
+            calendars = listOf(caldav),
+            attendees = listOf(
+                Attendee("boss@example.org", "The Boss", isOrganizer = true),
+                Attendee("me@example.org", status = AttendeeStatus.ACCEPTED),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(vm.state.value.canEditGuests)
+        assertFalse(vm.state.value.canAddGuest)
+    }
+
+    // Writing the list back even unchanged re-sends it to the server, so the save must carry null
+    // — the repository's "leave the guests alone" case — rather than the loaded list.
+    @Test
+    fun `saving an event we did not organize leaves its guest list untouched`() =
+        runTest(dispatcher) {
+            val vm = editorFor(
+                event = recurring.copy(calendarId = caldav.id, rrule = null),
+                calendars = listOf(caldav),
+                attendees = listOf(Attendee("boss@example.org", isOrganizer = true)),
+            )
+            advanceUntilIdle()
+
+            vm.updateTitle("Standup (renamed)")
+            vm.save()
+            advanceUntilIdle()
+
+            assertEquals(FakeCalendarRepository.Op.UPDATE, repo.lastOp)
+            assertNull(repo.lastWritten?.attendees)
+        }
+
+    @Test
+    fun `the gate holds against a mutation call that bypasses the disabled controls`() =
+        runTest(dispatcher) {
+            val locked = listOf(
+                Attendee("boss@example.org", isOrganizer = true),
+                Attendee("me@example.org"),
+            )
+            val vm = editorFor(
+                event = recurring.copy(calendarId = caldav.id),
+                calendars = listOf(caldav),
+                attendees = locked,
+            )
+            advanceUntilIdle()
+
+            vm.updateGuestDraft("intruder@example.org")
+            vm.addGuest()
+            vm.removeGuest("me@example.org")
+
+            assertEquals(locked, vm.state.value.attendees)
+        }
+
+    @Test
+    fun `guests stay editable when the organizer is the calendar's owner`() = runTest(dispatcher) {
+        val vm = editorFor(
+            event = recurring.copy(calendarId = caldav.id),
+            calendars = listOf(caldav),
+            attendees = listOf(Attendee("ME@example.org", isOrganizer = true)),
+        )
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.canEditGuests)
+    }
+
+    // A plain CalDAV event created by a non-scheduling client carries no ORGANIZER at all. There is
+    // nobody whose event it is instead, so locking the field would strand the common case.
+    @Test
+    fun `guests stay editable on a synced event that names no organizer`() = runTest(dispatcher) {
+        val vm = editorFor(
+            event = recurring.copy(calendarId = caldav.id),
+            calendars = listOf(caldav),
+            attendees = emptyList(),
+        )
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.canEditGuests)
+    }
+
+    // No server, no scheduling to get wrong — a local calendar is always the user's own.
+    @Test
+    fun `guests stay editable on a local calendar whatever the organizer says`() =
+        runTest(dispatcher) {
+            val vm = editorFor(
+                event = recurring,
+                calendars = listOf(calendar),
+                attendees = listOf(Attendee("someone@else.example", isOrganizer = true)),
+            )
+            advanceUntilIdle()
+
+            assertTrue(vm.state.value.canEditGuests)
+        }
 }

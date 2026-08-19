@@ -21,6 +21,8 @@ data class BehaviourState(
     val defaultEventMinutes: Int = Preferences.DEFAULT_EVENT_MINUTES,
     val showWeekNumbers: Boolean = false,
     val dayTapAction: DayTapAction = DayTapAction.Default,
+    /** Events shorter than this are left out of the month grid. 0 shows everything. */
+    val monthMinimumMinutes: Int = 0,
     /** Null means new events land on the first visible calendar. */
     val defaultCalendarId: Long? = null,
 ) {
@@ -53,8 +55,10 @@ class BehaviourViewModel @Inject constructor(
         prefs.firstDayOfWeek,
         prefs.defaultEventMinutes,
         prefs.showWeekNumbers,
-        prefs.dayTapAction,
-    ) { views, firstDay, minutes, weekNumbers, tap ->
+        // Paired because the outer combine is already at its five-argument overload.
+        combine(prefs.dayTapAction, prefs.monthMinimumMinutes, ::Pair),
+    ) { views, firstDay, minutes, weekNumbers, tapAndMonth ->
+        val (tap, monthMinimum) = tapAndMonth
         BehaviourState(
             startView = views.first,
             lastUsedView = views.second,
@@ -63,6 +67,7 @@ class BehaviourViewModel @Inject constructor(
             defaultEventMinutes = minutes,
             showWeekNumbers = weekNumbers,
             dayTapAction = tap,
+            monthMinimumMinutes = monthMinimum,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BehaviourState())
 
@@ -91,6 +96,10 @@ class BehaviourViewModel @Inject constructor(
 
     fun setShowWeekNumbers(enabled: Boolean) {
         viewModelScope.launch { prefs.setShowWeekNumbers(enabled) }
+    }
+
+    fun setMonthMinimumMinutes(minutes: Int) {
+        viewModelScope.launch { prefs.setMonthMinimumMinutes(minutes) }
     }
 
     fun setDayTapAction(action: DayTapAction) {

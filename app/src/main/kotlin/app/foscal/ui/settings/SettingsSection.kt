@@ -3,18 +3,19 @@ package app.foscal.ui.settings
 /**
  * The pages Settings is divided into.
  *
- * One list of everything had grown to the point where finding a switch meant scrolling past four
- * things you were not looking for. Seven short pages are quicker to search than one long one, and
- * each name says what is behind it so the summary underneath can stay a hint rather than a label.
+ * Six, and each one named by the thing it holds. There were eight, three of which — Appearance,
+ * Calendar style, Calendar — all sounded like the same page, and two of which differed only by an
+ * `s`. A name that has to be explained by a line of small print underneath it is not a name, so
+ * these carry no summary: anything that cannot be said in a word or two belongs on a page of its
+ * own rather than behind a caption.
  */
-enum class SettingsSection(val title: String, val summary: String) {
-    Appearance("Appearance", "Theme, colour"),
-    CalendarView("Calendar", "Which view opens, when the week starts"),
-    NewEvents("New events", "Where they go and how long they last"),
-    Calendars("Calendars", "What shows, and reminders per calendar"),
-    Reminders("Reminders", "When notifications arrive"),
-    Transfer("Import & export", "Move events in and out as .ics"),
-    About("About", "Version and syncing"),
+enum class SettingsSection(val title: String) {
+    Appearance("Appearance"),
+    Behaviour("Behaviour"),
+    Calendars("Calendars"),
+    Reminders("Reminders"),
+    Transfer("Import & export"),
+    About("About"),
     ;
 
     companion object {

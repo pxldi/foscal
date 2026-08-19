@@ -3,6 +3,7 @@ package app.foscal.ics
 import android.content.Context
 import android.net.Uri
 import app.foscal.core.data.CalendarRepository
+import app.foscal.core.model.Attendee
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.ExportEvent
@@ -46,7 +47,8 @@ class IcsTransfer @Inject constructor(
             listOf(export.event.id) + export.overrides.map { it.event.id }
         }
         val reminders = repository.getReminderMinutesFor(ids)
-        val events = exports.flatMap { it.toIcsEvents(reminders) }
+        val attendees = repository.getAttendeesFor(ids)
+        val events = exports.flatMap { it.toIcsEvents(reminders, attendees) }
         val text = Ics.write(events)
         // "wt" truncates. Plain "w" leaves any bytes past the new content in place, so exporting a
         // smaller calendar over an existing file would leave a tail of the previous export behind
@@ -151,7 +153,10 @@ internal suspend fun writeImported(
     return ImportSummary(imported = imported, skipped = events.size - imported)
 }
 
-internal fun Event.toIcsEvent(reminderMinutes: List<Int>): IcsEvent = IcsEvent(
+internal fun Event.toIcsEvent(
+    reminderMinutes: List<Int>,
+    attendees: List<Attendee> = emptyList(),
+): IcsEvent = IcsEvent(
     title = title,
     start = start,
     end = end,
@@ -161,6 +166,11 @@ internal fun Event.toIcsEvent(reminderMinutes: List<Int>): IcsEvent = IcsEvent(
     timezone = timezone,
     rrule = rrule,
     reminderMinutes = reminderMinutes,
+    // The provider keeps the organizer in the same table as the guests, distinguished only by
+    // RELATIONSHIP; RFC 5545 gives it its own property and forbids more than one, so the split
+    // happens here rather than the writer emitting two ORGANIZER lines for a malformed row.
+    organizer = attendees.firstOrNull { it.isOrganizer },
+    attendees = attendees.filterNot { it.isOrganizer },
 )
 
 /**
@@ -171,13 +181,20 @@ internal fun Event.toIcsEvent(reminderMinutes: List<Int>): IcsEvent = IcsEvent(
  * therefore computed once and copied down; letting the writer derive one per event would key each
  * override off its own (edited) title and start and orphan it.
  */
-internal fun ExportEvent.toIcsEvents(reminders: Map<Long, List<Int>>): List<IcsEvent> {
-    val master = event.toIcsEvent(reminders[event.id].orEmpty()).copy(
-        exdates = cancelledOccurrences.map(Instant::ofEpochMilli),
-    )
+internal fun ExportEvent.toIcsEvents(
+    reminders: Map<Long, List<Int>>,
+    attendees: Map<Long, List<Attendee>> = emptyMap(),
+): List<IcsEvent> {
+    val master = event.toIcsEvent(
+        reminders[event.id].orEmpty(),
+        attendees[event.id].orEmpty(),
+    ).copy(exdates = cancelledOccurrences.map(Instant::ofEpochMilli))
     val uid = master.uid ?: Ics.syntheticUid(master)
     return listOf(master.copy(uid = uid)) + overrides.map { override ->
-        override.event.toIcsEvent(reminders[override.event.id].orEmpty()).copy(
+        override.event.toIcsEvent(
+            reminders[override.event.id].orEmpty(),
+            attendees[override.event.id].orEmpty(),
+        ).copy(
             uid = uid,
             // RFC 5545 §3.8.5.3: a VEVENT with a RECURRENCE-ID replaces one occurrence and must not
             // define a series of its own. AOSP leaves an exception row's RRULE null, but a sync
@@ -208,4 +225,8 @@ internal fun IcsEvent.toEventInput(calendarId: Long, zone: ZoneId): EventInput =
     frequency = RecurrenceRules.parse(rrule).frequency,
     rrule = rrule,
     reminderMinutes = reminderMinutes,
+    // Null, not an empty list, when the file names nobody: writing a guest list is a
+    // clear-and-reinsert, and importing an override onto an existing series would otherwise strip
+    // the guests the series already has.
+    attendees = (listOfNotNull(organizer) + attendees).takeIf { it.isNotEmpty() },
 )

@@ -46,6 +46,10 @@ data class IcsEvent(
     val recurrenceIdAllDay: Boolean = false,
     /** Occurrence starts cancelled from this series (EXDATE). Empty for overrides and non-series. */
     val exdates: List<Instant> = emptyList(),
+    /** The event's ORGANIZER, if it names one. Never repeated in [attendees]. */
+    val organizer: Attendee? = null,
+    /** ATTENDEE rows, organizer excluded. */
+    val attendees: List<Attendee> = emptyList(),
 ) {
     /** Whether this VEVENT replaces one occurrence of another VEVENT with the same [uid]. */
     val isOverride: Boolean get() = recurrenceId != null
@@ -130,6 +134,8 @@ object Ics {
                 ?.let { sb.line("DESCRIPTION:${escape(it)}") }
             event.rrule?.takeIf { it.isNotBlank() }
                 ?.let { sb.line("RRULE:${it.removePrefix("RRULE:")}") }
+            event.organizer?.let { sb.line(organizerLine(it)) }
+            for (attendee in event.attendees) sb.line(attendeeLine(attendee))
             // Cancelled occurrences ride on the master as EXDATE rather than as their own
             // STATUS:CANCELLED override: every RFC 5545 reader understands EXDATE, while a
             // cancelled override is routinely imported as a real (if cancelled) event.
@@ -176,6 +182,41 @@ object Ics {
      */
     fun syntheticUid(event: IcsEvent): String =
         "${event.start.toEpochMilli()}-${abs(event.title.hashCode())}@foscal.app"
+
+    private fun organizerLine(organizer: Attendee): String =
+        "ORGANIZER${cnParam(organizer.name)}:mailto:${organizer.email}"
+
+    private fun attendeeLine(attendee: Attendee): String = buildString {
+        append("ATTENDEE")
+        append(cnParam(attendee.name))
+        append(";ROLE=")
+        append(if (attendee.optional) "OPT-PARTICIPANT" else "REQ-PARTICIPANT")
+        append(";PARTSTAT=")
+        append(partstat(attendee.status))
+        // RSVP is a request for an answer, so it only makes sense while there isn't one.
+        if (attendee.status == AttendeeStatus.INVITED) append(";RSVP=TRUE")
+        append(":mailto:")
+        append(attendee.email)
+    }
+
+    /**
+     * `;CN="Name"`, or empty when there is no name.
+     *
+     * The value is always quoted so a name containing `;`, `:` or `,` cannot end the parameter
+     * early. RFC 5545 §3.1 gives a quoted parameter value no escape mechanism at all — a `"` inside
+     * one simply terminates it — so an embedded quote is dropped rather than emitted broken.
+     */
+    private fun cnParam(name: String?): String {
+        val clean = name?.filter { it != '"' && it != '\r' && it != '\n' }?.trim().orEmpty()
+        return if (clean.isEmpty()) "" else ";CN=\"$clean\""
+    }
+
+    private fun partstat(status: AttendeeStatus): String = when (status) {
+        AttendeeStatus.ACCEPTED -> "ACCEPTED"
+        AttendeeStatus.DECLINED -> "DECLINED"
+        AttendeeStatus.TENTATIVE -> "TENTATIVE"
+        AttendeeStatus.INVITED -> "NEEDS-ACTION"
+    }
 
     private fun triggerDuration(minutes: Int): String {
         if (minutes <= 0) return "PT0S"
@@ -302,11 +343,15 @@ object Ics {
         var duration: Long? = null
         var rrule: String? = null
         var recurrenceId: DateValue? = null
+        var organizer: Attendee? = null
         val exdates = mutableListOf<DateValue>()
         val reminders = mutableListOf<Int>()
+        val attendees = mutableListOf<Attendee>()
 
         fun property(line: ContentLine) {
             when (line.name) {
+                "ORGANIZER" -> organizer = parseAttendee(line, isOrganizer = true)
+                "ATTENDEE" -> parseAttendee(line, isOrganizer = false)?.let { attendees += it }
                 "RECURRENCE-ID" -> recurrenceId = parseDateValue(line)
                 // EXDATE is multi-valued: one property can carry a whole comma-separated list, and
                 // a VEVENT may repeat the property as well. Both forms accumulate.
@@ -351,8 +396,40 @@ object Ics {
                 recurrenceId = recurrenceId?.toInstant(fallbackZone),
                 recurrenceIdAllDay = recurrenceId?.dateOnly == true,
                 exdates = exdates.map { it.toInstant(fallbackZone) }.distinct().sorted(),
+                organizer = organizer,
+                // Most exporters list the organizer as an ATTENDEE too, so that they get an entry in
+                // the guest list alongside the answer they gave. Keeping both would show the same
+                // person twice; the ATTENDEE row is the one dropped because ORGANIZER is what says
+                // which role they hold.
+                attendees = attendees
+                    .distinctBy { it.email.lowercase() }
+                    .filterNot { it.email.equals(organizer?.email, ignoreCase = true) },
             )
         }
+    }
+
+    /**
+     * One ORGANIZER / ATTENDEE property, or null when it carries no usable address.
+     *
+     * The value is a CAL-ADDRESS — in practice always `mailto:` — and everything else about the
+     * person rides in parameters. A row without an address cannot be matched to anyone by either
+     * the provider or a `mailto:` intent, so it is dropped rather than stored nameless.
+     */
+    private fun parseAttendee(line: ContentLine, isOrganizer: Boolean): Attendee? {
+        val email = line.value.trim().removePrefix("mailto:").removePrefix("MAILTO:").trim()
+        if (email.isEmpty()) return null
+        return Attendee(
+            email = email,
+            name = line.params["CN"]?.trim()?.takeIf { it.isNotEmpty() },
+            status = when (line.params["PARTSTAT"]?.uppercase()) {
+                "ACCEPTED" -> AttendeeStatus.ACCEPTED
+                "DECLINED" -> AttendeeStatus.DECLINED
+                "TENTATIVE" -> AttendeeStatus.TENTATIVE
+                else -> AttendeeStatus.INVITED
+            },
+            isOrganizer = isOrganizer,
+            optional = line.params["ROLE"]?.uppercase() == "OPT-PARTICIPANT",
+        )
     }
 
     /**

@@ -18,7 +18,7 @@ enum class AccentColor(val key: String) {
         val Default = COBALT
 
         /** The ARGB seed used for [CUSTOM] until the user picks one — matches the Cobalt preset. */
-        const val DEFAULT_CUSTOM_COLOR: Int = 0xFF1A73E8.toInt()
+        const val DEFAULT_CUSTOM_COLOR: Int = 0xFF4355F4.toInt()
 
         fun fromKey(key: String?): AccentColor =
             entries.firstOrNull { it.key == key } ?: Default

@@ -81,14 +81,100 @@ class TimelineLayoutTest {
     }
 
     @Test
-    fun overlappingEvents_splitIntoColumns() {
+    fun partlyOverlappingEvents_goSideBySide() {
         val positioned = layoutTimed(
             listOf(eventAt(9 * 60, 10 * 60), eventAt(9 * 60 + 30, 10 * 60 + 30)),
             60.dp,
             zone,
         )
         assertEquals(2, positioned.size)
-        assertEquals(2, positioned[0].columnCount)
-        assertEquals(setOf(0, 1), positioned.map { it.column }.toSet())
+        assertTrue("neither event contains the other", positioned.all { it.depth == 0 })
+        assertEquals(setOf(0f, 0.5f), positioned.map { it.leftFraction }.toSet())
+        assertTrue("each takes half the column", positioned.all { it.widthFraction == 0.5f })
+    }
+
+    /**
+     * The one the week grid used to get wrong: a break booked inside a workday halved the column
+     * for the whole workday, and "Arbeit" came out as "Ar / bei / t".
+     */
+    @Test
+    fun aContainedEvent_isIndentedOnTopInsteadOfHalvingTheColumn() {
+        val work = eventAt(8 * 60 + 15, 15 * 60)
+        val lunch = eventAt(12 * 60, 12 * 60 + 45)
+
+        val positioned = layoutTimed(listOf(work, lunch), 60.dp, zone)
+
+        val outer = positioned.first { it.event.start == work.start }
+        val inner = positioned.first { it.event.start == lunch.start }
+        assertEquals(0, outer.depth)
+        assertEquals(1, inner.depth)
+        assertEquals("the container keeps the whole column", 1f, outer.widthFraction, 0.001f)
+        assertTrue("the nested block is indented", inner.leftFraction > outer.leftFraction)
+        assertEquals(
+            "and still runs to the container's right edge",
+            outer.leftFraction + outer.widthFraction,
+            inner.leftFraction + inner.widthFraction,
+            0.001f,
+        )
+        assertTrue("nested blocks are drawn last", positioned.last().depth == 1)
+    }
+
+    /** Nesting is recursive: a call inside a break inside a workday steps in twice. */
+    @Test
+    fun nestingGoesDeeperThanOneLevel() {
+        val positioned = layoutTimed(
+            listOf(
+                eventAt(8 * 60, 17 * 60),
+                eventAt(12 * 60, 13 * 60),
+                eventAt(12 * 60 + 15, 12 * 60 + 30),
+            ),
+            60.dp,
+            zone,
+        )
+        assertEquals(listOf(0, 1, 2), positioned.map { it.depth })
+        val lefts = positioned.map { it.leftFraction }
+        assertTrue("each level steps further in", lefts[0] < lefts[1] && lefts[1] < lefts[2])
+    }
+
+    /** Two events on exactly the same slot are peers, not one inside the other. */
+    @Test
+    fun identicalSpans_shareTheColumnRatherThanNest() {
+        val positioned = layoutTimed(
+            listOf(eventAt(9 * 60, 10 * 60), eventAt(9 * 60, 10 * 60)),
+            60.dp,
+            zone,
+        )
+        assertTrue(positioned.all { it.depth == 0 })
+        assertEquals(setOf(0f, 0.5f), positioned.map { it.leftFraction }.toSet())
+    }
+
+    /**
+     * A ten-minute event is drawn at the minimum height whatever its length says, so it reaches
+     * past its own end and under the event that starts there. What is reported as visible is the
+     * strip above that event's top edge — the only part its title can safely sit in.
+     */
+    @Test
+    fun aBlockTooShortToDraw_reportsOnlyTheStripThatStaysInView() {
+        val wake = eventAt(5 * 60 + 50, 6 * 60)
+        val gym = eventAt(6 * 60, 7 * 60 + 15)
+
+        val positioned = layoutTimed(listOf(wake, gym), 48.dp, zone)
+
+        val short = positioned.first { it.event.start == wake.start }
+        val long = positioned.first { it.event.start == gym.start }
+        assertEquals("ten minutes of a 48dp hour", 8f, short.visibleDp.value, 0.01f)
+        assertTrue("but it is still drawn tall enough to hold a word", short.heightDp > short.visibleDp)
+        assertEquals("a block nothing covers is visible all the way down", long.heightDp, long.visibleDp)
+    }
+
+    /** Back-to-back events are not an overlap: the second gets the full width back. */
+    @Test
+    fun backToBackEvents_bothKeepTheFullColumn() {
+        val positioned = layoutTimed(
+            listOf(eventAt(9 * 60, 10 * 60), eventAt(10 * 60, 11 * 60)),
+            60.dp,
+            zone,
+        )
+        assertTrue(positioned.all { it.widthFraction == 1f && it.leftFraction == 0f })
     }
 }

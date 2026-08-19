@@ -12,12 +12,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.data.CalendarPermissionState
+import app.foscal.core.data.Preferences
 import app.foscal.core.data.UserPreferencesRepository
 import app.foscal.core.model.AccentColor
+import app.foscal.core.model.EventColorStrength
 import app.foscal.core.model.ThemeMode
 import app.foscal.core.ui.theme.FoscalTheme
 import app.foscal.ui.nav.FoscalNavHost
+import app.foscal.ui.util.LocalEventColorStrength
+import app.foscal.ui.util.LocalEventTextScale
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.LocalWrapEventTitles
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -49,6 +54,12 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = ThemeMode.Default)
             val use24Hour by prefs.use24HourClock
                 .collectAsStateWithLifecycle(initialValue = true)
+            val colorStrength by prefs.eventColorStrength
+                .collectAsStateWithLifecycle(initialValue = EventColorStrength.Default)
+            val eventTextScale by prefs.eventTextScalePercent
+                .collectAsStateWithLifecycle(initialValue = Preferences.DEFAULT_EVENT_TEXT_SCALE)
+            val wrapTitles by prefs.wrapEventTitles
+                .collectAsStateWithLifecycle(initialValue = true)
             val route = pendingRoute
             val darkTheme = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -61,7 +72,12 @@ class MainActivity : ComponentActivity() {
                 accent = accent,
                 customSeed = androidx.compose.ui.graphics.Color(customAccent),
             ) {
-                CompositionLocalProvider(LocalUse24HourClock provides use24Hour) {
+                CompositionLocalProvider(
+                    LocalUse24HourClock provides use24Hour,
+                    LocalEventColorStrength provides colorStrength,
+                    LocalEventTextScale provides eventTextScale / 100f,
+                    LocalWrapEventTitles provides wrapTitles,
+                ) {
                     when (val done = onboardingDone) {
                         null -> { /* splash while DataStore loads */ }
                         else -> FoscalNavHost(

@@ -62,6 +62,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
+import app.foscal.core.ui.theme.onTodayDiscColor
+import app.foscal.core.ui.theme.todayDiscColor
 import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
@@ -550,16 +552,16 @@ private fun DayCell(
     // its own subtree, so a cell's month membership and its today-ness are fixed for its whole
     // lifetime. The animations snapped to their targets on the first frame and charged 42 cells x 2
     // running animations per swipe for the privilege — spent during the exact frames the slide
-    // needs. Today reads as a filled accent disc; a tapped day gets a soft tonal one, so both are
-    // legible without competing.
+    // needs. Today reads as a filled amber disc; a tapped day gets a soft tonal one in the accent,
+    // so the two stop being the same blue and start meaning different things.
     val dayNumberColor = if (isInFocusedMonth) onSurface else muted
     val discColor = when {
-        isToday -> MaterialTheme.colorScheme.primary
+        isToday -> todayDiscColor()
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         else -> Color.Transparent
     }
     val numberColor = when {
-        isToday -> MaterialTheme.colorScheme.onPrimary
+        isToday -> onTodayDiscColor()
         isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> dayNumberColor
     }

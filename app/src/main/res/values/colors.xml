@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#101C36</color>
+    <color name="ic_launcher_background">#4355F4</color>
 
     <color name="widget_background">#F2F4F7</color>
     <color name="widget_title">#1A1C1E</color>
     <color name="widget_subtitle">#44474E</color>
-    <color name="widget_accent">#1976D2</color>
+    <color name="widget_accent">#4355F4</color>
     <color name="widget_divider">#E0E0E0</color>
 </resources>

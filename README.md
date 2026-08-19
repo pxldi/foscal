@@ -50,8 +50,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Theme & clock** — force **System / Light / Dark** and toggle **12- / 24-hour
   time**; both apply live across every screen and persist.
 - **Event editor** — create, edit, and delete events with title, calendar,
-  all-day toggle, start/end date-time pickers, location, notes, and any number of
-  reminders. Events keep the time zone they were authored in, so editing one that
+  all-day toggle, start/end date-time pickers, location, guests, notes, and any
+  number of reminders. Events keep the time zone they were authored in, so editing one that
   came from CalDAV does not shift it for other clients.
 - **Recurring events** — daily / weekly / monthly / yearly, with a custom
   editor for interval, end date / occurrence count, and by-weekday
@@ -63,6 +63,17 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Reminders / notifications** — exact-alarm reminders via `AlarmManager`,
   re-scheduled on boot and whenever the calendar changes, delivered on a
   dedicated notification channel that deep-links back to the event.
+- **Guests** — invite people by email in the editor and see the whole list on the
+  event, organizer first, with each person's answer (going / not going / maybe /
+  awaiting reply). Guests synced down from CalDAV are shown and preserved across
+  unrelated edits; tapping one opens your mail app. Foscal writes the guest list
+  to the calendar and lets the sync adapter deliver the invitations — it sends no
+  mail of its own. On an event somebody else organized the list is shown read-only
+  and left strictly untouched on save, so editing a meeting you were invited to
+  never sends a scheduling message on your behalf.
+- **Join video call** — a Meet / Zoom / Teams / Webex / Jitsi / Whereby / Nextcloud
+  Talk link in an event's location or notes becomes a one-tap Join action on the
+  event, labelled with the provider it points at.
 - **Real calendar colors** everywhere, with automatic light/dark contrast text.
 - **Search** across events by title, location, or notes; results expand older
   and newer as you scroll, and recurring series collapse to a single occurrence
@@ -74,7 +85,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Import & export `.ics`** — export every event on your visible calendars to a
   standard iCalendar file, or import one into a calendar you pick. Recurrence
   rules, all-day spans, time zones, reminders and multi-line notes are carried
-  across, and so are per-occurrence changes to a repeating event: a moved
+  across, and so are guests (`ORGANIZER` / `ATTENDEE` with their `PARTSTAT`), and so
+  are per-occurrence changes to a repeating event: a moved
   occurrence exports as a `RECURRENCE-ID` override and a deleted one as an
   `EXDATE`, both of which import back onto the series. Files are chosen through
   the system document picker, so Foscal needs no storage permission and only
@@ -92,8 +104,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Richer event detail: map preview, guests/attendees, join-video-call.
 - Time-zone-aware editing UI and a world-clock style secondary zone.
+- Map preview on the event detail screen (guests and join-video-call are done).
 
 **Later / future goals**
 

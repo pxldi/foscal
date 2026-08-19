@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.CalendarContract
+import app.foscal.core.model.Attendee
+import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
@@ -109,6 +111,28 @@ interface CalendarRepository {
      */
     suspend fun updateLocalCalendar(calendarId: Long, name: String, color: Int): Boolean
 
+    /**
+     * Answers an invitation on the user's own behalf.
+     *
+     * Writes the status onto the user's own `Attendees` row and onto the event's
+     * `SELF_ATTENDEE_STATUS`, without the sync-adapter flag, so the provider marks the event dirty
+     * and whatever adapter owns the calendar picks the reply up. Whether it reaches the organiser
+     * is that adapter's business; this app sends no mail of its own.
+     *
+     * Returns false when the event has no row for this calendar's owner — an event nobody invited
+     * the user to has nothing to answer.
+     */
+    suspend fun setSelfAttendeeStatus(eventId: Long, status: AttendeeStatus): Boolean
+
+    /**
+     * The colour set on this one event, or null when it simply follows its calendar's.
+     *
+     * A separate read rather than another column on the shared projections: the editor is the only
+     * caller that needs to tell "its own colour" from "the calendar's", because everywhere else
+     * already gets the resolved answer from `DISPLAY_COLOR`.
+     */
+    suspend fun getEventColor(eventId: Long): Int?
+
     /** How many events sit on [calendarId]. Shown before offering to delete it. */
     suspend fun countEvents(calendarId: Long): Int
 
@@ -183,6 +207,17 @@ interface CalendarRepository {
      * that is thousands of round-trips through the provider's binder interface.
      */
     suspend fun getReminderMinutesFor(eventIds: Collection<Long>): Map<Long, List<Int>>
+
+    /**
+     * Everyone on [eventId] — the organizer first, then the guests by name.
+     *
+     * The editor must load this before saving: [EventInput.attendees] replaces the whole list, so a
+     * caller that saves without having read it first has to pass null and leave the guests alone.
+     */
+    suspend fun getAttendees(eventId: Long): List<Attendee>
+
+    /** Attendees for many events at once, keyed by event id; events with none are absent. */
+    suspend fun getAttendeesFor(eventIds: Collection<Long>): Map<Long, List<Attendee>>
 
     /**
      * Master event rows on [calendarIds] — the `Events` table, *not* the expanded `Instances` the
@@ -448,6 +483,79 @@ class CalendarContractRepository @Inject constructor(
         "${CalendarContract.Calendars._ID} ASC",
     )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
 
+    override suspend fun getEventColor(eventId: Long): Int? = withContext(Dispatchers.IO) {
+        safeQuery(
+            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+            arrayOf(CalendarContract.Events.EVENT_COLOR),
+            null,
+            null,
+            null,
+        )?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getInt(0).takeIf { it != 0 } else null
+        }
+    }
+
+    override suspend fun setSelfAttendeeStatus(eventId: Long, status: AttendeeStatus): Boolean =
+        withContext(Dispatchers.IO) {
+            val owner = selfAddressFor(eventId) ?: return@withContext false
+            val values = ContentValues().apply {
+                put(CalendarContract.Attendees.ATTENDEE_STATUS, status.toProviderStatus())
+            }
+            val updated = safeUpdate(
+                CalendarContract.Attendees.CONTENT_URI,
+                values,
+                "${CalendarContract.Attendees.EVENT_ID} = ? AND " +
+                    "${CalendarContract.Attendees.ATTENDEE_EMAIL} = ?",
+                arrayOf(eventId.toString(), owner),
+            )
+            if (updated == 0) return@withContext false
+            // The event's own copy of the answer. Sync adapters and other calendar apps read this
+            // rather than joining to the attendee table, so leaving it behind would show the reply
+            // on this screen and nowhere else.
+            safeUpdate(
+                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+                ContentValues().apply {
+                    put(CalendarContract.Events.SELF_ATTENDEE_STATUS, status.toProviderStatus())
+                },
+                null,
+                null,
+            )
+            true
+        }
+
+    /** The address the user is known by on the calendar [eventId] lives on. */
+    private fun selfAddressFor(eventId: Long): String? {
+        val calendarId = safeQuery(
+            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
+            arrayOf(CalendarContract.Events.CALENDAR_ID),
+            null,
+            null,
+            null,
+        )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null } ?: return null
+        return safeQuery(
+            ContentUris.withAppendedId(CalendarContract.Calendars.CONTENT_URI, calendarId),
+            arrayOf(
+                CalendarContract.Calendars.OWNER_ACCOUNT,
+                CalendarContract.Calendars.ACCOUNT_NAME,
+            ),
+            null,
+            null,
+            null,
+        )?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            // OWNER_ACCOUNT is the address the server knows; ACCOUNT_NAME is the fallback for the
+            // providers that leave it empty, where the two are the same thing anyway.
+            c.getString(0)?.takeIf { it.isNotBlank() } ?: c.getString(1)?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun AttendeeStatus.toProviderStatus(): Int = when (this) {
+        AttendeeStatus.ACCEPTED -> CalendarContract.Attendees.ATTENDEE_STATUS_ACCEPTED
+        AttendeeStatus.DECLINED -> CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED
+        AttendeeStatus.TENTATIVE -> CalendarContract.Attendees.ATTENDEE_STATUS_TENTATIVE
+        AttendeeStatus.INVITED -> CalendarContract.Attendees.ATTENDEE_STATUS_INVITED
+    }
+
     override suspend fun updateLocalCalendar(calendarId: Long, name: String, color: Int): Boolean =
         withContext(Dispatchers.IO) {
             val account = localAccountOf(calendarId) ?: return@withContext false
@@ -538,6 +646,7 @@ class CalendarContractRepository @Inject constructor(
         val newId = safeInsert(CalendarContract.Events.CONTENT_URI, values)
             ?.let { ContentUris.parseId(it) } ?: return@withContext null
         setReminders(newId, input.reminderMinutes)
+        writeAttendees(newId, input.attendees)
         // AOSP links a recurrence exception to its master through the master's _sync_id. Events on
         // local calendars have no sync adapter to assign one, so we mint it ourselves — without it,
         // inserting an exception silently wipes the rest of the series. CalDAV calendars are left
@@ -591,6 +700,7 @@ class CalendarContractRepository @Inject constructor(
             if (rows > 0) {
                 deleteReminders(eventId)
                 setReminders(eventId, input.reminderMinutes)
+                writeAttendees(eventId, input.attendees)
                 true
             } else {
                 false
@@ -619,6 +729,11 @@ class CalendarContractRepository @Inject constructor(
             put(CalendarContract.Events.ALL_DAY, if (input.allDay) 1 else 0)
             put(CalendarContract.Events.EVENT_TIMEZONE, input.timezone)
             put(CalendarContract.Events.DTSTART, input.start.toEpochMilli())
+            if (input.color != null) {
+                put(CalendarContract.Events.EVENT_COLOR, input.color)
+            } else {
+                putNull(CalendarContract.Events.EVENT_COLOR)
+            }
             put(
                 CalendarContract.Events.DURATION,
                 formatDuration(input.start, input.end, input.allDay),
@@ -636,6 +751,10 @@ class CalendarContractRepository @Inject constructor(
             // both. Reminders are all-or-nothing: clear first, then write the complete set.
             deleteReminders(newId)
             setReminders(newId, input.reminderMinutes)
+            // Attendees are seeded from the master the same way, but a null list here means the
+            // caller has no guest list of its own — and for one occurrence of a series that is the
+            // right answer: it keeps the series' guests rather than dropping them.
+            writeAttendees(newId, input.attendees)
         }
         true
     }
@@ -863,6 +982,136 @@ class CalendarContractRepository @Inject constructor(
         return out.mapValues { (_, minutes) -> minutes.distinct().sorted() }
     }
 
+    override suspend fun getAttendees(eventId: Long): List<Attendee> =
+        withContext(Dispatchers.IO) { readAttendees(eventId) }
+
+    private fun readAttendees(eventId: Long): List<Attendee> {
+        val out = mutableListOf<Attendee>()
+        safeQuery(
+            CalendarContract.Attendees.CONTENT_URI,
+            ATTENDEE_PROJECTION,
+            "${CalendarContract.Attendees.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                out += c.readAttendeeRow() ?: continue
+            }
+        }
+        return out.sortAttendees()
+    }
+
+    override suspend fun getAttendeesFor(
+        eventIds: Collection<Long>,
+    ): Map<Long, List<Attendee>> = withContext(Dispatchers.IO) {
+        if (eventIds.isEmpty()) return@withContext emptyMap()
+        val out = mutableMapOf<Long, MutableList<Attendee>>()
+        // Same 999-bound-variable cap as the reminder batch read; a large calendar has to be
+        // chunked rather than passed as one IN clause.
+        for (chunk in eventIds.distinct().chunked(500)) {
+            val placeholders = chunk.joinToString(",") { "?" }
+            safeQuery(
+                CalendarContract.Attendees.CONTENT_URI,
+                ATTENDEE_PROJECTION + CalendarContract.Attendees.EVENT_ID,
+                "${CalendarContract.Attendees.EVENT_ID} IN ($placeholders)",
+                chunk.map { it.toString() }.toTypedArray(),
+                null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val attendee = c.readAttendeeRow() ?: continue
+                    out.getOrPut(c.getLong(ATTENDEE_PROJECTION.size)) { mutableListOf() } += attendee
+                }
+            }
+        }
+        out.mapValues { (_, attendees) -> attendees.sortAttendees() }
+    }
+
+    /**
+     * Reads the [ATTENDEE_PROJECTION] row at the cursor, or null if it has no email.
+     *
+     * The provider will store a row with only a name — nothing enforces the column — but the
+     * address is the identity everything downstream works from: RFC 5545 addresses an ATTENDEE by
+     * its `mailto:` value, the guest rows open a `mailto:` intent, and the write path dedupes on
+     * it. Such a row has nowhere to go, so it is dropped on the way in.
+     */
+    private fun android.database.Cursor.readAttendeeRow(): Attendee? {
+        val email = getString(1)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return Attendee(
+            email = email,
+            name = getString(0)?.trim()?.takeIf { it.isNotEmpty() },
+            status = when (getInt(4)) {
+                CalendarContract.Attendees.ATTENDEE_STATUS_ACCEPTED -> AttendeeStatus.ACCEPTED
+                CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED -> AttendeeStatus.DECLINED
+                CalendarContract.Attendees.ATTENDEE_STATUS_TENTATIVE -> AttendeeStatus.TENTATIVE
+                else -> AttendeeStatus.INVITED
+            },
+            isOrganizer = getInt(2) == CalendarContract.Attendees.RELATIONSHIP_ORGANIZER,
+            optional = getInt(3) == CalendarContract.Attendees.TYPE_OPTIONAL,
+        )
+    }
+
+    /** Organizer first, then guests by label — the provider returns rows in insertion order. */
+    private fun List<Attendee>.sortAttendees(): List<Attendee> =
+        distinctBy { it.email.lowercase() }
+            .sortedWith(compareByDescending<Attendee> { it.isOrganizer }.thenBy { it.label.lowercase() })
+
+    private fun deleteAttendees(eventId: Long) {
+        safeDelete(
+            CalendarContract.Attendees.CONTENT_URI,
+            "${CalendarContract.Attendees.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+        )
+    }
+
+    private fun setAttendees(eventId: Long, attendees: List<Attendee>) {
+        attendees.distinctBy { it.email.lowercase() }.forEach { attendee ->
+            val values = ContentValues().apply {
+                put(CalendarContract.Attendees.EVENT_ID, eventId)
+                put(CalendarContract.Attendees.ATTENDEE_EMAIL, attendee.email)
+                put(CalendarContract.Attendees.ATTENDEE_NAME, attendee.name)
+                put(
+                    CalendarContract.Attendees.ATTENDEE_RELATIONSHIP,
+                    if (attendee.isOrganizer) {
+                        CalendarContract.Attendees.RELATIONSHIP_ORGANIZER
+                    } else {
+                        CalendarContract.Attendees.RELATIONSHIP_ATTENDEE
+                    },
+                )
+                put(
+                    CalendarContract.Attendees.ATTENDEE_TYPE,
+                    if (attendee.optional) {
+                        CalendarContract.Attendees.TYPE_OPTIONAL
+                    } else {
+                        CalendarContract.Attendees.TYPE_REQUIRED
+                    },
+                )
+                put(
+                    CalendarContract.Attendees.ATTENDEE_STATUS,
+                    when (attendee.status) {
+                        AttendeeStatus.ACCEPTED -> CalendarContract.Attendees.ATTENDEE_STATUS_ACCEPTED
+                        AttendeeStatus.DECLINED -> CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED
+                        AttendeeStatus.TENTATIVE -> CalendarContract.Attendees.ATTENDEE_STATUS_TENTATIVE
+                        AttendeeStatus.INVITED -> CalendarContract.Attendees.ATTENDEE_STATUS_INVITED
+                    },
+                )
+            }
+            safeInsert(CalendarContract.Attendees.CONTENT_URI, values)
+        }
+    }
+
+    /**
+     * Applies [attendees] to [eventId], or leaves the event's guest list alone when it is null.
+     *
+     * There is no partial update for the `Attendees` table, so a write is a clear-and-reinsert.
+     * That is why null has to mean "untouched" rather than "none": every caller that does not model
+     * guests would otherwise wipe a list its sync adapter owns.
+     */
+    private fun writeAttendees(eventId: Long, attendees: List<Attendee>?) {
+        if (attendees == null) return
+        deleteAttendees(eventId)
+        setAttendees(eventId, attendees)
+    }
+
     override suspend fun getEventsForExport(
         calendarIds: Set<Long>,
     ): List<ExportEvent> = withContext(Dispatchers.IO) {
@@ -1080,6 +1329,13 @@ class CalendarContractRepository @Inject constructor(
         put(CalendarContract.Events.ALL_DAY, if (input.allDay) 1 else 0)
         put(CalendarContract.Events.EVENT_TIMEZONE, input.timezone)
         put(CalendarContract.Events.DTSTART, input.start.toEpochMilli())
+        // Null rather than omitted: an event that had its own colour and has been put back on the
+        // calendar's has to clear the column, and leaving it out would silently keep the old one.
+        if (input.color != null) {
+            put(CalendarContract.Events.EVENT_COLOR, input.color)
+        } else {
+            putNull(CalendarContract.Events.EVENT_COLOR)
+        }
 
         if (input.frequency == Frequency.NONE) {
             // Non-recurring: provider requires DTEND (or DURATION), forbids RRULE.
@@ -1273,6 +1529,18 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Events.ORIGINAL_INSTANCE_TIME,
             CalendarContract.Events.ORIGINAL_ALL_DAY,
             CalendarContract.Events.STATUS,
+        )
+
+        /**
+         * Column order `readAttendeeRow` depends on. The batch read appends `EVENT_ID` after
+         * these, so the reader must never index past the end of this array.
+         */
+        private val ATTENDEE_PROJECTION = arrayOf(
+            CalendarContract.Attendees.ATTENDEE_NAME,
+            CalendarContract.Attendees.ATTENDEE_EMAIL,
+            CalendarContract.Attendees.ATTENDEE_RELATIONSHIP,
+            CalendarContract.Attendees.ATTENDEE_TYPE,
+            CalendarContract.Attendees.ATTENDEE_STATUS,
         )
 
         /** Reminder methods Foscal delivers itself; EMAIL and SMS are the server's job. */

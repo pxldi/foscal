@@ -599,4 +599,98 @@ class IcsTest {
             Ics.read(Ics.write(events, stamp), berlin).map { it.title },
         )
     }
+
+    // ------------------------------------------------------------- attendees
+
+    @Test
+    fun `an organizer and guests round trip with their answers`() {
+        val read = writeRead(
+            timed().copy(
+                organizer = Attendee("chair@example.org", "Ada Chair", isOrganizer = true),
+                attendees = listOf(
+                    Attendee("yes@example.org", "Yes Person", AttendeeStatus.ACCEPTED),
+                    Attendee("no@example.org", status = AttendeeStatus.DECLINED),
+                    Attendee("maybe@example.org", status = AttendeeStatus.TENTATIVE),
+                    Attendee("quiet@example.org", status = AttendeeStatus.INVITED, optional = true),
+                ),
+            ),
+        )
+        assertEquals(Attendee("chair@example.org", "Ada Chair", isOrganizer = true), read.organizer)
+        assertEquals(
+            listOf(
+                "yes@example.org" to AttendeeStatus.ACCEPTED,
+                "no@example.org" to AttendeeStatus.DECLINED,
+                "maybe@example.org" to AttendeeStatus.TENTATIVE,
+                "quiet@example.org" to AttendeeStatus.INVITED,
+            ),
+            read.attendees.map { it.email to it.status },
+        )
+        assertTrue(read.attendees.single { it.email == "quiet@example.org" }.optional)
+        assertEquals("Yes Person", read.attendees.single { it.email == "yes@example.org" }.name)
+        assertNull(read.attendees.single { it.email == "no@example.org" }.name)
+    }
+
+    // Most exporters also list the organizer as an ATTENDEE so it has a PARTSTAT of its own.
+    // Keeping both would show the same person twice in the guest list.
+    @Test
+    fun `an organizer repeated as an attendee appears only once`() {
+        val text = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            UID:dup@example.org
+            DTSTART:20260726T090000Z
+            DTEND:20260726T093000Z
+            SUMMARY:Sync
+            ORGANIZER;CN=Ada:mailto:ada@example.org
+            ATTENDEE;CN=Ada;PARTSTAT=ACCEPTED:mailto:ADA@example.org
+            ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.org
+            END:VEVENT
+            END:VCALENDAR
+        """.trimIndent()
+        val read = Ics.read(text, berlin).single()
+        assertEquals("ada@example.org", read.organizer?.email)
+        assertEquals(listOf("bob@example.org"), read.attendees.map { it.email })
+    }
+
+    // A quoted CN is the only place a name may hold a ';' or ':'; unquoted, the parameter would
+    // end at the first one and the rest would be read as another parameter.
+    @Test
+    fun `a name containing a semicolon survives the round trip`() {
+        val read = writeRead(
+            timed().copy(attendees = listOf(Attendee("x@example.org", "Doe; Jane: ops"))),
+        )
+        assertEquals("Doe; Jane: ops", read.attendees.single().name)
+    }
+
+    @Test
+    fun `an attendee without an address is dropped rather than stored nameless`() {
+        val text = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            DTSTART:20260726T090000Z
+            DTEND:20260726T093000Z
+            SUMMARY:Sync
+            ATTENDEE;CN=Nobody:
+            END:VEVENT
+            END:VCALENDAR
+        """.trimIndent()
+        assertTrue(Ics.read(text, berlin).single().attendees.isEmpty())
+    }
+
+    @Test
+    fun `an unanswered attendee is asked to RSVP`() {
+        val text = Ics.write(
+            listOf(timed().copy(attendees = listOf(Attendee("x@example.org")))),
+            stamp,
+        )
+        assertTrue("RSVP=TRUE" in text)
+        assertTrue("PARTSTAT=NEEDS-ACTION" in text)
+    }
+
+    @Test
+    fun `an event with nobody on it writes no attendee properties`() {
+        val text = Ics.write(listOf(timed()), stamp)
+        assertFalse("ATTENDEE" in text)
+        assertFalse("ORGANIZER" in text)
+    }
 }

@@ -1,0 +1,10 @@
+0.11.0
+
+* The bottom sheet dismisses properly: no more grey screen left behind after a
+  swipe, a scrim tap or the back gesture.
+* Add a calendar kept on this phone, from Settings.
+* Event notes that arrive as HTML render as text, with working links.
+* Choose which calendar a new event lands on.
+* Settings is broken into pages you can find things on.
+* A baseline profile, so the app is compiled before your first run.
+* A new brand mark.

@@ -97,10 +97,20 @@ The emulator runs **outside** the dev container and is reached over adb — ther
 `emulator` binary or system image inside the image, so you cannot start or create an AVD
 from here. `adb devices` is the authority on whether one is attached.
 
-- **Verify the device before trusting coordinates.** The current device is
-  **320x640 at density 160**, where screenshots are native size and taps map **1:1**. An
-  earlier AVD was 1080x2400 and needed a 1.2x factor. Always run `adb shell wm size` first;
-  a stale factor silently sends every tap to the wrong widget.
+- **Verify the device before trusting coordinates.** `adb shell wm size` reports both a physical
+  size and an *override*, and the override is what taps and dumps are in — the current AVD is
+  320x640 physical but 1080x1920 override at density 420. Reading the physical line sends every
+  tap to a third of the screen. Always run it first; a stale factor silently sends every tap to
+  the wrong widget.
+- **`screencap` returns a black frame on this AVD, but `uiautomator dump` works.** There is no
+  point diagnosing the black PNG: use the hierarchy instead. It carries every label and its
+  bounds, which is enough to drive the UI *and* to measure it — a title that wrapped is twice as
+  tall as one that did not, and a text scale change shows up as a wider node. Note that the `text`
+  it reports for an ellipsised label is the *laid out* text, not the original string, which is
+  itself a usable signal.
+- **`input swipe` cannot produce a long-press drag** — it moves past touch slop before the press
+  becomes long. Use `input motionevent DOWN x y`, then separate `MOVE` calls (each round trip is
+  well over the long-press timeout), then `UP`.
 - **No KVM, so it is slow.** `am start` returns immediately while the app is still starting;
   the first frame took ~20s. Poll `dumpsys window | grep mCurrentFocus` until it names the
   activity instead of screenshotting straight away, or you will capture the launcher and
@@ -133,12 +143,15 @@ Beta. Working: Month / Week / Agenda / Settings tabs (bottom nav — Settings is
 tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination; the
 selected tab is `rememberSaveable` so returning from detail/editor preserves the
 current tab), event create/edit/delete, recurring events
-(this-vs-all-events, exceptions), reminders/notifications, real calendar colors,
+(this-vs-all-events, exceptions), reminders/notifications, guests/attendees with a
+join-video-call action, real calendar colors,
 offline local calendars, `.ics` import/export via the system document picker,
 permission-first onboarding. Week view is the shared
-hourly `TimelineLayout` with long-press drag-to-create and long-press
-drag-to-move for timed events; recurring timed moves are stored as single
-occurrence exceptions. There is no separate Day view — it was dropped as
+hourly `TimelineLayout` with long-press drag-to-create (snapped to ten minutes, with a
+pill above the block naming the range), tap-to-park-then-tap-to-open for a
+default-length event, and long-press drag-to-move for timed events; recurring timed
+moves are stored as single occurrence exceptions. How events are *drawn* — colour
+strength, title size, whether titles wrap — is the "Calendar style" settings page. There is no separate Day view — it was dropped as
 redundant (Week's schedule + Agenda cover it). See the README "Current status"
 and "Roadmap" sections for the full picture and what's next.
 
@@ -178,6 +191,22 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   with the rest of the UI whenever the user has forced Light or Dark in Settings. The only
   legitimate callers of `isSystemInDarkTheme()` are `MainActivity`, where `ThemeMode.SYSTEM`
   is resolved into the `darkTheme` argument, and that parameter's own default.
+- **Event colour** — `Instances.DISPLAY_COLOR` already resolves to the event's own colour when it
+  has one and the calendar's otherwise, so reading needs nothing special; only the write is the
+  app's problem. `EventInput.color` of null must write `putNull(EVENT_COLOR)`, never omit the
+  column, or an event put back on its calendar's colour silently keeps the old one.
+- **Event blocks** — one helper, `ui/EventColors.kt`, decides the fill and the text for both the
+  timed blocks and the all-day bars, so the two cannot drift apart the way they had (a solid slab
+  up top, a 10% wash below). The fill is the calendar's colour; the text is black or white by
+  whichever actually measures better, and then the *fill* is nudged 1–4% away from that text until
+  the pair clears 4.5:1. Three of the eight presets sat at 4.2–4.3:1 without it, and a colour from
+  a CalDAV server can be anything at all. `EventColorsTest` covers the presets and the greys.
+- **Which calendars a view draws** — `visibleCalendarIds(repository, prefs)` in
+  `ui/util/VisibleCalendars.kt` is the one source, intersecting the provider's `Calendars.VISIBLE`
+  with the user's own toggle. Month uses `monthCalendarIds`, which layers a second, month-only
+  exclusion on top. Layered, never folded in: the month setting can only ever remove, so a
+  calendar switched off everywhere cannot be brought back by it. Add a new view's filtering here
+  rather than in the view model — the four copies this replaced had already begun to drift.
 - **Editing and deleting a calendar** — only ones on the app's own local account, guarded both in
   the UI (`CalendarRowCard` shows both buttons only when `calendar.isLocal`) and again in
   `CalendarRepository.updateLocalCalendar` / `deleteLocalCalendar`. A rename writes `NAME` as well
@@ -198,8 +227,17 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `ic_foscal_badge.xml`). Keep them in sync if you change one, and redraw
   `ic_launcher_monochrome.xml` alongside — the themed-icon layer is a silhouette, so
   the grid has to be punched out with `fillType="evenOdd"` rather than drawn in a
-  second colour. Brand palette: ink `#101C36`, card `#A8CBFF`, band `#FFC963`,
-  tab `#2B4FA8`. These are the mark's own colours and are deliberately separate from
+  second colour. `ic_notification_calendar.xml` is the same grid again at 24dp,
+  minus the bands the colour version has room for. Its cells are real superellipses rather
+  than rounded rectangles: a generous corner radius reads as a circle at that size and the
+  round today-cell stops being distinguishable, which is the one thing the glyph has to say. Brand palette: ground `#4355F4`, card `#FFFFFF`, band `#FFC94D`,
+  tab `#8691F7`. The grid dots are drawn in the ground colour so they read as punched
+  through the card rather than printed on it. The first two are also the Cobalt accent's
+  primary and secondary in `:core-ui`, so the app matches the icon that opened it; the
+  amber marks today in both: `todayDiscColor()` fills the disc and `onTodayDiscColor()` is
+  the ink on it. Amber is a *fill* — at 1.5:1 on white it can never be a line or a label, so
+  anywhere it has to be text (weekend labels, today's weekday in the agenda) uses
+  `amberTextColor()`, the darkened form that clears 4.5:1. These are the mark's own colours and are deliberately separate from
   the Material scheme in `:core-ui` and from the per-calendar colours in
   `ui/CalendarColors.kt`.
 - Time is **24-hour by default** (`HH:mm`), but the user can switch to 12-hour in
@@ -314,6 +352,21 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **`ensureLocalCalendar` is find-or-create, deliberately.** The Calendar Provider outlives the
   app's own data, so a plain insert on every onboarding run adds a duplicate "My calendar" after
   each data clear or reinstall and strands the user's events in the first one.
+- **The grid's tap and its long-press drag are two pointer inputs on one node, and they both
+  see every gesture.** `detectTapGestures` fires on the release of a *long* press too — it is only
+  a very slow tap as far as it is concerned — so without `longPressActive` a drag that created an
+  event also parked a block on top of it. The flag is set in `onDragStart` and cleared in the tap
+  detector's `onPress`, which runs on the down of every gesture and therefore always before the
+  long press it might belong to. Do not "fix" this by passing `onLongPress` to `detectTapGestures`
+  instead: that path calls `consumeUntilUp()`, which eats the very move events the drag detector
+  needs and kills the drag outright.
+- **A drag rounds to the nearest snap step and a tap floors to it, deliberately.** Rounding a drag
+  keeps both edges under the finger; flooring a tap keeps the block from starting above where the
+  finger landed, which reads as a missed tap rather than as a snap.
+- **`eventColors` is the only thing that knows about `EventColorStrength`.** The wash is applied
+  before the ink is chosen, never after, so every strength gets ink picked against the fill it
+  actually has and the 4.5:1 nudge still applies. A settings swatch renders its own strength by
+  providing `LocalEventColorStrength` over the ambient one rather than by reimplementing the maths.
 - **Timeline headers must use `TimelineGutterWidth` / `TimelineEndInset`.** Any weekday strip drawn
   above a `TimelineLayout` shares those two values or its columns drift out of alignment with the
   grid columns below; the error accumulates across the week and shows up on the last day.
@@ -349,6 +402,39 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   any caller that passes a single value (or `minOrNull()`) silently destroys the other
   alarms, including ones DAVx⁵ synced down. The editor renders a chip per preset plus one
   per already-present value so nothing it can't display gets dropped on save.
+- **`EventInput.attendees` is nullable and null means "leave them alone".** Guests are
+  all-or-nothing exactly like reminders — the provider has no partial update for `Attendees`, so
+  `writeAttendees` clears and reinserts. Unlike reminders, most callers have no guest list at all
+  (quick add, a week-grid drag-to-move, an `.ics` file with no ATTENDEE lines), and an empty list
+  from those would wipe every guest DAVx⁵ synced down. Only a caller that actually *read* the
+  guests may pass a list; the editor does, which is why it can write an empty one when the user
+  removes the last guest. A recurrence exception inherits the master's guests through the same
+  null.
+- **The organizer lives in the `Attendees` table too.** The provider tells it from a guest only by
+  `ATTENDEE_RELATIONSHIP`; RFC 5545 gives it its own ORGANIZER property and allows exactly one, so
+  `Event.toIcsEvent` splits it out. Most exporters *also* list the organizer as an ATTENDEE, so the
+  reader drops the duplicate row rather than showing the same person twice. The editor will not let
+  the organizer be removed: dropping that row un-invites nobody, it only loses which address the
+  invitation came from.
+- **Foscal sends no invitations, but it can answer one.** It writes guests to the provider and the
+  calendar's sync adapter delivers them; the app never mails anybody itself. Replying is the same
+  shape in reverse — `setSelfAttendeeStatus` writes `ATTENDEE_STATUS` on the user's *own* row and
+  the adapter carries it back — which is why the detail screen offers Yes / Maybe / No when the
+  user is an attendee. There is no equivalent for anybody else on the list, so tapping another
+  guest opens a `mailto:` intent, which remains the only thing the app can honestly do about them.
+- **The editor only offers the guest field for events the user organized**
+  (`EditorUiState.canEditGuests`). Rewriting the `ATTENDEE` rows of somebody else's event is not an
+  edit but a scheduling message, and CalDAV servers vary in what they do with one — up to mailing
+  every guest a spurious update. Editable means: a new event, a local calendar, an event with no
+  ORGANIZER at all (what a plain CalDAV event from a non-scheduling client looks like — there is
+  nobody whose event it is instead), or an organizer matching the calendar's `OWNER_ACCOUNT`.
+  Otherwise the guests still render, read-only, and **the save passes `attendees = null`** — writing
+  the list back even unchanged re-sends it to the server. Both mutators re-check the gate, so a
+  disabled control is not the only thing enforcing it.
+- **A location that is only a call link gets no Location card.** `MeetingLinks.find` scans location
+  then description; when the whole location *is* the matched URL, the detail screen suppresses the
+  location card, because it would repeat the Join card and its `geo:` intent would search a map for
+  a URL. A location that merely contains a link still names a real place and keeps its card.
 - **Never re-anchor an event's time zone.** `EventInput.timezone` must carry the edited
   event's original `EVENT_TIMEZONE`; the editor keeps it in
   `EditorUiState.originalTimezone`. Rewriting it to the device zone preserves the chosen
