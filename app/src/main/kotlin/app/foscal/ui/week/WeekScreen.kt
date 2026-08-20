@@ -33,7 +33,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.ui.theme.Motion
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
+import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.common.TimelineEndInset
 import app.foscal.ui.common.TimelineGutterWidth
@@ -56,6 +60,13 @@ import app.foscal.ui.util.currentLocale
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/** A drop that is waiting on the user to say how much of a series it applies to. */
+private data class PendingMove(
+    val event: app.foscal.core.model.Event,
+    val startMillis: Long,
+    val endMillis: Long,
+)
 
 /**
  * The timeline, at whatever zoom [span] asks for: 1 day, 3 days or a week.
@@ -77,6 +88,27 @@ fun TimelineRoute(
     LaunchedEffect(span) { viewModel.setSpan(span) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val behaviour by behaviourViewModel.state.collectAsStateWithLifecycle()
+
+    // A drop on a series is a question, not an instruction. It used to be answered for the user —
+    // always "just this one" — which turned the occurrence into a lone exception carrying no rule,
+    // so the editor then reported it as repeating "Once" and the drag looked like it had thrown
+    // the repeat away.
+    var pendingMove by remember { mutableStateOf<PendingMove?>(null) }
+    var revertMoveSignal by remember { mutableIntStateOf(0) }
+
+    pendingMove?.let { move ->
+        RecurrenceScopeDialog(
+            verb = "Move",
+            onScope = { scope ->
+                pendingMove = null
+                viewModel.moveEvent(move.event, move.startMillis, move.endMillis, scope)
+            },
+            onDismiss = {
+                pendingMove = null
+                revertMoveSignal++
+            },
+        )
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -164,8 +196,15 @@ fun TimelineRoute(
                         compact = visible.size > 1,
                         onEventClick = onEventClick,
                         onNewEvent = onNewEvent,
-                        onEventMove = viewModel::moveEvent,
+                        onEventMove = { event, startMillis, endMillis ->
+                            if (event.isRecurring) {
+                                pendingMove = PendingMove(event, startMillis, endMillis)
+                            } else {
+                                viewModel.moveEvent(event, startMillis, endMillis)
+                            }
+                        },
                         newEventMinutes = behaviour.defaultEventMinutes,
+                        revertMoveSignal = revertMoveSignal,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -182,6 +221,7 @@ private fun WeekScheduleList(
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
     onEventMove: (app.foscal.core.model.Event, Long, Long) -> Unit,
     newEventMinutes: Int,
+    revertMoveSignal: Int,
     modifier: Modifier = Modifier,
 ) {
     TimelineLayout(
@@ -190,6 +230,7 @@ private fun WeekScheduleList(
         onTimeRangeSelected = onNewEvent,
         onEventMove = onEventMove,
         newEventMinutes = newEventMinutes,
+        revertMoveSignal = revertMoveSignal,
         modifier = modifier,
         compact = compact,
     )

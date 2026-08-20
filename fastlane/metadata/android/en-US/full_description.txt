@@ -1,6 +1,6 @@
 Foscal is a calendar for Android built on the phone's own calendar provider. It
 works fully offline with local calendars, and online with any CalDAV server —
-Nextcloud, ownCloud, Radicale, Baikal — through DAVx5.
+Nextcloud, ownCloud, Radicale, Baikal — through DAVx⁵.
 
 Nothing about your calendar leaves the phone. Foscal has no accounts, no
 analytics and no servers of its own. The only feature that touches the network
@@ -12,10 +12,10 @@ Views
 * Skip short events in the month grid, so timeboxing does not bury the dentist
 
 Events
-* Create, edit and delete, including single occurrences of a repeating event
+* Create, duplicate, edit and delete, single occurrences of a repeat included
 * Repeats, with the original rule preserved for events that came from CalDAV
 * Reminders per event, with a default per calendar
-* Guests, with a one-tap reply to an invitation
+* Attendees, with a one-tap RSVP to an invitation
 * A join button for a video call linked in the notes or the location
 * A colour per event, or the calendar's
 * Locations, with offline suggestions from the ones you have used before

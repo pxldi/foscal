@@ -61,7 +61,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -613,6 +615,7 @@ private fun ToggleCard(
     checked: Boolean,
     onToggle: (Boolean) -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
     androidx.compose.material3.Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -638,7 +641,15 @@ private fun ToggleCard(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                Switch(checked = checked, onCheckedChange = onToggle)
+                Switch(
+                    checked = checked,
+                    onCheckedChange = {
+                        haptics.performHapticFeedback(
+                            if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                        )
+                        onToggle(it)
+                    },
+                )
             }
             Text(
                 subtitle,

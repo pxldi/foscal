@@ -80,7 +80,7 @@ data class EditorUiState(
      * list — the editor has to be able to write back the guests it did not add itself.
      */
     val attendees: List<Attendee> = emptyList(),
-    /** What the user has typed into the "Add guest" field, before it is committed as a chip. */
+    /** What the user has typed into the "Add attendee" field, before it is committed as a chip. */
     val guestDraft: String = "",
     /** A colour for this one event, or null to follow its calendar's. */
     val color: Int? = null,
@@ -117,15 +117,18 @@ data class EditorUiState(
                 ?: return true
             if (calendar.isLocal) return true
             val organizer = attendees.firstOrNull { it.isOrganizer } ?: return true
-            val owner = calendar.ownerName?.removePrefix("mailto:")?.trim()
-            return !owner.isNullOrEmpty() && organizer.email.equals(owner, ignoreCase = true)
+            val owner = calendar.ownerName?.let { Attendee.normalizeAddress(it) }
+            return !owner.isNullOrEmpty() &&
+                Attendee.normalizeAddress(organizer.email) == owner
         }
 
-    /** Whether the current draft is a new, well-formed address the guest list does not have yet. */
+    /** Whether the current draft is a new, well-formed address the list does not already have. */
     val canAddGuest: Boolean
         get() = canEditGuests &&
             Attendee.isValidEmail(guestDraft) &&
-            attendees.none { it.email.equals(guestDraft.trim(), ignoreCase = true) }
+            attendees.none {
+                Attendee.normalizeAddress(it.email) == Attendee.normalizeAddress(guestDraft)
+            }
 }
 
 @HiltViewModel
@@ -152,6 +155,7 @@ class EventEditorViewModel @Inject constructor(
 
     init {
         val eventId = savedStateHandle.get<String>("eventId")?.toLongOrNull() ?: 0L
+        val copyFrom = savedStateHandle.get<String>("copyFrom")?.toLongOrNull() ?: 0L
         val startArg = savedStateHandle.get<String>("start")?.toLongOrNull()
         val endArg = savedStateHandle.get<String>("end")?.toLongOrNull()
         val calArg = savedStateHandle.get<String>("calendarId")?.toLongOrNull()
@@ -163,7 +167,7 @@ class EventEditorViewModel @Inject constructor(
             description = savedStateHandle.get<String>("description").orEmpty(),
             allDay = savedStateHandle.get<String>("allDay").toBoolean(),
         )
-        load(eventId, startArg, endArg, calArg, prefill)
+        load(eventId, startArg, endArg, calArg, prefill, copyFrom)
     }
 
     private data class Prefill(
@@ -179,6 +183,7 @@ class EventEditorViewModel @Inject constructor(
         endArg: Long?,
         calArg: Long?,
         prefill: Prefill = Prefill(),
+        copyFrom: Long = 0L,
     ) {
         viewModelScope.launch {
             val hidden = prefs.hiddenCalendarIds.first()
@@ -234,6 +239,61 @@ class EventEditorViewModel @Inject constructor(
                         attendees = attendees,
                         color = repository.getEventColor(eventId),
                         originalTimezone = event.timezone,
+                    )
+                    return@launch
+                }
+            }
+            // Duplicating. Everything the user can see comes across, the recurrence rule verbatim
+            // included, so a copy is actually a copy — except the guest list, which is deliberately
+            // left behind: saving attendees is a scheduling message, and nobody duplicating a
+            // meeting has asked to invite the room a second time. The title arrives selected under
+            // an open keyboard, which is the first thing a copy usually needs changed.
+            if (copyFrom > 0L) {
+                val source = repository.getEventOccurrence(copyFrom, startArg ?: 0L)
+                if (source != null) {
+                    val startZ = source.start.atZone(zone)
+                    val endZ = source.end.atZone(zone)
+                    val spec = RecurrenceRules.parse(source.rrule)
+                    _state.value = EditorUiState(
+                        loading = false,
+                        isEditing = false,
+                        title = source.title,
+                        availableCalendars = visible,
+                        // The source's calendar, unless it is one the user has since hidden —
+                        // a copy must not be parked on a calendar the picker cannot even show.
+                        selectedCalendarId = source.calendarId
+                            .takeIf { id -> visible.any { it.id == id } }
+                            ?: visible.firstOrNull()?.id,
+                        allDay = source.allDay,
+                        startDate = if (source.allDay) {
+                            source.startLocalDate(zone)
+                        } else {
+                            startZ.toLocalDate()
+                        },
+                        startTime = if (source.allDay) LocalTime.MIDNIGHT else startZ.toLocalTime(),
+                        endDate = if (source.allDay) source.lastLocalDate(zone) else endZ.toLocalDate(),
+                        endTime = if (source.allDay) LocalTime.MIDNIGHT else endZ.toLocalTime(),
+                        location = source.location.orEmpty(),
+                        recentLocations = recentLocations,
+                        mapsEnabled = mapsEnabled,
+                        description = source.description.orEmpty(),
+                        frequency = spec.frequency,
+                        interval = spec.interval,
+                        recurrenceEndDate = spec.until,
+                        recurrenceCount = spec.count,
+                        byWeekday = spec.byWeekday,
+                        showCustomRecurrence = spec.isCustom,
+                        // Carried so save() writes the source's rule as it stands rather than the
+                        // approximation the controls can express; touching any of them still
+                        // rebuilds, exactly as it does when editing.
+                        originalRrule = source.rrule,
+                        reminderMinutes = repository.getReminderMinutes(copyFrom)
+                            .distinct()
+                            .sorted(),
+                        // The copied reminders are a choice already made; switching calendars must
+                        // not quietly replace them with that calendar's default.
+                        remindersTouched = true,
+                        color = repository.getEventColor(copyFrom),
                     )
                     return@launch
                 }
@@ -372,7 +432,8 @@ class EventEditorViewModel @Inject constructor(
         if (!current.canEditGuests) return@mutate current
         current.copy(
             attendees = current.attendees.filterNot {
-                !it.isOrganizer && it.email.equals(email, ignoreCase = true)
+                !it.isOrganizer &&
+                    Attendee.normalizeAddress(it.email) == Attendee.normalizeAddress(email)
             },
         )
     }

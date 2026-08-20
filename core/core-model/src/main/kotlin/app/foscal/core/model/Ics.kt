@@ -400,10 +400,17 @@ object Ics {
                 // Most exporters list the organizer as an ATTENDEE too, so that they get an entry in
                 // the guest list alongside the answer they gave. Keeping both would show the same
                 // person twice; the ATTENDEE row is the one dropped because ORGANIZER is what says
-                // which role they hold.
+                // which role they hold. Matched through Attendee.normalizeAddress, because an
+                // iCalendar address is a URI: the same person can arrive as `mailto:a@b` on one
+                // property and `a@b` on the other, and a raw comparison lists them twice.
                 attendees = attendees
-                    .distinctBy { it.email.lowercase() }
-                    .filterNot { it.email.equals(organizer?.email, ignoreCase = true) },
+                    .distinctBy { Attendee.normalizeAddress(it.email) }
+                    .filterNot { attendee ->
+                        organizer?.let {
+                            Attendee.normalizeAddress(attendee.email) ==
+                                Attendee.normalizeAddress(it.email)
+                        } == true
+                    },
             )
         }
     }

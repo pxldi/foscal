@@ -4,9 +4,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +73,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -89,6 +93,7 @@ import app.foscal.core.model.Frequency
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.CalendarColors
+import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
 import app.foscal.ui.util.LocalUse24HourClock
@@ -127,7 +132,7 @@ fun EventEditorRoute(
 
     state.scopePrompt?.let { prompt ->
         RecurrenceScopeDialog(
-            prompt = prompt,
+            verb = if (prompt == RecurrenceScopePrompt.DELETE) "Delete" else "Change",
             onScope = viewModel::resolveScope,
             onDismiss = viewModel::dismissScopePrompt,
         )
@@ -316,16 +321,34 @@ private fun EditorForm(
                     title = "Repeats",
                     selected = state.frequency,
                 ) { freq -> viewModel.updateFrequency(freq) }
-                if (state.frequency != Frequency.NONE) {
-                    TextButton(onClick = viewModel::toggleCustomRecurrence) {
-                        Text(if (state.showCustomRecurrence) "Hide options" else "Customize…")
-                    }
-                    if (state.showCustomRecurrence) {
-                        CustomRecurrenceControls(
-                            state = state,
-                            viewModel = viewModel,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
+                // Grown into rather than popped in. Choosing "Weekly" adds a button and, behind
+                // it, a whole panel of controls; appearing instantly made the rest of the form
+                // jump down the screen with nothing to say it had. The all-day row next to it
+                // already opens its time fields this way.
+                AnimatedVisibility(
+                    visible = state.frequency != Frequency.NONE,
+                    enter = expandVertically(tween(Motion.DurationMedium)) +
+                        fadeIn(tween(Motion.DurationMedium)),
+                    exit = shrinkVertically(tween(Motion.DurationMedium)) +
+                        fadeOut(tween(Motion.DurationMedium)),
+                ) {
+                    Column {
+                        TextButton(onClick = viewModel::toggleCustomRecurrence) {
+                            Text(if (state.showCustomRecurrence) "Hide options" else "Customize…")
+                        }
+                        AnimatedVisibility(
+                            visible = state.showCustomRecurrence,
+                            enter = expandVertically(tween(Motion.DurationMedium)) +
+                                fadeIn(tween(Motion.DurationMedium)),
+                            exit = shrinkVertically(tween(Motion.DurationMedium)) +
+                                fadeOut(tween(Motion.DurationMedium)),
+                        ) {
+                            CustomRecurrenceControls(
+                                state = state,
+                                viewModel = viewModel,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -482,44 +505,6 @@ private fun EditorForm(
 }
 
 @Composable
-private fun RecurrenceScopeDialog(
-    prompt: RecurrenceScopePrompt,
-    onScope: (RecurrenceScope) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val verb = if (prompt == RecurrenceScopePrompt.DELETE) "Delete" else "Change"
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("$verb recurring event") },
-        text = {
-            Column {
-                Text("This event repeats. Apply your change to:")
-                Spacer(Modifier.height(16.dp))
-                ScopeChoice("$verb this event") { onScope(RecurrenceScope.SINGLE) }
-                ScopeChoice("$verb this and following events") { onScope(RecurrenceScope.THIS_AND_FOLLOWING) }
-                ScopeChoice("$verb all events") { onScope(RecurrenceScope.ALL_EVENTS) }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
-}
-
-@Composable
-private fun ScopeChoice(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.primary,
-    )
-}
-
-@Composable
 private fun Section(content: @Composable () -> Unit) {
     Column {
         content()
@@ -547,9 +532,20 @@ private fun ToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        // Compose's Switch has no haptic of its own, and a toggle is the one control whose entire
+        // output is a state the thumb is sitting on top of.
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.performHapticFeedback(
+                    if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                )
+                onCheckedChange(it)
+            },
+        )
     }
 }
 
@@ -795,7 +791,7 @@ private fun GuestsField(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Guests", style = MaterialTheme.typography.bodyLarge)
+        Text("Attendees", style = MaterialTheme.typography.bodyLarge)
         if (attendees.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 attendees.forEach { attendee ->
@@ -825,7 +821,7 @@ private fun GuestsField(
                 value = draft,
                 onValueChange = onDraftChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Add guest") },
+                label = { Text("Add attendee") },
                 placeholder = { Text("name@example.com") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -835,7 +831,7 @@ private fun GuestsField(
                 keyboardActions = KeyboardActions(onDone = { onAdd() }),
                 trailingIcon = {
                     IconButton(onClick = onAdd, enabled = canAdd) {
-                        Icon(Icons.Outlined.Add, contentDescription = "Add guest")
+                        Icon(Icons.Outlined.Add, contentDescription = "Add attendee")
                     }
                 },
             )

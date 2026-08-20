@@ -1,5 +1,7 @@
 package app.foscal.ui.common
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -52,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.LocalIsDarkTheme
+import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.eventColors
 import app.foscal.ui.util.LocalEventTextScale
 import app.foscal.ui.util.LocalUse24HourClock
@@ -67,6 +74,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 /**
  * Width of the hour-label gutter and the inset at the far edge of the grid. Any header rendered
@@ -178,6 +186,11 @@ fun TimelineLayout(
     onEventMove: ((event: Event, newStartMillis: Long, newEndMillis: Long) -> Unit)? = null,
     /** How long a block placed by a tap — or by a long press that never moved — comes out. */
     newEventMinutes: Int = 60,
+    /**
+     * Bumped by the caller when a move it was handed is not going to happen after all, so the
+     * block being held at the dropped position can go back where it came from.
+     */
+    revertMoveSignal: Int = 0,
 ) {
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
@@ -224,7 +237,28 @@ fun TimelineLayout(
     // of the event the drag just created. Set when the press becomes a drag and cleared at the
     // start of every press, so it only ever suppresses the tap belonging to that same gesture.
     var longPressActive by remember { mutableStateOf(false) }
+    // Every gesture on this grid produces something the finger is covering: a block under the
+    // thumb, a snap the eye cannot resolve mid-drag, a parked placeholder that lands on the hour
+    // rather than where the tap was. Touch is the only channel that can confirm any of it without
+    // asking the user to move their hand out of the way first.
+    val haptics = LocalHapticFeedback.current
     var eventDrag by remember { mutableStateOf<EventDrag?>(null) }
+    // The preview outlives the finger. A dropped event is written to the provider and comes back
+    // through a flow, which takes a few frames; releasing the preview on lift put the block back
+    // where it started for exactly that long, so every successful move read as a jump backwards
+    // followed by a jump forwards. Now the block simply stays where it was dropped and the new
+    // data replaces it in place.
+    LaunchedEffect(days) { if (eventDrag?.committed == true) eventDrag = null }
+    // A move that was offered and turned down (the recurring "which of these?" dialog, dismissed)
+    // never reaches the provider, so no new data is coming to release the block.
+    LaunchedEffect(revertMoveSignal) { if (revertMoveSignal > 0) eventDrag = null }
+    // And a write the provider refuses outright emits nothing either. Rare, but a block stranded
+    // where it is not is worse than one that snaps back a moment late.
+    LaunchedEffect(eventDrag?.committed) {
+        if (eventDrag?.committed != true) return@LaunchedEffect
+        delay(4_000)
+        eventDrag = null
+    }
     // What is pending on the grid right now, as a day and a range of minutes: a drag in progress
     // beats a parked block, since the finger is on the first one.
     val pending: Pair<LocalDate, IntRangeLike>? = selection?.let { it.date to it.span(newEventMinutes) }
@@ -317,11 +351,28 @@ fun TimelineLayout(
                                                     placement = null
                                                     val minute = minuteAt(offset.y)
                                                     selection = TimeSelection(day.date, minute, minute)
+                                                    // The long press is the moment the gesture
+                                                    // changes meaning, and nothing on screen says
+                                                    // so until the finger moves.
+                                                    haptics.performHapticFeedback(
+                                                        HapticFeedbackType.LongPress,
+                                                    )
                                                 },
                                                 onDrag = { change, _ ->
                                                     change.consume()
                                                     val start = selection ?: return@detectDragGesturesAfterLongPress
-                                                    selection = start.copy(endMinute = minuteAt(change.position.y))
+                                                    val minute = minuteAt(change.position.y)
+                                                    // One tick per step crossed, not per event:
+                                                    // the drag reports every pixel and the block
+                                                    // only moves every ten minutes, so ticking on
+                                                    // movement would buzz continuously and say
+                                                    // nothing. An hour of dragging is six ticks.
+                                                    if (minute != start.endMinute) {
+                                                        haptics.performHapticFeedback(
+                                                            HapticFeedbackType.SegmentFrequentTick,
+                                                        )
+                                                    }
+                                                    selection = start.copy(endMinute = minute)
                                                 },
                                                 onDragCancel = { selection = null },
                                                 onDragEnd = {
@@ -364,6 +415,11 @@ fun TimelineLayout(
                                                     placement = NewEventPlacement(
                                                         day.date,
                                                         raw.floorToStep(TapSnapMinutes).coerceIn(0, latest),
+                                                    )
+                                                    // The block lands on the hour, which is above
+                                                    // where the tap was and often under the hand.
+                                                    haptics.performHapticFeedback(
+                                                        HapticFeedbackType.Confirm,
                                                     )
                                                 },
                                             )
@@ -467,7 +523,13 @@ fun TimelineLayout(
                                     } else {
                                         null
                                     },
-                                    onMovePreviewEnd = { eventDrag = null },
+                                    onMovePreviewEnd = { committed ->
+                                        eventDrag = if (committed) {
+                                            eventDrag?.copy(committed = true)
+                                        } else {
+                                            null
+                                        }
+                                    },
                                     dayIndex = dayIndex,
                                     visibleDayCount = timedDays.size,
                                     eventLeftInDay = blockLeft,
@@ -497,27 +559,32 @@ fun TimelineLayout(
                                 ?.takeIf { it.date == day.date }
                                 ?.let { spot ->
                                     val range = spot.span(newEventMinutes)
-                                    NewEventPlaceholder(
-                                        label = pendingLabel.orEmpty(),
-                                        compact = compact,
-                                        cornerRadius = blockCornerRadius,
-                                        modifier = Modifier
-                                            .offset(y = hourHeight * (range.first / 60f))
-                                            .fillMaxWidth()
-                                            .height(range.heightAt(hourHeight))
-                                            .padding(horizontal = 3.dp),
-                                        onClick = {
-                                            placement = null
-                                            val start = spot.date.atStartOfDay(zone)
-                                                .plusMinutes(range.first.toLong())
-                                            val end = spot.date.atStartOfDay(zone)
-                                                .plusMinutes(range.second.toLong())
-                                            onTimeRangeSelected?.invoke(
-                                                start.toInstant().toEpochMilli(),
-                                                end.toInstant().toEpochMilli(),
-                                            )
-                                        },
-                                    )
+                                    // Keyed on the spot so moving the block to a new hour is a new
+                                    // arrival rather than a silent jump: the tap that placed it
+                                    // landed somewhere else, and the eye needs telling where it went.
+                                    key(spot) {
+                                        NewEventPlaceholder(
+                                            label = pendingLabel.orEmpty(),
+                                            compact = compact,
+                                            cornerRadius = blockCornerRadius,
+                                            modifier = Modifier
+                                                .offset(y = hourHeight * (range.first / 60f))
+                                                .fillMaxWidth()
+                                                .height(range.heightAt(hourHeight))
+                                                .padding(horizontal = 3.dp),
+                                            onClick = {
+                                                placement = null
+                                                val start = spot.date.atStartOfDay(zone)
+                                                    .plusMinutes(range.first.toLong())
+                                                val end = spot.date.atStartOfDay(zone)
+                                                    .plusMinutes(range.second.toLong())
+                                                onTimeRangeSelected?.invoke(
+                                                    start.toInstant().toEpochMilli(),
+                                                    end.toInstant().toEpochMilli(),
+                                                )
+                                            },
+                                        )
+                                    }
                                 }
                             // Last, so it crosses the blocks instead of hiding behind them. The
                             // whole point of the line is to say where you are in a day that is
@@ -658,8 +725,19 @@ private fun NewEventPlaceholder(
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val shape = RoundedCornerShape(cornerRadius)
+    // Grows in over one Motion.DurationShort. Nothing waits on it — the block is already placed and
+    // already tappable on the first frame — so this costs no responsiveness; it only stops a
+    // rectangle from materialising out of nothing somewhere the finger was not.
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val scale by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0.88f,
+        animationSpec = tween(Motion.DurationShort),
+        label = "placeholderAppear",
+    )
     Row(
         modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(accent.copy(alpha = 0.16f))
             .border(1.5.dp, accent, shape)
@@ -692,6 +770,8 @@ private data class EventDrag(
     val instanceStartMillis: Long,
     val deltaDays: Int,
     val deltaMinutes: Int,
+    /** Whether the finger has let go and the move has been handed on to be written. */
+    val committed: Boolean = false,
 )
 
 internal fun Int.roundToStep(step: Int): Int {
@@ -824,7 +904,7 @@ private fun EventBlock(
     onClick: () -> Unit,
     onMove: ((deltaDays: Int, deltaMinutes: Int) -> Unit)? = null,
     onMovePreview: ((deltaDays: Int, deltaMinutes: Int) -> Unit)? = null,
-    onMovePreviewEnd: () -> Unit = {},
+    onMovePreviewEnd: (committed: Boolean) -> Unit = {},
     dayIndex: Int = 0,
     visibleDayCount: Int = 1,
     eventLeftInDay: Dp = 0.dp,
@@ -857,6 +937,7 @@ private fun EventBlock(
     // enough that a wrapped title is routinely broken mid-word, and some people would rather see
     // the start of the title than all of it in pieces.
     val maxTitleLines = if (!LocalWrapEventTitles.current) 1 else if (compact) 3 else 2
+    val haptics = LocalHapticFeedback.current
 
     Row(
         modifier = modifier
@@ -879,6 +960,7 @@ private fun EventBlock(
                 if (onMove != null) {
                     Modifier.pointerInput(event.id, event.start, eventLeftInDay, dayWidth, hourHeight) {
                         var totalDrag = Offset.Zero
+                        var lastDelta = 0 to 0
                         fun deltas(): Pair<Int, Int> {
                             val rawMinutes = (totalDrag.y / hourHeight.toPx() * 60f).toInt()
                             val deltaMinutes = rawMinutes.roundToStep(15)
@@ -892,25 +974,45 @@ private fun EventBlock(
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
                                 totalDrag = Offset.Zero
+                                lastDelta = 0 to 0
                                 onMovePreview?.invoke(0, 0)
+                                // The event is under the finger from here on, so this is the last
+                                // moment the user can see that the drag took hold.
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 totalDrag += dragAmount
-                                val (deltaDays, deltaMinutes) = deltas()
-                                onMovePreview?.invoke(deltaDays, deltaMinutes)
+                                val delta = deltas()
+                                // Quarter-hours and whole columns both count as a step; crossing
+                                // either is a place the event could actually be dropped.
+                                if (delta != lastDelta) {
+                                    lastDelta = delta
+                                    haptics.performHapticFeedback(
+                                        HapticFeedbackType.SegmentFrequentTick,
+                                    )
+                                }
+                                onMovePreview?.invoke(delta.first, delta.second)
                             },
                             onDragCancel = {
                                 totalDrag = Offset.Zero
-                                onMovePreviewEnd()
+                                lastDelta = 0 to 0
+                                onMovePreviewEnd(false)
                             },
                             onDragEnd = {
                                 val (deltaDays, deltaMinutes) = deltas()
                                 totalDrag = Offset.Zero
-                                onMovePreviewEnd()
-                                if (deltaDays != 0 || deltaMinutes != 0) {
+                                lastDelta = 0 to 0
+                                val moved = deltaDays != 0 || deltaMinutes != 0
+                                // Handed on *before* the preview is released, so whoever takes it
+                                // can hold the block where it was dropped.
+                                if (moved) {
                                     onMove(deltaDays, deltaMinutes)
+                                    // Only when it landed somewhere new. Dropping an event back
+                                    // where it started changed nothing and should not claim to.
+                                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
                                 }
+                                onMovePreviewEnd(moved)
                             },
                         )
                     }

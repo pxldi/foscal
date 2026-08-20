@@ -1,0 +1,9 @@
+Dragging an event no longer strips its colour, and dropping one occurrence of
+a repeat now asks whether you meant that one, this and the rest, or all. The
+block stays put instead of jumping about while it saves.
+
+Answering an invitation works on accounts that store your address in another
+case, where the buttons matched nothing and silently did nothing.
+
+Attendees fold behind a count of who is coming. Edit moved top right, with
+Duplicate and Delete. Export asks which calendars to write.

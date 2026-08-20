@@ -2,6 +2,7 @@ package app.foscal.ui.settings
 
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -60,6 +61,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +73,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -188,10 +192,18 @@ fun SettingsScreen(
                 SettingsSection.Reminders -> remindersSection(state, viewModel)
                 SettingsSection.Transfer -> item {
                     ImportExportSection(
-                        calendars = state.items.map { it.calendar },
+                        rows = state.items,
+                        eventCounts = state.eventCounts,
+                        createdForImport = state.createdForImport,
+                        createError = state.createError,
                         transfer = state.transfer,
-                        onExport = { viewModel.exportTo(it) },
+                        onLoadCounts = { viewModel.loadEventCounts() },
+                        onExport = { uri, ids -> viewModel.exportTo(uri, ids) },
                         onImport = { uri, calendarId -> viewModel.importFrom(uri, calendarId) },
+                        onCreateForImport = { name, color ->
+                            viewModel.createCalendarForImport(name, color)
+                        },
+                        onCreatedConsumed = { viewModel.consumeCreatedCalendar() },
                         onDismissMessage = { viewModel.dismissTransferMessage() },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
@@ -589,7 +601,7 @@ private fun accountLabel(calendar: Calendar): String {
 }
 
 @Composable
-private fun ColorDot(colorArgb: Int) {
+internal fun ColorDot(colorArgb: Int) {
     Box(
         modifier = Modifier
             .size(18.dp)
@@ -650,7 +662,7 @@ private fun DeleteCalendarDialog(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CalendarDialog(
+internal fun CalendarDialog(
     title: String,
     confirmLabel: String,
     initialName: String,
@@ -768,21 +780,45 @@ private fun ThemeModePicker(
  * `.ics` import and export, both driven by the Storage Access Framework so the app needs no
  * storage permission and can only touch the one document the user picks.
  */
+private const val NO_FILE_APP = "No app on this phone can pick a file."
+
+/** Hands the launcher its input and gives back whatever went wrong, or null if nothing did. */
+private fun <I> ManagedActivityResultLauncher<I, *>.launchSafely(input: I): Throwable? =
+    runCatching { launch(input) }.exceptionOrNull()
+
+/** Which of the transfer dialogs is open, if any. */
+private enum class TransferPicker { EXPORT, IMPORT, NEW_CALENDAR }
+
 @Composable
 private fun ImportExportSection(
-    calendars: List<Calendar>,
+    rows: List<CalendarRow>,
+    eventCounts: Map<Long, Int>,
+    createdForImport: Long?,
+    createError: String?,
     transfer: TransferState,
-    onExport: (Uri) -> Unit,
+    onLoadCounts: () -> Unit,
+    onExport: (Uri, Set<Long>) -> Unit,
     onImport: (Uri, Long) -> Unit,
+    onCreateForImport: (String, Int) -> Unit,
+    onCreatedConsumed: () -> Unit,
     onDismissMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var pickingCalendar by remember { mutableStateOf(false) }
+    val calendars = rows.map { it.calendar }
+    var picking by remember { mutableStateOf<TransferPicker?>(null) }
+    // Held across the picker: launching a document intent can let the system stop this process,
+    // and the callback needs to know what the user chose when it comes back.
     var importTarget by rememberSaveable { mutableStateOf<Long?>(null) }
+    var exportSelection by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
+    // Both pickers are somebody else's activity, and there is no guarantee the phone has one:
+    // stripped ROMs and work profiles ship without a documents provider, and the launcher throws
+    // ActivityNotFoundException from a click handler, which takes the whole app down. The rest of
+    // the app already answers this by catching around startActivity; these two never did.
+    var launchError by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(Ics.MIME_TYPE),
-    ) { uri -> uri?.let(onExport) }
+    ) { uri -> uri?.let { onExport(it, exportSelection) } }
 
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -792,27 +828,43 @@ private fun ImportExportSection(
         importTarget = null
     }
 
+    // A calendar made from inside the import flow goes straight on to the file picker; the user
+    // asked to import into it, not merely to own it.
+    LaunchedEffect(createdForImport) {
+        val id = createdForImport ?: return@LaunchedEffect
+        picking = null
+        importTarget = id
+        onCreatedConsumed()
+        if (importLauncher.launchSafely(IMPORT_MIME_TYPES) != null) {
+            launchError = NO_FILE_APP
+            importTarget = null
+        }
+    }
+
     val exportName = remember { IcsTransfer.defaultExportName() }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ActionRow(
             title = "Export to .ics",
-            subtitle = "Every event on your visible calendars",
+            subtitle = "Pick the calendars to write out",
             icon = Icons.Outlined.FileUpload,
-            enabled = !transfer.busy,
+            enabled = !transfer.busy && calendars.isNotEmpty(),
             onClick = {
                 onDismissMessage()
-                exportLauncher.launch(exportName)
+                launchError = null
+                onLoadCounts()
+                picking = TransferPicker.EXPORT
             },
         )
         ActionRow(
             title = "Import from .ics",
             subtitle = "Adds a file's events to a calendar you pick",
             icon = Icons.Outlined.FileDownload,
-            enabled = !transfer.busy && calendars.isNotEmpty(),
+            enabled = !transfer.busy,
             onClick = {
                 onDismissMessage()
-                pickingCalendar = true
+                launchError = null
+                picking = TransferPicker.IMPORT
             },
         )
 
@@ -825,6 +877,14 @@ private fun ImportExportSection(
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text("Working…", style = MaterialTheme.typography.bodySmall)
             }
+        }
+        launchError?.let { message ->
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
         }
         transfer.message?.let { message ->
             Text(
@@ -840,41 +900,45 @@ private fun ImportExportSection(
         }
     }
 
-    if (pickingCalendar) {
-        AlertDialog(
-            onDismissRequest = { pickingCalendar = false },
-            title = { Text("Import into") },
-            text = {
-                Column {
-                    calendars.forEach { calendar ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    pickingCalendar = false
-                                    // Held across the picker: launching a document intent can let
-                                    // the system stop this process, and the callback needs to know
-                                    // which calendar the user chose when it comes back.
-                                    importTarget = calendar.id
-                                    importLauncher.launch(IMPORT_MIME_TYPES)
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            ColorDot(calendar.color)
-                            Text(
-                                calendar.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { pickingCalendar = false }) { Text("Cancel") }
+    when (picking) {
+        TransferPicker.EXPORT -> ExportPickerDialog(
+            calendars = calendars,
+            counts = eventCounts,
+            // Opens on what is visible in the app, which is what the button did unasked before.
+            initialSelection = rows.filterNot { it.isHidden }.map { it.calendar.id }.toSet(),
+            onDismiss = { picking = null },
+            onExport = { ids ->
+                picking = null
+                exportSelection = ids
+                if (exportLauncher.launchSafely(exportName) != null) launchError = NO_FILE_APP
             },
         )
+
+        TransferPicker.IMPORT -> ImportTargetDialog(
+            calendars = calendars,
+            onDismiss = { picking = null },
+            onPick = { id ->
+                picking = null
+                importTarget = id
+                if (importLauncher.launchSafely(IMPORT_MIME_TYPES) != null) {
+                    launchError = NO_FILE_APP
+                    importTarget = null
+                }
+            },
+            onCreate = { picking = TransferPicker.NEW_CALENDAR },
+        )
+
+        TransferPicker.NEW_CALENDAR -> CalendarDialog(
+            title = "New calendar",
+            confirmLabel = "Create and import",
+            initialName = "",
+            initialColor = CalendarColors.pick(0),
+            error = createError,
+            onDismiss = { picking = TransferPicker.IMPORT },
+            onConfirm = onCreateForImport,
+        )
+
+        null -> Unit
     }
 }
 
@@ -945,6 +1009,9 @@ internal fun ToggleRow(
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Compose's Switch has no haptic of its own, and a toggle is the one control whose
+    // entire output is a state the thumb is sitting on top of.
+    val haptics = LocalHapticFeedback.current
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -972,7 +1039,15 @@ internal fun ToggleRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(checked = checked, onCheckedChange = onToggle)
+            Switch(
+                checked = checked,
+                onCheckedChange = {
+                    haptics.performHapticFeedback(
+                        if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff,
+                    )
+                    onToggle(it)
+                },
+            )
         }
     }
 }

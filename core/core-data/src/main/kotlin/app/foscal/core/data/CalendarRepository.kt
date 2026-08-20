@@ -114,10 +114,11 @@ interface CalendarRepository {
     /**
      * Answers an invitation on the user's own behalf.
      *
-     * Writes the status onto the user's own `Attendees` row and onto the event's
-     * `SELF_ATTENDEE_STATUS`, without the sync-adapter flag, so the provider marks the event dirty
-     * and whatever adapter owns the calendar picks the reply up. Whether it reaches the organiser
-     * is that adapter's business; this app sends no mail of its own.
+     * Writes the status onto the user's own `Attendees` row, without the sync-adapter flag, so the
+     * provider marks the event dirty and whatever adapter owns the calendar picks the reply up.
+     * Whether it reaches the organiser is that adapter's business, and so is when: an account that
+     * replies by mail sends that mail on its own next sync, not when this returns. This app sends
+     * nothing itself.
      *
      * Returns false when the event has no row for this calendar's owner — an event nobody invited
      * the user to has nothing to answer.
@@ -498,30 +499,53 @@ class CalendarContractRepository @Inject constructor(
     override suspend fun setSelfAttendeeStatus(eventId: Long, status: AttendeeStatus): Boolean =
         withContext(Dispatchers.IO) {
             val owner = selfAddressFor(eventId) ?: return@withContext false
+            val rowId = selfAttendeeRowId(eventId, owner) ?: return@withContext false
             val values = ContentValues().apply {
                 put(CalendarContract.Attendees.ATTENDEE_STATUS, status.toProviderStatus())
             }
             val updated = safeUpdate(
-                CalendarContract.Attendees.CONTENT_URI,
+                ContentUris.withAppendedId(CalendarContract.Attendees.CONTENT_URI, rowId),
                 values,
-                "${CalendarContract.Attendees.EVENT_ID} = ? AND " +
-                    "${CalendarContract.Attendees.ATTENDEE_EMAIL} = ?",
-                arrayOf(eventId.toString(), owner),
+                null,
+                null,
             )
             if (updated == 0) return@withContext false
-            // The event's own copy of the answer. Sync adapters and other calendar apps read this
-            // rather than joining to the attendee table, so leaving it behind would show the reply
-            // on this screen and nowhere else.
-            safeUpdate(
-                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
-                ContentValues().apply {
-                    put(CalendarContract.Events.SELF_ATTENDEE_STATUS, status.toProviderStatus())
-                },
-                null,
-                null,
-            )
+            // `Events.SELF_ATTENDEE_STATUS` is deliberately left alone. The provider refuses to let
+            // anyone but a sync adapter set it — "Updating selfAttendeeStatus in Events table is
+            // not allowed", an IllegalArgumentException that safeUpdate would swallow whole — and
+            // it does not need to be set: writing the attendee row makes the provider recompute
+            // the column itself. It only manages that when the calendar's owner address matches
+            // the attendee row exactly, case included, which is the one thing this app cannot
+            // arrange; that is why nothing here reads the column back.
             true
         }
+
+    /**
+     * The id of the row [owner] holds on [eventId], or null when they hold none.
+     *
+     * Read and compared here rather than left to the provider as `attendeeEmail = ?`: SQLite's `=`
+     * is case-sensitive, and an Exchange calendar routinely stores its owner address in one case
+     * and the same person's attendee row in another. The screen decides whether to offer a reply
+     * with [Attendee.normalizeAddress], so an SQL match found nothing on exactly the invitations
+     * that looked answerable — buttons that did nothing, silently. Both sides now ask the same
+     * question, and the update goes to a row by id rather than by a predicate.
+     */
+    private fun selfAttendeeRowId(eventId: Long, owner: String): Long? {
+        val wanted = Attendee.normalizeAddress(owner)
+        return safeQuery(
+            CalendarContract.Attendees.CONTENT_URI,
+            arrayOf(CalendarContract.Attendees._ID, CalendarContract.Attendees.ATTENDEE_EMAIL),
+            "${CalendarContract.Attendees.EVENT_ID} = ?",
+            arrayOf(eventId.toString()),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val email = c.getString(1) ?: continue
+                if (Attendee.normalizeAddress(email) == wanted) return@use c.getLong(0)
+            }
+            null
+        }
+    }
 
     /** The address the user is known by on the calendar [eventId] lives on. */
     private fun selfAddressFor(eventId: Long): String? {

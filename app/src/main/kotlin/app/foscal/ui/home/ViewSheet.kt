@@ -50,11 +50,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -402,10 +404,18 @@ private fun ViewRow(current: CalendarView, onSelect: (CalendarView) -> Unit) {
 private fun CalendarToggle(row: CalendarRow, onToggle: () -> Unit) {
     val color = Color(row.calendar.color)
     val visible = !row.isHidden
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Checkbox, onClick = onToggle)
+            .clickable(role = Role.Checkbox) {
+                // The tick this draws is 22dp across and under a fingertip while it is being
+                // tapped; the sheet is also the one place a mis-tap silently hides a calendar.
+                haptics.performHapticFeedback(
+                    if (visible) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn,
+                )
+                onToggle()
+            }
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

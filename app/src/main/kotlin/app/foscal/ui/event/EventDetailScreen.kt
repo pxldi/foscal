@@ -2,7 +2,9 @@ package app.foscal.ui.event
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,18 +32,23 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -49,16 +56,24 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -77,8 +92,10 @@ import app.foscal.core.model.Event
 import app.foscal.core.model.MeetingLinks
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.BricolageFamily
+import app.foscal.core.ui.theme.LocalIsDarkTheme
 import app.foscal.core.ui.theme.Motion
 import app.foscal.location.openInMaps
+import app.foscal.ui.editor.RecurrenceScope
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.timeFormatter
@@ -93,10 +110,13 @@ fun EventDetailScreen(
     instanceStartMillis: Long = 0L,
     onBack: () -> Unit,
     onEdit: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    onDuplicate: (eventId: Long, instanceStartMillis: Long) -> Unit = { _, _ -> },
     onOpenLocationMap: (location: String) -> Unit = {},
     viewModel: EventDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Nothing left to look at once it is deleted, and the list underneath re-reads on resume.
+    LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
     // Reload on every resume so returning from the editor reflects edits; show the spinner
     // only for the first fetch, refresh silently afterwards.
     LifecycleResumeEffect(eventId, instanceStartMillis) {
@@ -145,11 +165,12 @@ fun EventDetailScreen(
                                 calendarName = state.calendar?.displayName ?: "Calendar",
                                 reminderMinutes = state.reminderMinutes,
                                 attendees = state.attendees,
+                                selfEmail = state.selfAttendee?.email,
                                 reply = state.selfAttendee?.status.takeIf { state.canReply },
+                                replyFailed = state.replyFailed,
                                 onReply = viewModel::reply,
                                 mapsEnabled = state.mapsEnabled,
                                 onOpenLocationMap = onOpenLocationMap,
-                                onEdit = { onEdit(eventId, current.start.toEpochMilli()) },
                             )
                         }
                     }
@@ -166,8 +187,144 @@ fun EventDetailScreen(
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
+            if (event != null) {
+                DetailActions(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(4.dp),
+                    onEdit = { onEdit(eventId, event.start.toEpochMilli()) },
+                    onDuplicate = { onDuplicate(eventId, event.start.toEpochMilli()) },
+                    onDelete = viewModel::askDelete,
+                )
+            }
         }
     }
+
+    if (state.deletePrompt) {
+        DeleteDialog(
+            recurring = event?.isRecurring == true,
+            onDelete = viewModel::delete,
+            onDismiss = viewModel::dismissDelete,
+        )
+    }
+}
+
+/**
+ * Edit, and the things that are not edit.
+ *
+ * The pencil is on its own because it is the one action with a reason to be reached without
+ * looking; duplicate and delete sit behind the overflow because a menu is a moment of thought,
+ * and one of them cannot be undone. Both float over the header for the same reason the back
+ * button does — there is no app bar here to hold them.
+ */
+@Composable
+private fun DetailActions(
+    modifier: Modifier = Modifier,
+    onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Outlined.Edit, contentDescription = "Edit event")
+        }
+        Box {
+            IconButton(onClick = { open = true }) {
+                Icon(Icons.Outlined.MoreVert, contentDescription = "More")
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(
+                    text = { Text("Duplicate") },
+                    leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
+                    onClick = {
+                        open = false
+                        onDuplicate()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    onClick = {
+                        open = false
+                        onDelete()
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Confirming a delete, and for a series, deciding how much of it.
+ *
+ * A recurring event gets the three choices instead of a yes/no, because "delete" has no single
+ * meaning for one: the dialog that asks how much to remove is also the one that asks whether to.
+ */
+@Composable
+private fun DeleteDialog(
+    recurring: Boolean,
+    onDelete: (RecurrenceScope) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    // The dialog closes and the screen leaves, so the event is gone before the eye has anywhere to
+    // look. This is the one action in the app that cannot be taken back, and it is worth feeling.
+    val confirm: (RecurrenceScope) -> Unit = { scope ->
+        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        onDelete(scope)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (recurring) "Delete recurring event" else "Delete event?") },
+        text = {
+            if (recurring) {
+                Column {
+                    Text("This event repeats. Delete:")
+                    Spacer(Modifier.height(16.dp))
+                    DeleteChoice("This event") { confirm(RecurrenceScope.SINGLE) }
+                    DeleteChoice("This and following events") {
+                        confirm(RecurrenceScope.THIS_AND_FOLLOWING)
+                    }
+                    DeleteChoice("All events") { confirm(RecurrenceScope.ALL_EVENTS) }
+                }
+            } else {
+                Text("This cannot be undone.")
+            }
+        },
+        confirmButton = {
+            if (recurring) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            } else {
+                TextButton(onClick = { confirm(RecurrenceScope.ALL_EVENTS) }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        dismissButton = {
+            if (!recurring) TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+private fun DeleteChoice(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.primary,
+    )
 }
 
 @Composable
@@ -189,12 +346,15 @@ private fun DetailContent(
     calendarName: String,
     reminderMinutes: List<Int>,
     attendees: List<Attendee>,
+    /** The user's own address, so their row can be marked as theirs in the list. */
+    selfEmail: String?,
     /** The user's current answer, or null when this is not an invitation they can answer. */
     reply: AttendeeStatus?,
+    /** Whether the last answer was refused by the calendar. */
+    replyFailed: Boolean,
     onReply: (AttendeeStatus) -> Unit,
     mapsEnabled: Boolean,
     onOpenLocationMap: (location: String) -> Unit,
-    onEdit: () -> Unit,
 ) {
     val accent = Color(event.color)
     val context = LocalContext.current
@@ -257,28 +417,15 @@ private fun DetailContent(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = onEdit,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            ),
-        ) {
-            Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.size(10.dp))
-            Text("Edit event", fontWeight = FontWeight.SemiBold)
-        }
         if (reply != null) {
-            ReplyRow(current = reply, onReply = onReply)
+            ReplyRow(current = reply, failed = replyFailed, onReply = onReply)
         }
         if (attendees.isNotEmpty()) {
-            GuestsCard(attendees = attendees, onEmail = { openMail(context, it) })
+            AttendeesCard(
+                attendees = attendees,
+                selfEmail = selfEmail,
+                onEmail = { openMail(context, it) },
+            )
         }
     }
 }
@@ -291,15 +438,19 @@ private fun DetailContent(
  * glance says which one it is without reading all three.
  */
 @Composable
-private fun ReplyRow(current: AttendeeStatus, onReply: (AttendeeStatus) -> Unit) {
+private fun ReplyRow(
+    current: AttendeeStatus,
+    failed: Boolean,
+    onReply: (AttendeeStatus) -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            "Going?",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            "RSVP",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
@@ -315,11 +466,26 @@ private fun ReplyRow(current: AttendeeStatus, onReply: (AttendeeStatus) -> Unit)
                 )
             }
         }
+        // Only when the write was refused. The chips do not move optimistically, so a reply that
+        // worked needs no confirmation — but one that did not looks identical to one nobody
+        // tapped, and a read-only calendar is not something the user can be expected to infer.
+        AnimatedVisibility(visible = failed) {
+            Text(
+                "Your answer could not be saved. This calendar may be read-only.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 
 /**
- * The guest list, organizer first, with each person's answer.
+ * Who is on the event, folded away until it is asked for.
+ *
+ * A meeting from work arrives with thirty people on it, and thirty rows between the event and the
+ * bottom of the screen is a wall rather than a list. Collapsed, the card answers the question the
+ * names are usually opened for — how many are actually coming — in one line, and the names are one
+ * tap behind it for when that is not enough.
  *
  * Tapping a row opens a mail composer. Answering for *yourself* is a write to your own attendee
  * row that the sync adapter delivers, which is what [ReplyRow] does; there is no equivalent for
@@ -327,7 +493,18 @@ private fun ReplyRow(current: AttendeeStatus, onReply: (AttendeeStatus) -> Unit)
  * honest thing on offer here.
  */
 @Composable
-private fun GuestsCard(attendees: List<Attendee>, onEmail: (String) -> Unit) {
+private fun AttendeesCard(
+    attendees: List<Attendee>,
+    selfEmail: String?,
+    onEmail: (String) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(Motion.DurationShort),
+        label = "attendeesChevron",
+    )
+    val self = selfEmail?.let { Attendee.normalizeAddress(it) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -335,68 +512,122 @@ private fun GuestsCard(attendees: List<Attendee>, onEmail: (String) -> Unit) {
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         ),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(
-                if (attendees.size == 1) "1 guest" else "${attendees.size} guests",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            attendees.forEach { attendee ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onEmail(attendee.email) }
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            attendee.initial(),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            attendee.label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            attendee.subtitle(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    val statusIcon = when (attendee.status) {
-                        AttendeeStatus.ACCEPTED -> Icons.Outlined.CheckCircle
-                        AttendeeStatus.DECLINED -> Icons.Outlined.Cancel
-                        AttendeeStatus.TENTATIVE -> Icons.AutoMirrored.Outlined.HelpOutline
-                        AttendeeStatus.INVITED -> Icons.Outlined.Schedule
-                    }
-                    Icon(
-                        statusIcon,
-                        contentDescription = attendee.statusLabel(),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        if (attendees.size == 1) "1 attendee" else "${attendees.size} attendees",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        attendees.answerSummary(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Icon(
+                    Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "Hide attendees" else "Show attendees",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(rotation),
+                )
             }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    attendees.forEach { attendee ->
+                        AttendeeRow(
+                            attendee = attendee,
+                            isSelf = self != null &&
+                                Attendee.normalizeAddress(attendee.email) == self,
+                            onEmail = onEmail,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One person, with their answer stated rather than implied.
+ *
+ * The answer used to be a grey tick at the end of the row and a word buried in a line of small
+ * print with the address — three answers that all looked the same at a glance, which is the one
+ * glance this list gets. Now it is a word in the colour of what it means, and the address moves
+ * under the name where it belongs.
+ */
+@Composable
+private fun AttendeeRow(attendee: Attendee, isSelf: Boolean, onEmail: (String) -> Unit) {
+    val tint = attendee.status.tint()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onEmail(attendee.email) }
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                attendee.initial(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (isSelf) "${attendee.label} (you)" else attendee.label,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            attendee.detailLine().takeIf { it.isNotEmpty() }?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                attendee.statusIcon(),
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                attendee.statusLabel(),
+                style = MaterialTheme.typography.labelMedium,
+                color = tint,
+                maxLines = 1,
+            )
         }
     }
 }
@@ -405,22 +636,58 @@ private fun GuestsCard(attendees: List<Attendee>, onEmail: (String) -> Unit) {
 private fun Attendee.initial(): String =
     label.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?"
 
-/** The answer, plus the address when the name is what's already on the row above. */
-private fun Attendee.subtitle(): String {
-    val role = if (isOrganizer) "Organizer • " else ""
-    val optionalMark = if (optional && !isOrganizer) " (optional)" else ""
-    return if (label == email) {
-        "$role${statusLabel()}$optionalMark"
-    } else {
-        "$role$email • ${statusLabel()}$optionalMark"
-    }
+/** Who they are on this event and how to reach them; the answer itself sits at the end of the row. */
+private fun Attendee.detailLine(): String = listOfNotNull(
+    "Organizer".takeIf { isOrganizer },
+    "Optional".takeIf { optional && !isOrganizer },
+    email.takeIf { it != label },
+).joinToString(" · ")
+
+private fun Attendee.statusIcon(): ImageVector = when (status) {
+    AttendeeStatus.ACCEPTED -> Icons.Outlined.CheckCircle
+    AttendeeStatus.DECLINED -> Icons.Outlined.Cancel
+    AttendeeStatus.TENTATIVE -> Icons.AutoMirrored.Outlined.HelpOutline
+    AttendeeStatus.INVITED -> Icons.Outlined.Schedule
 }
 
 private fun Attendee.statusLabel(): String = when (status) {
     AttendeeStatus.ACCEPTED -> "Going"
     AttendeeStatus.DECLINED -> "Not going"
     AttendeeStatus.TENTATIVE -> "Maybe"
-    AttendeeStatus.INVITED -> "Awaiting reply"
+    AttendeeStatus.INVITED -> "No reply"
+}
+
+/** "4 going · 1 maybe · 2 no reply", with the answers nobody gave left out. */
+private fun List<Attendee>.answerSummary(): String {
+    val counts = listOf(
+        AttendeeStatus.ACCEPTED to "going",
+        AttendeeStatus.TENTATIVE to "maybe",
+        AttendeeStatus.DECLINED to "not going",
+        AttendeeStatus.INVITED to "no reply",
+    )
+    return counts
+        .mapNotNull { (status, word) ->
+            count { it.status == status }.takeIf { it > 0 }?.let { "$it $word" }
+        }
+        .joinToString(" · ")
+}
+
+/**
+ * The colour an answer is drawn in.
+ *
+ * Fixed greens and ambers rather than roles from the scheme: the accent is the user's to pick, so
+ * a "going" painted in it would mean something different on every install — and would match the
+ * header, which is already the event's own colour and says nothing about anybody's answer. Error
+ * is the exception, because a refusal is the one thing that role is actually for.
+ */
+@Composable
+private fun AttendeeStatus.tint(): Color = when (this) {
+    AttendeeStatus.ACCEPTED ->
+        if (LocalIsDarkTheme.current) Color(0xFF74C79C) else Color(0xFF1B7A50)
+    AttendeeStatus.DECLINED -> MaterialTheme.colorScheme.error
+    AttendeeStatus.TENTATIVE ->
+        if (LocalIsDarkTheme.current) Color(0xFFDCB55F) else Color(0xFF8A5E07)
+    AttendeeStatus.INVITED -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /**

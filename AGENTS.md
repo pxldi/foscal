@@ -143,7 +143,7 @@ Beta. Working: Month / Week / Agenda / Settings tabs (bottom nav — Settings is
 tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination; the
 selected tab is `rememberSaveable` so returning from detail/editor preserves the
 current tab), event create/edit/delete, recurring events
-(this-vs-all-events, exceptions), reminders/notifications, guests/attendees with a
+(this-vs-all-events, exceptions), reminders/notifications, attendees with a
 join-video-call action, real calendar colors,
 offline local calendars, `.ics` import/export via the system document picker,
 permission-first onboarding. Week view is the shared
@@ -151,7 +151,15 @@ hourly `TimelineLayout` with long-press drag-to-create (snapped to ten minutes, 
 pill above the block naming the range), tap-to-park-then-tap-to-open for a
 default-length event, and long-press drag-to-move for timed events; recurring timed
 moves are stored as single occurrence exceptions. How events are *drawn* — colour
-strength, title size, whether titles wrap — is the "Calendar style" settings page. There is no separate Day view — it was dropped as
+strength, title size, whether titles wrap — is the "Calendar style" settings page.
+Export asks which calendars to write (checkboxes, with each one's event count) and
+import can make the calendar it is about to import into without leaving the dialog.
+The event detail screen carries no app bar: back floats top-left over the header
+gradient, and edit plus an overflow (Duplicate, Delete) float top-right. Duplicate
+goes through `Routes.editorCopy`, whose `copyFrom` argument makes the editor read an
+existing event and then forget where it came from — everything carries across, the
+RRULE verbatim included, except the attendee list, because saving attendees is a
+scheduling message rather than a copy. There is no separate Day view — it was dropped as
 redundant (Week's schedule + Agenda cover it). See the README "Current status"
 and "Roadmap" sections for the full picture and what's next.
 
@@ -416,12 +424,62 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   reader drops the duplicate row rather than showing the same person twice. The editor will not let
   the organizer be removed: dropping that row un-invites nobody, it only loses which address the
   invitation came from.
-- **Foscal sends no invitations, but it can answer one.** It writes guests to the provider and the
-  calendar's sync adapter delivers them; the app never mails anybody itself. Replying is the same
-  shape in reverse — `setSelfAttendeeStatus` writes `ATTENDEE_STATUS` on the user's *own* row and
-  the adapter carries it back — which is why the detail screen offers Yes / Maybe / No when the
-  user is an attendee. There is no equivalent for anybody else on the list, so tapping another
-  guest opens a `mailto:` intent, which remains the only thing the app can honestly do about them.
+- **Foscal sends no invitations, but it can answer one.** It writes attendees to the provider and
+  the calendar's sync adapter delivers them; the app never mails anybody itself. Replying is the
+  same shape in reverse — `setSelfAttendeeStatus` writes `ATTENDEE_STATUS` on the user's *own* row
+  and the adapter carries it back — which is why the detail screen offers Yes / Maybe / No under
+  **RSVP** when the user is an attendee. There is no equivalent for anybody else on the list, so
+  tapping another row opens a `mailto:` intent, the only thing the app can honestly do about them.
+  Two consequences that look like bugs and are not: the reply lands in the provider **instantly**
+  but the mail an Exchange/Outlook account sends on the back of it goes out on that adapter's next
+  sync, which can be an hour later; and there is no way to answer *without* it, because
+  `CalendarContract` carries only the status and every decision after that belongs to the adapter.
+- **A drag-to-move must be told how much of a series it means, and must carry the event's own
+  colour.** `moveEvent` builds a fresh `EventInput`, and every field it leaves out is a field it
+  *clears*: `color` defaults to null and null means "put this event back on its calendar's colour",
+  so a drag used to strip it. Read it with `getEventColor` — never pass `Event.color`, which is the
+  resolved `DISPLAY_COLOR` and already falls back to the calendar's. Scope is the other half: a
+  drop on an occurrence is offered the same three choices as an edit or a delete, and "all events"
+  shifts the *master's* DTSTART by the delta rather than setting it to the dropped time, which for
+  any occurrence past the first would jump the series forward by however many repeats have run.
+- **The grid holds a move preview past the drop.** The write goes to the provider and returns
+  through a flow; releasing the preview when the finger lifts put the block back at its old time
+  for those frames, so a successful move read as a jump backwards and then forwards. `EventDrag`
+  now carries a `committed` flag and is released by new data arriving, by `revertMoveSignal` (the
+  scope dialog dismissed), or by a timeout if the write is refused and neither happens.
+- **`launch()` on an `ActivityResultLauncher` can throw.** `CREATE_DOCUMENT` and `OPEN_DOCUMENT`
+  need a documents provider, and stripped ROMs, some work profiles and the ATD emulator images do
+  not ship one — the `ActivityNotFoundException` comes out of a click handler and takes the app
+  down. Both transfer pickers go through `launchSafely`. The same rule is why `openLink`/`openMail`
+  wrap `startActivity`.
+- **Haptics answer for the part of the screen the hand is covering, and nothing else.** The rule is
+  not "confirm every tap" — a tap on a visible control confirms itself, and a buzz on top is noise
+  that trains people to ignore the ones that matter. Feedback is added exactly where the result is
+  hidden or ambiguous: `LongPress` the instant `detectDragGesturesAfterLongPress` arms (nothing on
+  screen says the gesture changed meaning until the finger moves), `SegmentFrequentTick` once per
+  *snap step crossed* during a drag — never per pixel, or it buzzes continuously and says nothing —
+  `Confirm` when a drag lands somewhere new or a tap parks a block on an hour above where the
+  finger was, `ToggleOn`/`ToggleOff` on switches and the calendar checkboxes because Compose's
+  `Switch` ships none, and `Confirm` on a delete that has already closed the screen. Deliberately
+  *not* on the RSVP chips: the write is checked before the chip moves, so a tick at tap time would
+  be the one place touch claims success before the app knows. `SegmentedControlTick` does not exist
+  in this Compose version — the names are `SegmentTick` and `SegmentFrequentTick`.
+- **Addresses are compared through `Attendee.normalizeAddress`, never with `=`.** The screen decides
+  whether to offer a reply and the repository decides which row to write, and the two used to
+  disagree: the screen compared case-insensitively while the write handed
+  `attendeeEmail = ?` to SQLite, whose `=` is case-sensitive. An Exchange calendar routinely stores
+  its `OWNER_ACCOUNT` in one case and the same person's attendee row in another, so the reply
+  buttons appeared and then did nothing at all, silently — `safeUpdate` returning 0 is
+  indistinguishable from "no such row". `setSelfAttendeeStatus` now finds the row itself and
+  updates it **by id**. The rule also strips a `mailto:` prefix, because iCalendar addresses an
+  ATTENDEE as a URI while the provider stores a bare address.
+- **Never write `Events.SELF_ATTENDEE_STATUS`.** The provider rejects it outright for anyone but a
+  sync adapter — *"Updating selfAttendeeStatus in Events table is not allowed"*, an
+  `IllegalArgumentException` that `safeUpdate` swallows whole, so the call looks like it worked and
+  never did. It is also unnecessary: writing the attendee row makes the provider recompute the
+  column itself. It only manages that when the calendar's owner address matches the attendee row
+  *exactly*, case included — which is the one thing this app cannot arrange — so nothing here reads
+  the column back, and the user's own answer is always read from the `Attendees` table.
 - **The editor only offers the guest field for events the user organized**
   (`EditorUiState.canEditGuests`). Rewriting the `ATTENDEE` rows of somebody else's event is not an
   edit but a scheduling message, and CalDAV servers vary in what they do with one — up to mailing

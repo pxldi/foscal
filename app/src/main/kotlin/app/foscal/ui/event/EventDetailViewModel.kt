@@ -8,6 +8,7 @@ import app.foscal.core.model.Attendee
 import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
+import app.foscal.ui.editor.RecurrenceScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,17 +26,30 @@ data class EventDetailUiState(
     /** Whether the opt-in map is on, deciding in-app OSM viewer vs external geo: intent. */
     val mapsEnabled: Boolean = false,
     val reminderMinutes: List<Int> = emptyList(),
+    /**
+     * Set when a reply was refused, so the screen can say so.
+     *
+     * A tap that changes nothing and explains nothing is the worst of the three outcomes: the
+     * user cannot tell it from a reply that worked, and will find out from the organiser.
+     */
+    val replyFailed: Boolean = false,
+    /** Whether the user is being asked to confirm a delete. */
+    val deletePrompt: Boolean = false,
+    /** Set once the event is gone, so the screen showing it can leave. */
+    val deleted: Boolean = false,
 ) {
     /**
      * The user's own row, when they were invited to this rather than having made it.
      *
      * Matched on the calendar's owner address, which is what the provider stores on the attendee
-     * row. An event with no guest list, or one whose list does not name the user, has nothing to
-     * answer and shows no reply buttons.
+     * row, through [Attendee.normalizeAddress] — the same rule the write uses, so a reply is never
+     * offered on a row the write would then fail to find. An event with no attendees, or one whose
+     * list does not name the user, has nothing to answer and shows no reply buttons.
      */
     val selfAttendee: Attendee? = calendar?.ownerName
         ?.takeIf { it.isNotBlank() }
-        ?.let { owner -> attendees.firstOrNull { it.email.equals(owner, ignoreCase = true) } }
+        ?.let { Attendee.normalizeAddress(it) }
+        ?.let { owner -> attendees.firstOrNull { Attendee.normalizeAddress(it.email) == owner } }
 
     /** Whether to offer Yes / Maybe / No: someone invited the user and is not the user. */
     val canReply: Boolean = selfAttendee != null && !selfAttendee.isOrganizer
@@ -57,12 +71,42 @@ class EventDetailViewModel @Inject constructor(
      * provider will not match — and a reply that appears to have been sent and was not is worse
      * than one that visibly did nothing.
      */
+    fun askDelete() = _state.update { it.copy(deletePrompt = true) }
+
+    fun dismissDelete() = _state.update { it.copy(deletePrompt = false) }
+
+    /**
+     * Removes the event, at the breadth [scope] asks for.
+     *
+     * The same three repository calls the editor makes, rather than a trip through the editor to
+     * reach its delete: this screen already knows which occurrence the user is looking at, and
+     * opening a form in order to throw its subject away is a strange way to spend a tap. [scope]
+     * is ignored for an event that does not repeat, where there is only one thing it could mean.
+     */
+    fun delete(scope: RecurrenceScope) {
+        val event = _state.value.event ?: return
+        _state.update { it.copy(deletePrompt = false) }
+        viewModelScope.launch {
+            val gone = when {
+                event.isRecurring && scope == RecurrenceScope.SINGLE ->
+                    repository.deleteEventInstance(event.id, event.start.toEpochMilli())
+                event.isRecurring && scope == RecurrenceScope.THIS_AND_FOLLOWING ->
+                    repository.deleteEventFollowing(event.id, event.start.toEpochMilli())
+                else -> repository.deleteEvent(event.id)
+            }
+            if (gone) _state.update { it.copy(deleted = true) }
+        }
+    }
+
     fun reply(status: AttendeeStatus) {
         val eventId = _state.value.event?.id ?: return
+        _state.update { it.copy(replyFailed = false) }
         viewModelScope.launch {
             if (repository.setSelfAttendeeStatus(eventId, status)) {
                 val attendees = repository.getAttendees(eventId)
-                _state.update { it.copy(attendees = attendees) }
+                _state.update { it.copy(attendees = attendees, replyFailed = false) }
+            } else {
+                _state.update { it.copy(replyFailed = true) }
             }
         }
     }

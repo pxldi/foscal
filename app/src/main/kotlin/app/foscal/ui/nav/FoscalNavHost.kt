@@ -87,7 +87,8 @@ object Routes {
      * optional; if `eventId` is set it's edit mode, otherwise new with the given pre-fills.
      */
     const val EVENT_EDITOR =
-        "editor?eventId={eventId}&calendarId={calendarId}&start={start}&end={end}" +
+        "editor?eventId={eventId}&copyFrom={copyFrom}&calendarId={calendarId}" +
+            "&start={start}&end={end}" +
             "&title={title}&location={location}&description={description}&allDay={allDay}"
 
     fun editorNew(
@@ -102,13 +103,24 @@ object Routes {
         val cal = calendarId?.toString() ?: ""
         val start = startMillis?.toString() ?: ""
         val end = endMillis?.toString() ?: ""
-        return "editor?eventId=&calendarId=$cal&start=$start&end=$end" +
+        return "editor?eventId=&copyFrom=&calendarId=$cal&start=$start&end=$end" +
             "&title=${Uri.encode(title)}&location=${Uri.encode(location)}" +
             "&description=${Uri.encode(description)}&allDay=$allDay"
     }
 
     fun editorEdit(eventId: Long, instanceStartMillis: Long): String =
-        "editor?eventId=$eventId&calendarId=&start=$instanceStartMillis&end=" +
+        "editor?eventId=$eventId&copyFrom=&calendarId=&start=$instanceStartMillis&end=" +
+            "&title=&location=&description=&allDay=false"
+
+    /**
+     * The editor opened on a *new* event that starts out as a copy of an existing one.
+     *
+     * `copyFrom` rather than `eventId` because the distinction is the whole point: the editor
+     * reads the source event and then forgets where it came from, so saving writes a second event
+     * instead of overwriting the first.
+     */
+    fun editorCopy(eventId: Long, instanceStartMillis: Long): String =
+        "editor?eventId=&copyFrom=$eventId&calendarId=&start=$instanceStartMillis&end=" +
             "&title=&location=&description=&allDay=false"
 }
 
@@ -253,6 +265,11 @@ fun FoscalNavHost(
             composable(
             route = Routes.EVENT_EDITOR,
             arguments = listOf(
+                navArgument("copyFrom") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
+                },
                 navArgument("eventId") {
                     type = NavType.StringType
                     defaultValue = ""
@@ -485,6 +502,9 @@ fun FoscalNavHost(
                 onBack = { navController.popBackStack() },
                 onEdit = { id, instanceStart ->
                     navController.navigate(Routes.editorEdit(id, instanceStart))
+                },
+                onDuplicate = { id, instanceStart ->
+                    navController.navigate(Routes.editorCopy(id, instanceStart))
                 },
                 onOpenLocationMap = { location ->
                     navController.navigate(Routes.locationViewer(location))

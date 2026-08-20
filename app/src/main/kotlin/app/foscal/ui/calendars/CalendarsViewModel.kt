@@ -38,6 +38,30 @@ data class CalendarsUiState(
     val pendingDelete: PendingDelete? = null,
     /** The calendar open for renaming and recolouring, if one is. */
     val editing: EditingCalendar? = null,
+    /**
+     * How many events each calendar holds, for the export picker.
+     *
+     * Loaded when that picker opens rather than kept up to date: it is a count per calendar over
+     * the whole of time, which is not a thing to be recomputing behind a screen nobody is looking
+     * at. Empty until then, and the picker simply shows no counts.
+     */
+    val eventCounts: Map<Long, Int> = emptyMap(),
+    /** A calendar just made from inside the import flow, waiting to be imported into. */
+    val createdForImport: Long? = null,
+)
+
+/**
+ * Everything that is open, being typed into, or waiting to be picked up.
+ *
+ * A holder rather than five more arguments to the outer `combine`, which is already at the arity
+ * the overloads stop at.
+ */
+private data class Dialogs(
+    val error: String?,
+    val pendingDelete: PendingDelete?,
+    val editing: EditingCalendar?,
+    val eventCounts: Map<Long, Int>,
+    val createdForImport: Long?,
 )
 
 /** A calendar open in the edit dialog, with the values it started from. */
@@ -99,6 +123,8 @@ class CalendarsViewModel @Inject constructor(
 
     private val transferState = MutableStateFlow(TransferState())
     private val createError = MutableStateFlow<String?>(null)
+    private val eventCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    private val createdForImport = MutableStateFlow<Long?>(null)
     private val pendingDelete = MutableStateFlow<PendingDelete?>(null)
     private val editing = MutableStateFlow<EditingCalendar?>(null)
 
@@ -144,14 +170,18 @@ class CalendarsViewModel @Inject constructor(
         repository.observeCalendars(),
         prefsFlow,
         transferState,
-        combine(createError, pendingDelete, editing, ::Triple),
+        combine(createError, pendingDelete, editing, eventCounts, createdForImport, ::Dialogs),
     ) { all, p, transfer, dialogs ->
-        val (error, delete, edit) = dialogs
+        val error = dialogs.error
+        val delete = dialogs.pendingDelete
+        val edit = dialogs.editing
         CalendarsUiState(
             transfer = transfer,
             createError = error,
             pendingDelete = delete,
             editing = edit,
+            eventCounts = dialogs.eventCounts,
+            createdForImport = dialogs.createdForImport,
             items = all.map { cal ->
                 CalendarRow(
                     calendar = cal,
@@ -311,19 +341,56 @@ class CalendarsViewModel @Inject constructor(
     }
 
     /** Writes every event on the currently visible calendars to the document at [target]. */
-    fun exportTo(target: Uri) {
+    /** Counts every calendar's events, so the export picker can say what each one is worth. */
+    fun loadEventCounts() {
+        viewModelScope.launch {
+            val counts = state.value.items.associate { it.calendar.id to repository.countEvents(it.calendar.id) }
+            eventCounts.value = counts
+        }
+    }
+
+    /**
+     * Writes the events on [calendarIds] to [target].
+     *
+     * The caller says which. It used to be "every visible calendar", which is a reasonable default
+     * and a poor only option: the common reasons to export are one calendar to hand to somebody
+     * and all of them for a backup, and neither is served by a rule about what happens to be
+     * on screen.
+     */
+    fun exportTo(target: Uri, calendarIds: Set<Long>) {
         runTransfer {
-            val calendarIds = state.value.items
-                .filterNot { it.isHidden }
-                .map { it.calendar.id }
-                .toSet()
             if (calendarIds.isEmpty()) {
-                TransferState(message = "No visible calendars to export", failed = true)
+                TransferState(message = "No calendars selected", failed = true)
             } else {
                 val count = icsTransfer.export(target, calendarIds)
                 TransferState(message = "Exported $count ${plural(count, "event")}")
             }
         }
+    }
+
+    /**
+     * Makes a calendar and holds on to its id, for importing a file into a calendar of its own.
+     *
+     * Separate from [createCalendar] because the id is the point: the import that follows has to
+     * name a target, and the ordinary path throws the id away.
+     */
+    fun createCalendarForImport(name: String, color: Int) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        createError.value = null
+        viewModelScope.launch {
+            val id = repository.createLocalCalendar(trimmed, color)
+            if (id == null) {
+                createError.value = "Couldn't add the calendar."
+            } else {
+                createdForImport.value = id
+            }
+        }
+    }
+
+    /** Called once the import flow has taken the new calendar's id and started on it. */
+    fun consumeCreatedCalendar() {
+        createdForImport.value = null
     }
 
     /** Creates every event in the document at [source] on [calendarId]. */

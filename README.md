@@ -50,7 +50,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Theme & clock** — force **System / Light / Dark** and toggle **12- / 24-hour
   time**; both apply live across every screen and persist.
 - **Event editor** — create, edit, and delete events with title, calendar,
-  all-day toggle, start/end date-time pickers, location, guests, notes, and any
+  all-day toggle, start/end date-time pickers, location, attendees, notes, and any
   number of reminders. Events keep the time zone they were authored in, so editing one that
   came from CalDAV does not shift it for other clients.
 - **Recurring events** — daily / weekly / monthly / yearly, with a custom
@@ -63,14 +63,16 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Reminders / notifications** — exact-alarm reminders via `AlarmManager`,
   re-scheduled on boot and whenever the calendar changes, delivered on a
   dedicated notification channel that deep-links back to the event.
-- **Guests** — invite people by email in the editor and see the whole list on the
-  event, organizer first, with each person's answer (going / not going / maybe /
-  awaiting reply). Guests synced down from CalDAV are shown and preserved across
-  unrelated edits; tapping one opens your mail app. Foscal writes the guest list
-  to the calendar and lets the sync adapter deliver the invitations — it sends no
-  mail of its own. On an event somebody else organized the list is shown read-only
-  and left strictly untouched on save, so editing a meeting you were invited to
-  never sends a scheduling message on your behalf.
+- **Attendees** — invite people by email in the editor and see the whole list on
+  the event, organizer first, folded behind a line that counts the answers (going /
+  not going / maybe / no reply) and opening to name everybody. Attendees synced down
+  from CalDAV are shown and preserved across unrelated edits; tapping one opens your
+  mail app. Answering an invitation yourself is one tap under **RSVP**. Foscal writes
+  to the calendar and lets the sync adapter deliver both the invitations and your
+  reply — it sends no mail of its own, and cannot stop the account that does. On an
+  event somebody else organized the list is shown read-only and left strictly
+  untouched on save, so editing a meeting you were invited to never sends a
+  scheduling message on your behalf.
 - **Join video call** — a Meet / Zoom / Teams / Webex / Jitsi / Whereby / Nextcloud
   Talk link in an event's location or notes becomes a one-tap Join action on the
   event, labelled with the provider it points at.
@@ -83,9 +85,11 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
   tomorrow noon", "PTO all-day") and it parses the title, date, and time.
 - **Import & export `.ics`** — export every event on your visible calendars to a
-  standard iCalendar file, or import one into a calendar you pick. Recurrence
+  standard iCalendar file — choosing which calendars go into it, with each one's
+  event count next to it — or import one into a calendar you pick, or into a new
+  one made without leaving the dialog. Recurrence
   rules, all-day spans, time zones, reminders and multi-line notes are carried
-  across, and so are guests (`ORGANIZER` / `ATTENDEE` with their `PARTSTAT`), and so
+  across, and so are attendees (`ORGANIZER` / `ATTENDEE` with their `PARTSTAT`), and so
   are per-occurrence changes to a repeating event: a moved
   occurrence exports as a `RECURRENCE-ID` override and a deleted one as an
   `EXDATE`, both of which import back onto the series. Files are chosen through
@@ -105,7 +109,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 **Next up**
 
 - Time-zone-aware editing UI and a world-clock style secondary zone.
-- Map preview on the event detail screen (guests and join-video-call are done).
+- Map preview on the event detail screen (attendees and join-video-call are done).
 
 **Later / future goals**
 

@@ -24,6 +24,25 @@ data class Attendee(
 
     companion object {
         /**
+         * An address reduced to what identity actually depends on.
+         *
+         * Case and a `mailto:` prefix are noise: RFC 5321 makes the domain case-insensitive, servers
+         * are inconsistent about the local part, and iCalendar addresses an ATTENDEE as a URI while
+         * the Calendar Provider stores a bare address. Comparing anything but this normal form finds
+         * the same person only by luck — which is how a reply could be offered on a screen and then
+         * quietly match no row when it was written.
+         */
+        fun normalizeAddress(text: String): String {
+            val trimmed = text.trim()
+            val bare = if (trimmed.startsWith("mailto:", ignoreCase = true)) {
+                trimmed.substring(7)
+            } else {
+                trimmed
+            }
+            return bare.trim().lowercase()
+        }
+
+        /**
          * Whether [text] is usable as an attendee address.
          *
          * Deliberately far looser than RFC 5322: the only thing the app does with the address is
