@@ -179,14 +179,10 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
      */
     private fun scheduleSnooze(context: Context, source: Intent, key: Int) {
         val am = context.getSystemService(AlarmManager::class.java) ?: return
-        val intent = Intent(source).apply {
-            action = ACTION_SNOOZED_FIRE
-            component = ComponentName(context.applicationContext.packageName, javaClass.name)
-        }
         val pi = PendingIntent.getBroadcast(
             context.applicationContext,
             key,
-            intent,
+            snoozedFireIntent(context, source),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val at = System.currentTimeMillis() + SnoozeMinutes * 60_000L
@@ -294,5 +290,17 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val CHANNEL_ID = "foscal_reminders"
+
+        /**
+         * The broadcast a snooze re-arms: the reminder's extras unchanged, under its own action.
+         *
+         * The component is named by class literal. `javaClass` inside `Intent(source).apply { }`
+         * is the Intent's class, which aimed the alarm at `android.content.Intent` and lost it.
+         */
+        internal fun snoozedFireIntent(context: Context, source: Intent): Intent =
+            Intent(source).apply {
+                action = ACTION_SNOOZED_FIRE
+                component = ComponentName(context, ReminderAlarmReceiver::class.java)
+            }
     }
 }
