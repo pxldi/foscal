@@ -354,6 +354,11 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   running instance to make room. Re-arming first therefore cancelled the worker before it armed
   anything: the trigger looped forever while no alarm was ever scheduled. `ensureScheduled` uses
   `KEEP` for the same reason, so opening the app cannot kill an in-flight sync.
+- **`syncNow()` is expedited only from API 31.** Below 31 WorkManager runs expedited work as a
+  foreground service and calls `getForegroundInfo`, which `CoroutineWorker` does not implement: the
+  work fails with "Not implemented" before `doWork` runs, so boot, app update, clock changes and
+  "Resync now" re-armed nothing on Android 8 to 11. Plain work starts at once anyway, because every
+  caller runs in a live process. Do not drop the SDK gate without implementing `getForegroundInfo`.
 - **Force-stopping the app cancels its alarms *and* its jobs, and nothing runs until it is
   reopened.** This is OS behaviour, not a bug — but it means `adb shell am force-stop` invalidates
   any reminder test. Use `am kill` plus HOME to simulate a backgrounded app instead.

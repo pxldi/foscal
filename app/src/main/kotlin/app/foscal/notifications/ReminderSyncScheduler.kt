@@ -1,6 +1,7 @@
 package app.foscal.notifications
 
 import android.content.Context
+import android.os.Build
 import android.provider.CalendarContract
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -92,7 +93,14 @@ class ReminderSyncScheduler @Inject constructor(
      */
     fun syncNow() {
         val request = OneTimeWorkRequestBuilder<ReminderSyncWorker>()
-            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .apply {
+                // Below 31 WorkManager runs expedited work as a foreground service and asks the
+                // worker for a notification; CoroutineWorker throws there, so the sync failed
+                // before doWork ran. Every caller runs in a live process, so plain work starts at once.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                }
+            }
             .build()
         // APPEND_OR_REPLACE keeps a running sync from being cancelled halfway — cancelling mid-pass
         // would leave the registry describing alarms that were never armed.
