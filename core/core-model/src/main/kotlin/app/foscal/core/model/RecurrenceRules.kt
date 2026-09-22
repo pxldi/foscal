@@ -3,6 +3,7 @@ package app.foscal.core.model
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -30,8 +31,14 @@ object RecurrenceRules {
 
     private val untilTimed =
         DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+    private val untilLocal = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
 
-    fun parse(rrule: String?): RecurrenceSpec {
+    /**
+     * @param zone the event's zone. A timed UNTIL is a UTC instant, and its date is only the date
+     *   the user picked once it is read back in that zone: "until 5 January" in New York is stored
+     *   as 04:59:59Z on the 6th.
+     */
+    fun parse(rrule: String?, zone: ZoneId = ZoneOffset.UTC): RecurrenceSpec {
         if (rrule.isNullOrBlank()) return RecurrenceSpec(Frequency.NONE)
         val map = rrule.split(';')
             .filter { '=' in it }
@@ -50,7 +57,7 @@ object RecurrenceRules {
             frequency = frequency,
             interval = map["INTERVAL"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
             count = map["COUNT"]?.toIntOrNull(),
-            until = map["UNTIL"]?.let(::parseUntilDate),
+            until = map["UNTIL"]?.let { parseUntilDate(it, zone) },
             byWeekday = map["BYDAY"]
                 ?.split(',')
                 ?.mapNotNull(::parseDayCode)
@@ -75,51 +82,64 @@ object RecurrenceRules {
     }
 
     /**
-     * Rewrites [rrule] so the series ends strictly before [splitInstant], preserving
-     * FREQ/INTERVAL/BYDAY and replacing any end condition with UNTIL. All-day rules use the
-     * previous UTC day (DATE); timed rules use one second before [splitInstant] in UTC, which
-     * excludes the split occurrence while keeping every earlier one (recurrences are ≥1 day apart).
-     * Returns null if [rrule] is not recurring. Used to truncate a series for "this and following".
+     * Rewrites [rrule] so the series ends strictly before [splitInstant]: COUNT and UNTIL are
+     * dropped and a new UNTIL is appended. Every other part stays as written, because the old
+     * series keeps its past occurrences only if its rule still generates them. All-day rules use
+     * the previous UTC day (DATE); timed rules use one second before [splitInstant] in UTC.
+     * Returns null if [rrule] has no valid FREQ. Used to truncate a series for "this and following".
      */
     fun truncateBefore(rrule: String?, splitInstant: Instant, allDay: Boolean): String? {
-        val spec = parse(rrule)
-        if (spec.frequency == Frequency.NONE) return null
-        val parts = mutableListOf("FREQ=${spec.frequency.name}")
-        if (spec.interval > 1) parts += "INTERVAL=${spec.interval}"
-        if (spec.frequency == Frequency.WEEKLY && spec.byWeekday.isNotEmpty()) {
-            val ordered = DayOfWeek.values().filter { it in spec.byWeekday }
-            parts += "BYDAY=${ordered.joinToString(",") { it.rruleCode() }}"
-        }
+        val parts = parts(rrule)
+        if (!repeats(parts)) return null
         val until = if (allDay) {
             splitInstant.atZone(ZoneOffset.UTC).toLocalDate().minusDays(1).format(BASIC_ISO_DATE)
         } else {
             splitInstant.minusSeconds(1).atZone(ZoneOffset.UTC).format(untilTimed)
         }
-        parts += "UNTIL=$until"
-        return parts.joinToString(";")
+        val kept = parts.filter { it.first != "COUNT" && it.first != "UNTIL" }
+        return format(kept + ("UNTIL" to until))
     }
 
     /**
-     * Rewrites [rrule] for a new series starting at the split of a "this and following" edit:
-     * FREQ/INTERVAL/BYDAY/UNTIL are preserved; a COUNT end condition is reduced by
-     * [occurrencesBeforeSplit] so the following series ends on the same final occurrence as the
-     * original. Returns null if [rrule] is not recurring.
+     * Rewrites [rrule] for a new series starting at the split of a "this and following" edit.
+     * Only a COUNT changes: it is reduced by [occurrencesBeforeSplit] so the following series
+     * ends on the same final occurrence as the original. Everything else, UNTIL included, is kept
+     * as written. Returns null if [rrule] has no valid FREQ.
      */
-    fun rebaseFollowing(
-        rrule: String?,
-        occurrencesBeforeSplit: Int,
-        allDay: Boolean,
-        zone: ZoneId,
-    ): String? {
-        val spec = parse(rrule)
-        if (spec.frequency == Frequency.NONE) return null
-        val rebased = if (spec.count != null) {
-            spec.copy(count = (spec.count - occurrencesBeforeSplit).coerceAtLeast(1))
-        } else {
-            spec
-        }
-        return build(rebased, allDay, zone)
+    fun rebaseFollowing(rrule: String?, occurrencesBeforeSplit: Int): String? {
+        val parts = parts(rrule)
+        if (!repeats(parts)) return null
+        return format(
+            parts.map { (key, value) ->
+                val count = value.toIntOrNull()
+                if (key == "COUNT" && count != null) {
+                    key to (count - occurrencesBeforeSplit).coerceAtLeast(1).toString()
+                } else {
+                    key to value
+                }
+            },
+        )
     }
+
+    /** The rule's parts in their written order, keys upper-cased, values untouched. */
+    private fun parts(rrule: String?): List<Pair<String, String>> =
+        rrule.orEmpty().split(';')
+            .filter { '=' in it }
+            .map {
+                val (k, v) = it.split('=', limit = 2)
+                k.trim().uppercase() to v.trim()
+            }
+
+    // Every RFC 5545 frequency, including the ones [Frequency] does not model: a split has to
+    // truncate an HOURLY series too, or the old one keeps generating the occurrences it gave away.
+    private val rfcFrequencies =
+        setOf("SECONDLY", "MINUTELY", "HOURLY", "DAILY", "WEEKLY", "MONTHLY", "YEARLY")
+
+    private fun repeats(parts: List<Pair<String, String>>): Boolean =
+        parts.any { (k, v) -> k == "FREQ" && v.uppercase() in rfcFrequencies }
+
+    private fun format(parts: List<Pair<String, String>>): String =
+        parts.joinToString(";") { (k, v) -> "$k=$v" }
 
     private fun formatUntil(date: LocalDate, allDay: Boolean, zone: ZoneId): String =
         if (allDay) {
@@ -132,15 +152,16 @@ object RecurrenceRules {
                 .format(untilTimed)
         }
 
-    private fun parseUntilDate(value: String): LocalDate? {
+    private fun parseUntilDate(value: String, zone: ZoneId): LocalDate? {
         val core = value.trim()
         return runCatching {
             when {
-                core.length == 8 -> LocalDate.parse(core, BASIC_ISO_DATE)
                 core.endsWith('Z', ignoreCase = true) ->
-                    LocalDate.parse(core.substring(0, 8), BASIC_ISO_DATE)
-                'T' in core -> LocalDate.parse(core.substring(0, 8), BASIC_ISO_DATE)
-                else -> LocalDate.parse(core, BASIC_ISO_DATE)
+                    LocalDateTime.parse(core.dropLast(1), untilLocal)
+                        .atZone(ZoneOffset.UTC)
+                        .withZoneSameInstant(zone)
+                        .toLocalDate()
+                else -> LocalDate.parse(core.substring(0, 8), BASIC_ISO_DATE)
             }
         }.getOrNull()
     }

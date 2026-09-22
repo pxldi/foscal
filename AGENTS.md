@@ -400,6 +400,18 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `getPackageInfo` throws `NameNotFoundException` and `resolveActivity` returns null for undeclared
   packages — indistinguishable from the app genuinely not being installed. This covers DAVx⁵ and
   every vendor autostart screen in `VendorSettings.CANDIDATES`.
+- **A "this and following" split edits the rule, never rebuilds it.** `RecurrenceRules.truncateBefore`
+  swaps COUNT/UNTIL for a new UNTIL and `rebaseFollowing` changes only COUNT; every other part
+  (ordinal BYDAY, BYMONTHDAY, BYSETPOS, WKST, HOURLY) stays as written, because the old series keeps
+  its past occurrences only if its rule still generates them. The new series is created *before*
+  the old one is truncated and removed again if the truncate is refused. Exceptions from the split
+  point on are deleted, and "first occurrence" is `instanceStartMillis <= DTSTART`, never an
+  Instances count of zero, which an edited first occurrence also produces.
+- **The provider rebuilds Instances only when an update carries DTSTART, and judges recurrence from
+  the update alone.** Writing just a new RRULE updates `lastDate` but leaves every old occurrence
+  expanded; writing DTSTART without the RRULE re-expands a series as a single event. Any write that
+  changes a series' shape sends DTSTART, RRULE, DURATION, EVENT_TIMEZONE and ALL_DAY together, as
+  `truncateSeries` does.
 - **A recurrence exception starts life with the master's reminders.** The provider seeds the new
   exception row by copying the master's children, so `updateEventInstance` must clear reminders on
   the new id before writing the editor's set — otherwise editing one occurrence leaves it holding

@@ -190,15 +190,15 @@ class RecurrenceRulesTest {
 
     @Test
     fun `rebaseFollowing returns null for non-recurring`() {
-        assertNull(RecurrenceRules.rebaseFollowing(null, 3, allDay = false, zone = berlin))
-        assertNull(RecurrenceRules.rebaseFollowing("FREQ=NONE", 3, allDay = false, zone = berlin))
+        assertNull(RecurrenceRules.rebaseFollowing(null, 3))
+        assertNull(RecurrenceRules.rebaseFollowing("FREQ=NONE", 3))
     }
 
     @Test
     fun `rebaseFollowing leaves an open-ended rule unchanged`() {
         assertEquals(
             "FREQ=DAILY",
-            RecurrenceRules.rebaseFollowing("FREQ=DAILY", 4, allDay = false, zone = berlin),
+            RecurrenceRules.rebaseFollowing("FREQ=DAILY", 4),
         )
     }
 
@@ -206,7 +206,7 @@ class RecurrenceRulesTest {
     fun `rebaseFollowing subtracts occurrencesBeforeSplit from COUNT`() {
         assertEquals(
             "FREQ=DAILY;COUNT=6",
-            RecurrenceRules.rebaseFollowing("FREQ=DAILY;COUNT=10", 4, allDay = false, zone = berlin),
+            RecurrenceRules.rebaseFollowing("FREQ=DAILY;COUNT=10", 4),
         )
     }
 
@@ -214,7 +214,7 @@ class RecurrenceRulesTest {
     fun `rebaseFollowing clamps a COUNT that would go below one`() {
         assertEquals(
             "FREQ=DAILY;COUNT=1",
-            RecurrenceRules.rebaseFollowing("FREQ=DAILY;COUNT=2", 10, allDay = false, zone = berlin),
+            RecurrenceRules.rebaseFollowing("FREQ=DAILY;COUNT=2", 10),
         )
     }
 
@@ -223,9 +223,125 @@ class RecurrenceRulesTest {
         val out = RecurrenceRules.rebaseFollowing(
             "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR",
             3,
-            allDay = false,
-            zone = berlin,
         )
         assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR", out)
+    }
+
+    // --- splits keep what the app does not model --------------------------------------------
+
+    private val split = Instant.parse("2026-03-27T09:00:00Z")
+
+    @Test
+    fun `truncateBefore keeps an ordinal BYDAY`() {
+        assertEquals(
+            "FREQ=MONTHLY;BYDAY=-1FR;UNTIL=20260327T085959Z",
+            RecurrenceRules.truncateBefore("FREQ=MONTHLY;BYDAY=-1FR", split, allDay = false),
+        )
+    }
+
+    @Test
+    fun `truncateBefore keeps a negative BYMONTHDAY`() {
+        assertEquals(
+            "FREQ=MONTHLY;BYMONTHDAY=-1;UNTIL=20260327T085959Z",
+            RecurrenceRules.truncateBefore("FREQ=MONTHLY;BYMONTHDAY=-1", split, allDay = false),
+        )
+    }
+
+    @Test
+    fun `truncateBefore keeps a yearly BYMONTH with an ordinal BYDAY`() {
+        assertEquals(
+            "FREQ=YEARLY;BYMONTH=11;BYDAY=4TH;UNTIL=20260327T085959Z",
+            RecurrenceRules.truncateBefore("FREQ=YEARLY;BYMONTH=11;BYDAY=4TH", split, allDay = false),
+        )
+    }
+
+    @Test
+    fun `truncateBefore keeps BYSETPOS and WKST and drops only the end`() {
+        assertEquals(
+            "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;WKST=SU;UNTIL=20260327T085959Z",
+            RecurrenceRules.truncateBefore(
+                "FREQ=MONTHLY;COUNT=12;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;UNTIL=20270101T000000Z;WKST=SU",
+                split,
+                allDay = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `truncateBefore handles a frequency the editor does not model`() {
+        // Falling through to the untouched rule left both series generating the split occurrence.
+        assertEquals(
+            "FREQ=HOURLY;INTERVAL=4;UNTIL=20260327T085959Z",
+            RecurrenceRules.truncateBefore("FREQ=HOURLY;INTERVAL=4", split, allDay = false),
+        )
+    }
+
+    @Test
+    fun `rebaseFollowing keeps unmodelled parts verbatim`() {
+        for (rule in listOf(
+            "FREQ=MONTHLY;BYDAY=-1FR",
+            "FREQ=MONTHLY;BYMONTHDAY=-1",
+            "FREQ=YEARLY;BYMONTH=11;BYDAY=4TH",
+            "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;WKST=SU",
+        )) {
+            assertEquals(rule, RecurrenceRules.rebaseFollowing(rule, 3))
+        }
+    }
+
+    @Test
+    fun `rebaseFollowing replaces COUNT where it stands`() {
+        assertEquals(
+            "FREQ=MONTHLY;COUNT=9;BYDAY=-1FR",
+            RecurrenceRules.rebaseFollowing("FREQ=MONTHLY;COUNT=12;BYDAY=-1FR", 3),
+        )
+    }
+
+    @Test
+    fun `rebaseFollowing keeps a timed UNTIL exactly`() {
+        // Rebuilding it from a date moved it to the end of that UTC day in the device zone, which
+        // west of UTC is the next day.
+        val rule = "FREQ=WEEKLY;BYDAY=TU;UNTIL=20260106T045959Z"
+        assertEquals(rule, RecurrenceRules.rebaseFollowing(rule, 2))
+    }
+
+    // --- UNTIL survives an editor round trip west of UTC --------------------------------------
+
+    private val newYork = ZoneId.of("America/New_York")
+
+    @Test
+    fun `a timed UNTIL reads back as the date it was built from in winter`() {
+        val until = LocalDate.of(2026, 1, 5)
+        val rule = RecurrenceRules.build(
+            RecurrenceSpec(Frequency.DAILY, until = until),
+            allDay = false,
+            zone = newYork,
+        )
+        assertEquals("FREQ=DAILY;UNTIL=20260106T045959Z", rule)
+        assertEquals(until, RecurrenceRules.parse(rule, newYork).until)
+    }
+
+    @Test
+    fun `a timed UNTIL reads back as the date it was built from in summer`() {
+        val until = LocalDate.of(2026, 7, 5)
+        val rule = RecurrenceRules.build(
+            RecurrenceSpec(Frequency.DAILY, until = until),
+            allDay = false,
+            zone = newYork,
+        )
+        assertEquals("FREQ=DAILY;UNTIL=20260706T035959Z", rule)
+        assertEquals(until, RecurrenceRules.parse(rule, newYork).until)
+        // And building again from what was read gives the same rule, so saves do not creep.
+        assertEquals(
+            rule,
+            RecurrenceRules.build(RecurrenceRules.parse(rule, newYork), allDay = false, zone = newYork),
+        )
+    }
+
+    @Test
+    fun `an all-day UNTIL is a date in every zone`() {
+        assertEquals(
+            LocalDate.of(2026, 1, 5),
+            RecurrenceRules.parse("FREQ=DAILY;UNTIL=20260105", newYork).until,
+        )
     }
 }

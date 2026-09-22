@@ -806,26 +806,35 @@ class CalendarContractRepository @Inject constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         val master = loadMaster(eventId) ?: return@withContext false
         val occurrencesBefore = countInstancesBefore(eventId, master.dtStart, instanceStartMillis)
-        truncateSeries(eventId, master, instanceStartMillis, occurrencesBefore)
+            ?: return@withContext false
         // The following series takes the user's edited values. When the recurrence rule was left
-        // untouched, preserve the original pattern but rebase a COUNT end so the series length is
+        // untouched, keep the original pattern but rebase a COUNT end so the series length is
         // preserved; when the user changed recurrence, apply their rule verbatim from [input].
         val followingRrule: String?
         val followingFrequency: Frequency
         if (rebaseCount) {
-            val masterSpec = RecurrenceRules.parse(master.rrule)
-            followingFrequency = masterSpec.frequency
-            followingRrule = RecurrenceRules.rebaseFollowing(
-                master.rrule,
-                occurrencesBefore,
-                master.allDay,
-                master.zone(),
-            )
+            followingFrequency = RecurrenceRules.parse(master.rrule).frequency
+            followingRrule = RecurrenceRules.rebaseFollowing(master.rrule, occurrencesBefore)
+            // A FREQ this app does not model (HOURLY) parses to NONE, and the provider would be
+            // handed the new series as a one-off. Refusing leaves the series whole.
+            if (followingFrequency == Frequency.NONE) return@withContext false
         } else {
             followingFrequency = input.frequency
             followingRrule = input.rrule
         }
-        createEvent(input.copy(frequency = followingFrequency, rrule = followingRrule)) != null
+        // A caller with no guest list of its own (a drag, or an event the user did not organize)
+        // passes null. For a new series null would mean "nobody", so the master's list is copied.
+        val attendees = input.attendees ?: readAttendees(eventId)
+        // Create first, so a refused insert changes nothing. A refused truncate then takes the new
+        // series back out rather than leaving the occurrences on the calendar twice.
+        val newId = createEvent(
+            input.copy(frequency = followingFrequency, rrule = followingRrule, attendees = attendees),
+        ) ?: return@withContext false
+        if (!truncateSeries(eventId, master, instanceStartMillis)) {
+            safeDelete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, newId), null, null)
+            return@withContext false
+        }
+        true
     }
 
     override suspend fun deleteEventFollowing(
@@ -833,8 +842,7 @@ class CalendarContractRepository @Inject constructor(
         instanceStartMillis: Long,
     ): Boolean = withContext(Dispatchers.IO) {
         val master = loadMaster(eventId) ?: return@withContext false
-        val occurrencesBefore = countInstancesBefore(eventId, master.dtStart, instanceStartMillis)
-        truncateSeries(eventId, master, instanceStartMillis, occurrencesBefore)
+        truncateSeries(eventId, master, instanceStartMillis)
     }
 
     /** Holds the recurrence-relevant columns of a master event (read from the Events table). */
@@ -843,6 +851,9 @@ class CalendarContractRepository @Inject constructor(
         val allDay: Boolean,
         val timezone: String?,
         val rrule: String?,
+        val syncId: String?,
+        val calendarId: Long,
+        val duration: String?,
     ) {
         fun zone(): ZoneId = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
             ?: ZoneId.systemDefault()
@@ -854,6 +865,9 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Events.ALL_DAY,
             CalendarContract.Events.EVENT_TIMEZONE,
             CalendarContract.Events.RRULE,
+            CalendarContract.Events._SYNC_ID,
+            CalendarContract.Events.CALENDAR_ID,
+            CalendarContract.Events.DURATION,
         )
         return safeQuery(
             ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
@@ -868,16 +882,27 @@ class CalendarContractRepository @Inject constructor(
                 allDay = c.getInt(1) == 1,
                 timezone = c.getString(2),
                 rrule = c.getString(3),
+                syncId = c.getString(4)?.takeIf { it.isNotBlank() },
+                calendarId = c.getLong(5),
+                duration = c.getString(6),
             )
         }
     }
 
-    /** Number of occurrences of [eventId] whose start is in [fromMillis, toExclusiveMillis). */
+    /**
+     * Number of occurrences of [eventId] whose start is in [fromMillis, toExclusiveMillis), or
+     * null if the provider could not be asked. Zero is a real answer that rebases a COUNT, so a
+     * failed query must not look like it.
+     *
+     * Instances lists an overridden occurrence under the exception's own id and a cancelled one
+     * not at all, so both are missing from this count and a COUNT rebased from it runs long by
+     * that many. The rule itself would have to be expanded to do better.
+     */
     private fun countInstancesBefore(
         eventId: Long,
         fromMillis: Long,
         toExclusiveMillis: Long,
-    ): Int {
+    ): Int? {
         if (toExclusiveMillis <= fromMillis) return 0
         // Query the Instances window ending one ms before the split so the box itself excludes it;
         // guard the BEGIN bound too in case the box is inclusive at either edge.
@@ -896,41 +921,75 @@ class CalendarContractRepository @Inject constructor(
                 if (c.getLong(0) < toExclusiveMillis) n++
             }
             n
-        } ?: 0
+        }
     }
 
     /**
-     * Shrinks the master series so it ends just before [instanceStartMillis]. If the split is the
-     * first occurrence (nothing precedes it), the master is deleted outright instead of being left
-     * with an impossible UNTIL. Returns whether the original series was modified or removed.
+     * Shrinks the master series so it ends just before [instanceStartMillis], and removes its
+     * exceptions from that point on. If the split is the first occurrence, the master is deleted
+     * outright instead of being left with an impossible UNTIL. Returns whether the original
+     * series was modified or removed.
+     *
+     * "First" is read from DTSTART, not from how many instances precede the split: an earlier
+     * occurrence that was edited or cancelled is not an instance of the master, and counting
+     * none used to delete a series that still had past occurrences.
      */
     private fun truncateSeries(
         eventId: Long,
         master: MasterEvent,
         instanceStartMillis: Long,
-        occurrencesBefore: Int,
     ): Boolean {
-        if (occurrencesBefore <= 0) {
-            return safeDelete(
-                ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
-                null,
-                null,
-            ) > 0
+        val masterUri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
+        if (instanceStartMillis <= master.dtStart) {
+            return safeDelete(masterUri, null, null) > 0
         }
         val truncated = RecurrenceRules.truncateBefore(
             master.rrule,
             Instant.ofEpochMilli(instanceStartMillis),
             master.allDay,
-        ) ?: master.rrule
+        ) ?: return false
+        // The provider rebuilds a series' Instances only when the update carries DTSTART, and it
+        // decides from the update alone whether the event recurs. An RRULE on its own therefore
+        // left the old expansion in place, every occurrence past the split still drawn, and DTSTART
+        // without the RRULE re-expanded the series as a one-off. So the time columns go together.
         val values = ContentValues().apply {
+            put(CalendarContract.Events.DTSTART, master.dtStart)
             put(CalendarContract.Events.RRULE, truncated)
+            put(CalendarContract.Events.DURATION, master.duration)
+            put(CalendarContract.Events.EVENT_TIMEZONE, master.timezone)
+            put(CalendarContract.Events.ALL_DAY, if (master.allDay) 1 else 0)
         }
-        return safeUpdate(
-            ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
-            values,
-            null,
-            null,
-        ) > 0
+        if (safeUpdate(masterUri, values, null, null) <= 0) return false
+        deleteExceptionsFrom(eventId, master, instanceStartMillis)
+        return true
+    }
+
+    /**
+     * Deletes the exceptions of a series from [fromMillis] on. Once the series ends before them
+     * they override nothing: a moved occurrence would stay on the calendar as a stray one-off
+     * beside the new series, and a delete of "this and following" would leave it behind. This is
+     * what Google Calendar does with later overrides on a split, too. An exception is linked by
+     * `ORIGINAL_ID` locally and by `ORIGINAL_SYNC_ID` from a sync adapter, so both are matched. A
+     * sync id is only unique within its calendar, hence the calendar check.
+     */
+    private fun deleteExceptionsFrom(masterId: Long, master: MasterEvent, fromMillis: Long) {
+        val link = if (master.syncId != null) {
+            "(${CalendarContract.Events.ORIGINAL_ID} = ? OR ${CalendarContract.Events.ORIGINAL_SYNC_ID} = ?)"
+        } else {
+            "${CalendarContract.Events.ORIGINAL_ID} = ?"
+        }
+        val args = listOfNotNull(
+            masterId.toString(),
+            master.syncId,
+            master.calendarId.toString(),
+            fromMillis.toString(),
+        )
+        safeDelete(
+            CalendarContract.Events.CONTENT_URI,
+            "$link AND ${CalendarContract.Events.CALENDAR_ID} = ? AND " +
+                "${CalendarContract.Events.ORIGINAL_INSTANCE_TIME} >= ?",
+            args.toTypedArray(),
+        )
     }
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> =

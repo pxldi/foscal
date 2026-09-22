@@ -203,7 +203,7 @@ class EventEditorViewModel @Inject constructor(
                     val cal = event.calendarId
                     val startZ = event.start.atZone(zone)
                     val endZ = event.end.atZone(zone)
-                    val spec = RecurrenceRules.parse(event.rrule)
+                    val spec = RecurrenceRules.parse(event.rrule, zone)
                     _state.value = EditorUiState(
                         loading = false,
                         eventId = eventId,
@@ -253,7 +253,7 @@ class EventEditorViewModel @Inject constructor(
                 if (source != null) {
                     val startZ = source.start.atZone(zone)
                     val endZ = source.end.atZone(zone)
-                    val spec = RecurrenceRules.parse(source.rrule)
+                    val spec = RecurrenceRules.parse(source.rrule, zone)
                     _state.value = EditorUiState(
                         loading = false,
                         isEditing = false,
