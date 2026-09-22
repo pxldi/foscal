@@ -96,6 +96,7 @@ import app.foscal.ui.CalendarColors
 import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.rememberDateFormatter
@@ -111,6 +112,8 @@ private val rowPadding = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
 @Composable
 fun EventEditorRoute(
     onBack: () -> Unit,
+    /** Where to go after a delete; the screen under the editor may show the deleted event. */
+    onDeleted: () -> Unit = onBack,
     onPickLocation: (currentQuery: String) -> Unit = {},
     pickedLocation: String? = null,
     onPickedLocationConsumed: () -> Unit = {},
@@ -119,7 +122,7 @@ fun EventEditorRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.finished) {
-        if (state.finished) onBack()
+        if (state.finished) if (state.deleted) onDeleted() else onBack()
     }
 
     // A place chosen on the map picker comes back through the nav back-stack; apply it once.
@@ -139,6 +142,7 @@ fun EventEditorRoute(
     }
 
     Scaffold(
+        snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(

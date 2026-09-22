@@ -4,6 +4,7 @@ import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
+import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,7 +41,7 @@ class SearchViewModelTest {
 
     @Test
     fun `query filters results by title after debounce`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences())
+        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
 
         vm.onQueryChange("dentist")
@@ -53,7 +54,7 @@ class SearchViewModelTest {
 
     @Test
     fun `results from a hidden calendar are excluded`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences(hidden = setOf("2")))
+        val vm = SearchViewModel(repo(), FakePreferences(hidden = setOf("2")), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
 
         vm.onQueryChange("dentist")

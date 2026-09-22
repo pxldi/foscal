@@ -7,12 +7,16 @@ import app.foscal.core.model.Attendee
 import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.UserMessages
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -69,6 +73,8 @@ class EventEditorViewModelTest {
     )
 
     private lateinit var repo: FakeCalendarRepository
+    private val messages = UserMessages()
+    private lateinit var pendingDeletes: PendingDeletes
 
     @Before
     fun setUp() {
@@ -79,6 +85,8 @@ class EventEditorViewModelTest {
             reminderMinutes = listOf(15),
             attendees = listOf(organizer, guest),
         )
+        // On the test dispatcher, so advanceUntilIdle runs the undo window out in virtual time.
+        pendingDeletes = PendingDeletes(repo, messages, CoroutineScope(dispatcher))
     }
 
     @After
@@ -95,7 +103,7 @@ class EventEditorViewModelTest {
                 "end" to "",
             ),
         )
-        return EventEditorViewModel(handle, repo, FakePreferences())
+        return EventEditorViewModel(handle, repo, FakePreferences(), messages, pendingDeletes)
     }
 
     private fun newEventVm(prefs: FakePreferences = FakePreferences()): EventEditorViewModel {
@@ -107,7 +115,7 @@ class EventEditorViewModelTest {
                 "end" to "",
             ),
         )
-        return EventEditorViewModel(handle, repo, prefs)
+        return EventEditorViewModel(handle, repo, prefs, messages, pendingDeletes)
     }
 
     @Test
@@ -181,6 +189,38 @@ class EventEditorViewModelTest {
     }
 
     @Test
+    fun `a refused save keeps the editor open with the draft and says so`() = runTest(dispatcher) {
+        repo.refuseWrites = true
+        val vm = newEventVm()
+        advanceUntilIdle()
+
+        vm.updateTitle("Lunch")
+        vm.save()
+        advanceUntilIdle()
+
+        val state = vm.state.value
+        assertFalse(state.finished)
+        assertFalse(state.saving)
+        assertEquals("Lunch", state.title)
+        assertEquals("Couldn't save the event", messages.messages.first())
+    }
+
+    @Test
+    fun `a refused this-and-following split is reported like any refused save`() =
+        runTest(dispatcher) {
+            repo.refuseWrites = true
+            val vm = recurringEditVm()
+            advanceUntilIdle()
+
+            vm.save()
+            vm.resolveScope(RecurrenceScope.THIS_AND_FOLLOWING)
+            advanceUntilIdle()
+
+            assertFalse(vm.state.value.finished)
+            assertEquals("Couldn't save the event", messages.messages.first())
+        }
+
+    @Test
     fun `an event years outside the old scan window still opens for editing`() = runTest(dispatcher) {
         // The lookup used to scan a +-2-year window of instances, so anything beyond it silently
         // fell through to the blank "new event" form and saving created a duplicate.
@@ -197,7 +237,7 @@ class EventEditorViewModelTest {
                 "end" to "",
             ),
         )
-        val vm = EventEditorViewModel(handle, repo, FakePreferences())
+        val vm = EventEditorViewModel(handle, repo, FakePreferences(), messages, pendingDeletes)
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -424,6 +464,23 @@ class EventEditorViewModelTest {
         c.resolveScope(RecurrenceScope.ALL_EVENTS)
         advanceUntilIdle()
         assertEquals(FakeCalendarRepository.Op.DELETE, repo.lastOp)
+        assertTrue(c.state.value.deleted)
+    }
+
+    @Test
+    fun `a delete waits out the undo window and an undo cancels it`() = runTest(dispatcher) {
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+        vm.delete()
+        vm.resolveScope(RecurrenceScope.ALL_EVENTS)
+
+        // The editor closes straight away, but nothing has reached the provider yet.
+        assertTrue(vm.state.value.finished)
+        assertNull(repo.lastOp)
+
+        pendingDeletes.undo(pendingDeletes.pending.value.single().key)
+        advanceUntilIdle()
+        assertNull(repo.lastOp)
     }
 
     @Test
@@ -452,7 +509,7 @@ class EventEditorViewModelTest {
                 "end" to "",
             ),
         )
-        val vm = EventEditorViewModel(handle, repo, FakePreferences())
+        val vm = EventEditorViewModel(handle, repo, FakePreferences(), messages, pendingDeletes)
         advanceUntilIdle()
 
         // The editor shows the last covered day, not the exclusive end.
@@ -570,7 +627,7 @@ class EventEditorViewModelTest {
                 "end" to "",
             ),
         )
-        return EventEditorViewModel(handle, repo, FakePreferences())
+        return EventEditorViewModel(handle, repo, FakePreferences(), messages, pendingDeletes)
     }
 
     // Rewriting the ATTENDEE rows of an event somebody else organized is a scheduling message, not

@@ -95,6 +95,7 @@ fun TimelineRoute(
     // the repeat away.
     var pendingMove by remember { mutableStateOf<PendingMove?>(null) }
     var revertMoveSignal by remember { mutableIntStateOf(0) }
+    val moveRefusals by viewModel.moveRefusals.collectAsStateWithLifecycle()
 
     pendingMove?.let { move ->
         RecurrenceScopeDialog(
@@ -204,7 +205,7 @@ fun TimelineRoute(
                             }
                         },
                         newEventMinutes = behaviour.defaultEventMinutes,
-                        revertMoveSignal = revertMoveSignal,
+                        revertMoveSignal = revertMoveSignal + moveRefusals,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }

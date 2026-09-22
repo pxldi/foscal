@@ -1,7 +1,13 @@
 package app.foscal
 
+import app.foscal.core.data.CalendarRepository
+import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.UserMessages
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -70,3 +76,12 @@ fun allDayEvent(
 /** Instant at [time] on [date] in the given zone. */
 fun at(date: LocalDate, hour: Int, minute: Int = 0, zone: ZoneId = ZoneId.systemDefault()): Instant =
     date.atTime(hour, minute).atZone(zone).toInstant()
+
+/**
+ * A [PendingDeletes] for view models that only read it. Its timers run on [scope]; a test that
+ * deletes should pass its own dispatcher so the undo window elapses in virtual time.
+ */
+fun testPendingDeletes(
+    repository: CalendarRepository = FakeCalendarRepository(),
+    scope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined),
+): PendingDeletes = PendingDeletes(repository, UserMessages(), scope)

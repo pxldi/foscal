@@ -11,7 +11,9 @@ import androidx.compose.animation.fadeOut
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,6 +25,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -33,6 +36,8 @@ import app.foscal.IntentRoute
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.editor.EventEditorRoute
 import app.foscal.ui.event.EventDetailScreen
+import app.foscal.ui.feedback.FeedbackEffects
+import app.foscal.ui.feedback.LocalSnackbarHostState
 import app.foscal.ui.home.HomeRoute
 import app.foscal.ui.location.LocationPickerRoute
 import app.foscal.ui.location.LocationViewerRoute
@@ -190,6 +195,11 @@ fun FoscalNavHost(
         onRouteConsumed()
     }
 
+    // Created here, above every destination, so a message outlives the screen that posted it.
+    val snackbarHost = remember { SnackbarHostState() }
+    FeedbackEffects(snackbarHost, hiltViewModel())
+
+    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHost) {
     Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
@@ -335,6 +345,13 @@ fun FoscalNavHost(
                 .collectAsStateWithLifecycle()
             EventEditorRoute(
                 onBack = { navController.popBackStack() },
+                // The detail screen under an edit would re-read the event, which is still in the
+                // provider until the Undo runs out, and show it as though nothing had happened.
+                onDeleted = {
+                    if (!navController.popBackStack(Routes.EVENT_DETAIL, inclusive = true)) {
+                        navController.popBackStack()
+                    }
+                },
                 onPickLocation = { query -> navController.navigate(Routes.locationPicker(query)) },
                 pickedLocation = pickedLocation,
                 onPickedLocationConsumed = {
@@ -535,6 +552,7 @@ fun FoscalNavHost(
             QuickAddRoute(onBack = { navController.popBackStack() })
         }
         }
+    }
     }
 }
 

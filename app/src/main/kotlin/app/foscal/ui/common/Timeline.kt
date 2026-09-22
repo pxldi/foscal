@@ -252,8 +252,9 @@ fun TimelineLayout(
     // A move that was offered and turned down (the recurring "which of these?" dialog, dismissed)
     // never reaches the provider, so no new data is coming to release the block.
     LaunchedEffect(revertMoveSignal) { if (revertMoveSignal > 0) eventDrag = null }
-    // And a write the provider refuses outright emits nothing either. Rare, but a block stranded
-    // where it is not is worse than one that snaps back a moment late.
+    // A write the provider refuses emits nothing either; the caller reports that through
+    // revertMoveSignal. This timeout is for a write that neither lands nor is refused, since a
+    // block stranded where it is not is worse than one that snaps back a moment late.
     LaunchedEffect(eventDrag?.committed) {
         if (eventDrag?.committed != true) return@LaunchedEffect
         delay(4_000)

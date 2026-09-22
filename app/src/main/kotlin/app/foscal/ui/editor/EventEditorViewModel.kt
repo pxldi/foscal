@@ -13,6 +13,8 @@ import app.foscal.core.model.Frequency
 import app.foscal.core.model.RecurrenceRules
 import app.foscal.core.model.RecurrenceSpec
 import app.foscal.core.model.resolveEventTimezone
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.UserMessages
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -92,6 +94,8 @@ data class EditorUiState(
     val originalTimezone: String? = null,
     val saving: Boolean = false,
     val finished: Boolean = false,
+    /** Set with [finished] when the editor closed on a delete rather than a save. */
+    val deleted: Boolean = false,
     val scopePrompt: RecurrenceScopePrompt? = null,
 ) {
     val canSave: Boolean get() = title.isNotBlank() && selectedCalendarId != null && !saving
@@ -136,6 +140,8 @@ class EventEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: CalendarRepository,
     private val prefs: Preferences,
+    private val messages: UserMessages,
+    private val pendingDeletes: PendingDeletes,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
@@ -531,8 +537,8 @@ class EventEditorViewModel @Inject constructor(
                 attendees = current.attendees.takeIf { current.canEditGuests },
                 color = current.color,
             )
-            when {
-                !current.isEditing -> repository.createEvent(input)
+            val saved = when {
+                !current.isEditing -> repository.createEvent(input) != null
                 current.isRecurring && scope == RecurrenceScope.SINGLE ->
                     repository.updateEventInstance(current.eventId, current.originalInstanceTime, input)
                 current.isRecurring && scope == RecurrenceScope.THIS_AND_FOLLOWING ->
@@ -544,23 +550,23 @@ class EventEditorViewModel @Inject constructor(
                     )
                 else -> repository.updateEvent(current.eventId, input)
             }
-            mutate { it.copy(saving = false, finished = true) }
+            // A refused write keeps the editor open with everything the user typed. Closing it
+            // looked exactly like a save that worked.
+            mutate { it.copy(saving = false, finished = saved) }
+            if (!saved) messages.post("Couldn't save the event")
         }
     }
 
+    /** Hands the delete to [PendingDeletes], which writes it once the Undo has gone unused. */
     private fun performDelete(scope: RecurrenceScope) {
         val current = _state.value
-        mutate { it.copy(saving = true) }
-        viewModelScope.launch {
-            when {
-                current.isRecurring && scope == RecurrenceScope.SINGLE ->
-                    repository.deleteEventInstance(current.eventId, current.originalInstanceTime)
-                current.isRecurring && scope == RecurrenceScope.THIS_AND_FOLLOWING ->
-                    repository.deleteEventFollowing(current.eventId, current.originalInstanceTime)
-                else -> repository.deleteEvent(current.eventId)
-            }
-            mutate { it.copy(saving = false, finished = true) }
-        }
+        pendingDeletes.request(
+            eventId = current.eventId,
+            instanceStartMillis = current.originalInstanceTime,
+            scope = if (current.isRecurring) scope else RecurrenceScope.ALL_EVENTS,
+            title = current.title.ifBlank { "(Untitled)" },
+        )
+        mutate { it.copy(finished = true, deleted = true) }
     }
 
     private fun combineInstant(date: LocalDate, time: LocalTime, allDay: Boolean): Instant {

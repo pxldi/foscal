@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Event
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
@@ -117,6 +118,7 @@ fun SearchRoute(
     }
 
     Scaffold(
+        snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(

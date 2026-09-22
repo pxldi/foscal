@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.withoutPendingDeletes
 import app.foscal.ui.util.DayWindow
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.monthCalendarIds
@@ -40,6 +42,7 @@ data class MonthUiState(
 class MonthViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: Preferences,
+    private val pendingDeletes: PendingDeletes,
 ) : ViewModel() {
 
     private val _visibleMonth = MutableStateFlow(YearMonth.now())
@@ -67,6 +70,7 @@ class MonthViewModel @Inject constructor(
         .flatMapLatest { (ids, w) ->
             repository.observeEvents(ids, w.startInstant(zone), w.endInstant(zone))
         }
+        .withoutPendingDeletes(pendingDeletes)
 
     /**
      * Grouped once per load rather than once per month change. The map is handed to the screen

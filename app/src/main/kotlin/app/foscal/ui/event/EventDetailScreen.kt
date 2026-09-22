@@ -215,7 +215,7 @@ fun EventDetailScreen(
  *
  * The pencil is on its own because it is the one action with a reason to be reached without
  * looking; duplicate and delete sit behind the overflow because a menu is a moment of thought,
- * and one of them cannot be undone. Both float over the header for the same reason the back
+ * and one of them removes the event. Both float over the header for the same reason the back
  * button does — there is no app bar here to hold them.
  */
 @Composable
@@ -284,8 +284,10 @@ private fun DeleteDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (recurring) "Delete recurring event" else "Delete event?") },
-        text = {
-            if (recurring) {
+        // A one-off needs no body: the title asks the question, and the snackbar that follows
+        // offers Undo.
+        text = if (recurring) {
+            {
                 Column {
                     Text("This event repeats. Delete:")
                     Spacer(Modifier.height(16.dp))
@@ -295,9 +297,9 @@ private fun DeleteDialog(
                     }
                     DeleteChoice("All events") { confirm(RecurrenceScope.ALL_EVENTS) }
                 }
-            } else {
-                Text("This cannot be undone.")
             }
+        } else {
+            null
         },
         confirmButton = {
             if (recurring) {

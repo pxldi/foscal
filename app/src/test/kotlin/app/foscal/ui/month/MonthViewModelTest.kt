@@ -5,6 +5,7 @@ import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
+import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
 import app.foscal.ui.common.SwipeDirection
 import app.foscal.ui.common.swipeDirection
@@ -43,7 +44,7 @@ class MonthViewModelTest {
                 timedEvent(2, at(today, 9), at(today, 10), title = "Standup"),
             ),
         )
-        val vm = MonthViewModel(repo, FakePreferences())
+        val vm = MonthViewModel(repo, FakePreferences(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -54,7 +55,11 @@ class MonthViewModelTest {
 
     @Test
     fun `navigation moves the visible month and back to a chosen month`() = runTest(dispatcher) {
-        val vm = MonthViewModel(FakeCalendarRepository(calendars = listOf(testCalendar())), FakePreferences())
+        val vm = MonthViewModel(
+            FakeCalendarRepository(calendars = listOf(testCalendar())),
+            FakePreferences(),
+            testPendingDeletes(),
+        )
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -71,7 +76,11 @@ class MonthViewModelTest {
 
     @Test
     fun `selectDate updates the selection`() = runTest(dispatcher) {
-        val vm = MonthViewModel(FakeCalendarRepository(calendars = listOf(testCalendar())), FakePreferences())
+        val vm = MonthViewModel(
+            FakeCalendarRepository(calendars = listOf(testCalendar())),
+            FakePreferences(),
+            testPendingDeletes(),
+        )
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -85,7 +94,7 @@ class MonthViewModelTest {
     @Test
     fun `paging inside the loaded window never goes back to the provider`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
-        val vm = MonthViewModel(repo, FakePreferences())
+        val vm = MonthViewModel(repo, FakePreferences(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
         assertEquals(1, repo.observedWindows.size)
@@ -99,7 +108,7 @@ class MonthViewModelTest {
     @Test
     fun `paging off the end of the window loads a new one`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
-        val vm = MonthViewModel(repo, FakePreferences())
+        val vm = MonthViewModel(repo, FakePreferences(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 

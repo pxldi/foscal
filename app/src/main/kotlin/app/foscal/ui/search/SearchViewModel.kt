@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.withoutPendingDeletes
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,6 +33,7 @@ private const val SEARCH_PAGE_YEARS = 2L
 class SearchViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: Preferences,
+    pendingDeletes: PendingDeletes,
 ) : ViewModel() {
 
     val zone: ZoneId = ZoneId.systemDefault()
@@ -52,6 +55,9 @@ class SearchViewModel @Inject constructor(
                 emit(repository.searchEvents(request.calendarIds, request.query, from, to))
             }
         }
+        // A result deleted from its detail screen is still in the provider during the undo
+        // window, and this list is what the user comes back to.
+        .withoutPendingDeletes(pendingDeletes)
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),

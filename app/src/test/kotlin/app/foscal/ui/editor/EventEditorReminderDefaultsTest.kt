@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.core.model.Calendar
+import app.foscal.testPendingDeletes
+import app.foscal.ui.feedback.UserMessages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -61,6 +63,8 @@ class EventEditorReminderDefaultsTest {
         ),
         repo,
         prefs,
+        UserMessages(),
+        testPendingDeletes(),
     )
 
     @Test
