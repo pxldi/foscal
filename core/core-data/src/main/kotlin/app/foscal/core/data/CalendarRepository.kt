@@ -13,6 +13,8 @@ import app.foscal.core.model.Attendee
 import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
+import app.foscal.core.model.EventAccess
+import app.foscal.core.model.EventAvailability
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.EventOverride
 import app.foscal.core.model.ExportEvent
@@ -207,7 +209,18 @@ interface CalendarRepository {
      * Export would otherwise issue one query per event; on a calendar with a few thousand events
      * that is thousands of round-trips through the provider's binder interface.
      */
-    suspend fun getReminderMinutesFor(eventIds: Collection<Long>): Map<Long, List<Int>>
+    suspend fun getReminderMinutesFor(
+        eventIds: Collection<Long>,
+        notifiableOnly: Boolean = false,
+    ): Map<Long, List<Int>>
+
+    /**
+     * Which of [uids] already belong to an event on [calendarId], matched on `Events.UID_2445`.
+     *
+     * This is what makes importing the same file twice add nothing. A failed read returns an empty
+     * set, so the import goes ahead rather than refusing the whole file.
+     */
+    suspend fun findEventUids(calendarId: Long, uids: Collection<String>): Set<String>
 
     /**
      * Everyone on [eventId] — the organizer first, then the guests by name.
@@ -1025,9 +1038,27 @@ class CalendarContractRepository @Inject constructor(
 
     override suspend fun getReminderMinutesFor(
         eventIds: Collection<Long>,
+        notifiableOnly: Boolean,
     ): Map<Long, List<Int>> = withContext(Dispatchers.IO) {
-        queryReminderMinutes(eventIds, notifiableOnly = false).orEmpty()
+        queryReminderMinutes(eventIds, notifiableOnly).orEmpty()
     }
+
+    override suspend fun findEventUids(calendarId: Long, uids: Collection<String>): Set<String> =
+        withContext(Dispatchers.IO) {
+            val out = mutableSetOf<String>()
+            for (chunk in uids.distinct().chunked(500)) {
+                val placeholders = chunk.joinToString(",") { "?" }
+                safeQuery(
+                    CalendarContract.Events.CONTENT_URI,
+                    arrayOf(CalendarContract.Events.UID_2445),
+                    "${CalendarContract.Events.CALENDAR_ID} = ? AND ${CalendarContract.Events.DELETED} != 1" +
+                        " AND ${CalendarContract.Events.UID_2445} IN ($placeholders)",
+                    arrayOf(calendarId.toString()) + chunk,
+                    null,
+                )?.use { c -> while (c.moveToNext()) c.getString(0)?.let { out += it } }
+            }
+            out
+        }
 
     /**
      * Reminder offsets for many events in one pass, keyed by event id.
@@ -1223,18 +1254,20 @@ class CalendarContractRepository @Inject constructor(
             calendarIds.map { it.toString() }.toTypedArray(),
             "${CalendarContract.Events.DTSTART} ASC",
         )?.use { c ->
+            // The export-only columns follow EVENT_PROJECTION, so they are indexed from its end.
+            val x = EVENT_PROJECTION.size
             while (c.moveToNext()) {
-                val originalId = c.getString(14)?.toLongOrNull()
-                val originalSyncId = c.getString(15)?.takeIf { it.isNotBlank() }
-                val originalStart = if (c.isNull(16)) null else c.getLong(16)
+                val originalId = c.getString(x + 1)?.toLongOrNull()
+                val originalSyncId = c.getString(x + 2)?.takeIf { it.isNotBlank() }
+                val originalStart = if (c.isNull(x + 3)) null else c.getLong(x + 3)
                 if (originalStart != null && (originalId != null || originalSyncId != null)) {
                     exceptions += ExceptionRow(
                         masterId = originalId,
                         masterSyncId = originalSyncId,
                         originalInstanceTime = originalStart,
-                        originalAllDay = c.getInt(17) == 1,
-                        cancelled = !c.isNull(18) &&
-                            c.getInt(18) == CalendarContract.Events.STATUS_CANCELED,
+                        originalAllDay = c.getInt(x + 4) == 1,
+                        cancelled = !c.isNull(x + 5) &&
+                            c.getInt(x + 5) == CalendarContract.Events.STATUS_CANCELED,
                         event = c.readEventRow(),
                     )
                     continue
@@ -1242,7 +1275,7 @@ class CalendarContractRepository @Inject constructor(
                 val event = c.readEventRow() ?: continue
                 if (event.title.isBlank()) continue
                 masters += event
-                c.getString(13)?.takeIf { it.isNotBlank() }?.let { syncIdToMasterId[it] = event.id }
+                c.getString(x)?.takeIf { it.isNotBlank() }?.let { syncIdToMasterId[it] = event.id }
             }
         }
 
@@ -1493,6 +1526,18 @@ class CalendarContractRepository @Inject constructor(
         } else {
             putNull(CalendarContract.Events.EVENT_COLOR)
         }
+        input.uid?.let { put(CalendarContract.Events.UID_2445, it) }
+        input.access?.let { put(CalendarContract.Events.ACCESS_LEVEL, it.toProviderAccess()) }
+        input.availability?.let { put(CalendarContract.Events.AVAILABILITY, it.toProviderAvailability()) }
+        val exdates = input.exdates
+        if (exdates != null && input.frequency != Frequency.NONE) {
+            // UTC date-times for all-day series too: the provider matches either form, and one
+            // format is one less thing to get wrong.
+            val value = exdates.distinct().sorted().joinToString(",") {
+                it.atZone(java.time.ZoneOffset.UTC).format(EXDATE_FORMAT)
+            }
+            if (value.isEmpty()) putNull(CalendarContract.Events.EXDATE) else put(CalendarContract.Events.EXDATE, value)
+        }
 
         if (input.frequency == Frequency.NONE) {
             // Non-recurring: provider requires DTEND (or DURATION), forbids RRULE.
@@ -1507,6 +1552,17 @@ class CalendarContractRepository @Inject constructor(
             put(CalendarContract.Events.RRULE, input.rrule ?: "FREQ=${input.frequency.name}")
             putNull(CalendarContract.Events.DTEND)
         }
+    }
+
+    private fun EventAccess.toProviderAccess(): Int = when (this) {
+        EventAccess.PUBLIC -> CalendarContract.Events.ACCESS_PUBLIC
+        EventAccess.PRIVATE -> CalendarContract.Events.ACCESS_PRIVATE
+        EventAccess.CONFIDENTIAL -> CalendarContract.Events.ACCESS_CONFIDENTIAL
+    }
+
+    private fun EventAvailability.toProviderAvailability(): Int = when (this) {
+        EventAvailability.BUSY -> CalendarContract.Events.AVAILABILITY_BUSY
+        EventAvailability.FREE -> CalendarContract.Events.AVAILABILITY_FREE
     }
 
     /** RFC 5545 duration (P[n]DT[n]H[n]M[n]S, or P[n]W for weeks, or P[n]D for all-day). */
@@ -1612,6 +1668,7 @@ class CalendarContractRepository @Inject constructor(
             timezone = getString(9),
             color = if (displayColor != 0) displayColor else calendarColor,
             rrule = getString(12),
+            uid = getString(13)?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -1672,12 +1729,15 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Events.DISPLAY_COLOR,
             CalendarContract.Events.CALENDAR_COLOR,
             CalendarContract.Events.RRULE,
+            CalendarContract.Events.UID_2445,
         )
+
+        private val EXDATE_FORMAT = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
 
         /**
          * [EVENT_PROJECTION] plus the columns that describe how a row relates to a series. The
-         * first 13 are byte-for-byte the same so `readEventRow` reads either projection; the
-         * export-only columns are appended at 13..18.
+         * leading columns are byte-for-byte the same so `readEventRow` reads either projection; the
+         * export-only columns are appended after them.
          */
         private val EXPORT_PROJECTION = EVENT_PROJECTION + arrayOf(
             CalendarContract.Events._SYNC_ID,

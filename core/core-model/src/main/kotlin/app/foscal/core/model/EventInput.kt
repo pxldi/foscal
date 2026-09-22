@@ -74,4 +74,19 @@ data class EventInput(
      * accounts may snap it to their nearest swatch or drop it.
      */
     val color: Int? = null,
+    /**
+     * The iCalendar UID, written to `Events.UID_2445`. Null leaves the column alone. Only an import
+     * sets it: it is what tells a second import of the same file that the event is already there.
+     */
+    val uid: String? = null,
+    /**
+     * Cancelled occurrence starts, written to a recurring event's `EXDATE` column. Null leaves the
+     * column alone, for the same reason as [attendees]: an editor save must not clear the EXDATEs
+     * a sync adapter wrote.
+     */
+    val exdates: List<Instant>? = null,
+    /** CLASS, written to `ACCESS_LEVEL`. Null leaves the column alone. */
+    val access: EventAccess? = null,
+    /** TRANSP, written to `AVAILABILITY`. Null leaves the column alone. */
+    val availability: EventAvailability? = null,
 )

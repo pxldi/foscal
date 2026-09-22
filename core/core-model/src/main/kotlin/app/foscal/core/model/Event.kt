@@ -20,6 +20,8 @@ data class Event(
     val color: Int,
     /** Non-null when this event is part of a recurring series (its RRULE string). */
     val rrule: String? = null,
+    /** The iCalendar UID (`Events.UID_2445`). Read only where export needs it; null elsewhere. */
+    val uid: String? = null,
 ) {
     val durationMillis: Long
         get() = end.toEpochMilli() - start.toEpochMilli()

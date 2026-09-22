@@ -209,6 +209,7 @@ class FakeCalendarRepository(
     ): Boolean {
         lastOp = Op.UPDATE_FOLLOWING
         lastRebaseCount = rebaseCount
+        followingUpdates += Triple(eventId, instanceStartMillis, input)
         lastCreated = input
         lastWritten = input
         return true
@@ -229,7 +230,17 @@ class FakeCalendarRepository(
 
     override suspend fun getReminderMinutesFor(
         eventIds: Collection<Long>,
+        notifiableOnly: Boolean,
     ): Map<Long, List<Int>> = eventIds.associateWith { reminderMinutes }
+
+    /** UIDs that count as already on the calendar, for import dedupe tests. */
+    val existingUids = mutableSetOf<String>()
+
+    override suspend fun findEventUids(calendarId: Long, uids: Collection<String>): Set<String> =
+        uids.filter { it in existingUids }.toSet()
+
+    /** Every `updateEventFollowing` call, as (eventId, split start, input). */
+    val followingUpdates = mutableListOf<Triple<Long, Long, EventInput>>()
 
     override suspend fun getAttendees(eventId: Long): List<Attendee> = attendees
 

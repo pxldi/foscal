@@ -379,7 +379,7 @@ class EventEditorViewModelTest {
         vm.save()
         advanceUntilIdle()
 
-        assertEquals(ZoneOffset.UTC.id, repo.lastWritten?.timezone)
+        assertEquals("UTC", repo.lastWritten?.timezone)
     }
 
     @Test

@@ -2,6 +2,8 @@ package app.foscal.ics
 
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.model.Event
+import app.foscal.core.model.EventAccess
+import app.foscal.core.model.EventAvailability
 import app.foscal.core.model.EventOverride
 import app.foscal.core.model.ExportEvent
 import app.foscal.core.model.Ics
@@ -98,6 +100,13 @@ class IcsTransferTest {
         assertEquals(listOf(60), events[1].reminderMinutes)
     }
 
+    @Test
+    fun `a stored UID is exported as the series' UID, overrides included`() {
+        val stored = series().copy(event = event(1L, rrule = "FREQ=DAILY").copy(uid = "abc@example.com"))
+        val events = stored.toIcsEvents(emptyMap())
+        assertEquals(listOf("abc@example.com", "abc@example.com"), events.map { it.uid })
+    }
+
     // ------------------------------------------------------------------ import
 
     @Test
@@ -121,16 +130,17 @@ class IcsTransferTest {
     }
 
     @Test
-    fun `cancelled occurrences are re-applied to the imported series`() = runTest {
+    fun `cancelled occurrences go into the master's EXDATE column, not exception rows`() = runTest {
         val repository = FakeCalendarRepository()
         val text = Ics.write(series().toIcsEvents(emptyMap()))
 
         writeImported(repository, Ics.read(text, berlin), 9L, berlin)
 
         assertEquals(
-            listOf(1L to Instant.parse("2026-07-27T09:00:00Z").toEpochMilli()),
-            repository.instanceDeletes,
+            listOf(Instant.parse("2026-07-27T09:00:00Z")),
+            repository.created.single().exdates,
         )
+        assertTrue(repository.instanceDeletes.isEmpty())
     }
 
     @Test
@@ -144,7 +154,6 @@ class IcsTransferTest {
         assertEquals(listOf("Other", "Standup"), repository.created.map { it.title })
         // "Standup" was the second row created, so the override must address id 2.
         assertEquals(2L, repository.instanceUpdates.single().first)
-        assertEquals(2L, repository.instanceDeletes.single().first)
     }
 
     @Test
@@ -171,5 +180,151 @@ class IcsTransferTest {
         assertEquals(0, summary.skipped)
         assertTrue(repository.instanceUpdates.isEmpty())
         assertTrue(repository.instanceDeletes.isEmpty())
+    }
+
+    // ------------------------------------------------------------------ import: interop rules
+
+    private fun ics(vararg events: String) =
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n" + events.joinToString("") + "END:VCALENDAR\r\n"
+
+    private fun vevent(vararg lines: String) =
+        "BEGIN:VEVENT\r\n" + lines.joinToString("") { "$it\r\n" } + "END:VEVENT\r\n"
+
+    @Test
+    fun `on a synced calendar an override is excluded from its series and created on its own`() = runTest {
+        val repository = FakeCalendarRepository()
+        val text = Ics.write(series().toIcsEvents(emptyMap()))
+
+        val summary = writeImported(repository, Ics.read(text, berlin), 9L, berlin, isLocal = false)
+
+        assertEquals(2, summary.imported)
+        assertTrue(repository.instanceUpdates.isEmpty())
+        assertTrue(repository.instanceDeletes.isEmpty())
+        val (master, moved) = repository.created
+        assertEquals(
+            listOf(Instant.parse("2026-07-27T09:00:00Z"), Instant.parse("2026-07-28T09:00:00Z")),
+            master.exdates,
+        )
+        assertEquals("Standup (late)", moved.title)
+        assertNull(moved.rrule)
+        // Its own UID, so a sync adapter does not upload two events under the series' one.
+        assertTrue(moved.uid != master.uid)
+    }
+
+    @Test
+    fun `every created event carries its UID, synthetic when the file has none`() = runTest {
+        val repository = FakeCalendarRepository()
+        val events = Ics.read(
+            ics(vevent("UID:given@example.com", "DTSTART:20260115T090000Z"), vevent("DTSTART:20260116T090000Z")),
+            berlin,
+        )
+
+        writeImported(repository, events, 9L, berlin)
+
+        assertEquals("given@example.com", repository.created[0].uid)
+        assertEquals(Ics.syntheticUid(events[1]), repository.created[1].uid)
+    }
+
+    @Test
+    fun `a series already on the calendar is skipped with its overrides`() = runTest {
+        val repository = FakeCalendarRepository()
+        val text = Ics.write(series().toIcsEvents(emptyMap()))
+        val events = Ics.read(text, berlin)
+        repository.existingUids += events.first().uid!!
+
+        val summary = writeImported(repository, events, 9L, berlin)
+
+        assertEquals(ImportSummary(imported = 0, skipped = 0, duplicates = 2), summary)
+        assertTrue(repository.created.isEmpty())
+        assertTrue(repository.instanceUpdates.isEmpty())
+    }
+
+    @Test
+    fun `importing the same file twice adds nothing the second time`() = runTest {
+        val repository = FakeCalendarRepository()
+        val events = Ics.read(
+            ics(
+                vevent("UID:a", "DTSTART:20260115T090000Z", "RRULE:FREQ=WEEKLY", "RDATE:20260117T090000Z"),
+                vevent("DTSTART:20260116T090000Z", "SUMMARY:No uid"),
+                vevent("UID:orphan", "RECURRENCE-ID:20260120T090000Z", "DTSTART:20260120T100000Z"),
+            ),
+            berlin,
+        )
+
+        val first = writeImported(repository, events, 9L, berlin)
+        repository.existingUids += repository.created.mapNotNull { it.uid }
+        val createdBefore = repository.created.size
+        val second = writeImported(repository, events, 9L, berlin)
+
+        assertEquals(4, first.imported)
+        assertEquals(0, second.imported)
+        assertEquals(4, second.duplicates)
+        assertEquals(createdBefore, repository.created.size)
+    }
+
+    @Test
+    fun `an RDATE becomes a one-off copy of the series with its own UID`() = runTest {
+        val repository = FakeCalendarRepository()
+        val events = Ics.read(
+            ics(vevent("UID:a", "DTSTART:20260115T090000Z", "DTEND:20260115T100000Z", "RRULE:FREQ=MONTHLY", "RDATE:20260120T090000Z")),
+            berlin,
+        )
+
+        writeImported(repository, events, 9L, berlin)
+
+        val copy = repository.created[1]
+        assertEquals(Instant.parse("2026-01-20T09:00:00Z"), copy.start)
+        assertEquals(Instant.parse("2026-01-20T10:00:00Z"), copy.end)
+        assertNull(copy.rrule)
+        assertTrue(copy.uid != "a")
+    }
+
+    @Test
+    fun `a THISANDFUTURE override splits the series with its own exclusions`() = runTest {
+        val repository = FakeCalendarRepository()
+        val events = Ics.read(
+            ics(
+                vevent(
+                    "UID:s",
+                    "DTSTART:20260105T090000Z",
+                    "RRULE:FREQ=WEEKLY;COUNT=10",
+                    "EXDATE:20260112T090000Z,20260202T090000Z",
+                ),
+                vevent("UID:s", "RECURRENCE-ID;RANGE=THISANDFUTURE:20260126T090000Z", "DTSTART:20260126T100000Z"),
+            ),
+            berlin,
+        )
+
+        val summary = writeImported(repository, events, 9L, berlin)
+
+        assertEquals(2, summary.imported)
+        val (masterId, split, input) = repository.followingUpdates.single()
+        assertEquals(1L, masterId)
+        assertEquals(Instant.parse("2026-01-26T09:00:00Z").toEpochMilli(), split)
+        assertEquals(true, repository.lastRebaseCount)
+        assertEquals("FREQ=WEEKLY;COUNT=10", input.rrule)
+        // The exclusion past the split moves with the series, an hour later.
+        assertEquals(listOf(Instant.parse("2026-02-02T10:00:00Z")), input.exdates)
+    }
+
+    @Test
+    fun `unreadable VEVENTs are reported as skipped`() = runTest {
+        val repository = FakeCalendarRepository()
+        val document = Ics.readDocument(ics(vevent("DTSTART:20260115T090000Z"), vevent("DTSTART:garbage")), berlin)
+
+        val summary = writeImported(repository, document.events, 9L, berlin, rejected = document.rejected)
+
+        assertEquals(ImportSummary(imported = 1, skipped = 1), summary)
+    }
+
+    @Test
+    fun `CLASS and TRANSP reach the provider input`() = runTest {
+        val repository = FakeCalendarRepository()
+        val events = Ics.read(ics(vevent("DTSTART:20260115T090000Z", "CLASS:PRIVATE", "TRANSP:TRANSPARENT")), berlin)
+
+        writeImported(repository, events, 9L, berlin)
+
+        assertEquals(EventAccess.PRIVATE, repository.created.single().access)
+        assertEquals(EventAvailability.FREE, repository.created.single().availability)
     }
 }

@@ -559,12 +559,32 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **Cancelled occurrences export as `EXDATE` on the master, not as `STATUS:CANCELLED` overrides.**
   Every RFC 5545 reader understands EXDATE; a cancelled override is routinely imported as a real
   (if cancelled) event.
-- **Import writes masters before overrides.** An override can only be applied once the series it
-  replaces has a row id, so `writeImported` creates every non-override first, keeps a uid→id map,
-  then applies EXDATEs via `deleteEventInstance` and RECURRENCE-ID VEVENTs via
-  `updateEventInstance`. An override whose master is not in the file is created as a standalone
-  event rather than dropped. That function is deliberately separate from `IcsTransfer.import` so
-  the ordering is testable without a `Context` or a document URI.
+- **Import writes masters before overrides, and never writes an exception row on a synced
+  calendar.** An override can only be applied once its series has a row id, so `writeImported`
+  creates every master first. Cancelled occurrences go into the master's `EXDATE` column in the
+  same insert (`EventInput.exdates`, nullable like `attendees` so an editor save never clears what
+  a sync adapter wrote). On a local calendar an override then becomes an exception row via
+  `updateEventInstance`. On any other calendar the master has no `_sync_id` until its adapter runs,
+  and an exception inserted before then can wipe the series, so the occurrence is added to the
+  master's EXDATE and the override is created as its own event under its own UID. `THISANDFUTURE`
+  goes through `updateEventFollowing`, latest split first. An RDATE becomes a one-off copy. That
+  function is deliberately separate from `IcsTransfer.import` so these rules are testable without a
+  `Context` or a document URI.
+- **`Events.UID_2445` is the import identity.** Every imported event is written with its UID, a
+  synthetic one when the file has none, and `findEventUids` skips a series already on the target
+  calendar with everything that belongs to it, so a second import of the same file adds nothing.
+  An event created on its own from an override or an RDATE gets `<uid>-<millis>`: a sync adapter
+  uploads each event under its UID, and two events sharing one collide on the server. Export reads
+  the column back, so a stored UID survives a round trip.
+- **The reader, not the importer, applies STATUS:CANCELLED and resolves zones.** `Ics.readDocument`
+  folds a cancelled override into its series' EXDATEs (or ends the series, for `THISANDFUTURE`) and
+  leaves out cancelled events and series. TZIDs go through `IcsTimeZones`: an IANA name, the end of
+  a prefixed id, the CLDR Windows table in `WindowsZones.kt`, then the file's VTIMEZONE matched
+  against IANA rules. Only DISPLAY and AUDIO alarms become reminders, and none over
+  `Ics.MAX_REMINDER_MINUTES`. Export writes only the reminders Foscal delivers itself.
+- **All-day events are written with zone `"UTC"`, never `ZoneOffset.UTC.id`, which is `"Z"`.** The
+  provider stores `"Z"` and even expands it, but only because `java.util.TimeZone` falls back to
+  GMT for an id it does not know.
 - **Timed events export as UTC, deliberately.** A `TZID` parameter is only usable by the reader if
   the file also carries that zone's full VTIMEZONE with its DST rules; emitting a one-block
   VTIMEZONE with today's offset is worse than none, because it silently shifts occurrences on the

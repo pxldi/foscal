@@ -404,9 +404,11 @@ class CalendarsViewModel @Inject constructor(
             val summary = icsTransfer.import(source, calendarId)
             val message = buildString {
                 append("Imported ${summary.imported} ${plural(summary.imported, "event")}")
+                if (summary.duplicates > 0) append(" · ${summary.duplicates} already there")
                 if (summary.skipped > 0) append(" · ${summary.skipped} skipped")
             }
-            TransferState(message = message, failed = summary.imported == 0)
+            // A second import of the same file writes nothing and is still not a failure.
+            TransferState(message = message, failed = summary.imported == 0 && summary.duplicates == 0)
         }
     }
 

@@ -517,7 +517,8 @@ class EventEditorViewModel @Inject constructor(
                 // occurrences and shifts the event for every other client on the same CalDAV
                 // calendar. New events (and all-day events, which are UTC by contract) fall back.
                 timezone = when {
-                    current.allDay -> ZoneOffset.UTC.id
+                    // "UTC", not ZoneOffset.UTC.id, which is "Z"; see Ics.UTC.
+                    current.allDay -> "UTC"
                     else -> resolveEventTimezone(current.originalTimezone, zone)
                 },
                 frequency = current.frequency,

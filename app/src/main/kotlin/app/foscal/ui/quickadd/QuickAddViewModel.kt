@@ -81,7 +81,8 @@ class QuickAddViewModel @Inject constructor(
                     start = start,
                     end = end,
                     allDay = parsed.allDay,
-                    timezone = if (parsed.allDay) ZoneOffset.UTC.id else zone.id,
+                    // "UTC", not ZoneOffset.UTC.id, which is "Z"; see Ics.UTC.
+                    timezone = if (parsed.allDay) "UTC" else zone.id,
                     frequency = Frequency.NONE,
                     rrule = null,
                     reminderMinutes = listOfNotNull(
