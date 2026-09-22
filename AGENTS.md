@@ -346,14 +346,37 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   20 days away — the event never enters the window, so the alarm is never set. `ReminderTrigger.horizonEnd`
   also rounds up to the next local midnight; truncating down puts the end before `now + days`.
 - **An unreadable provider must not look like an empty calendar.** `getUpcomingReminders` returns
-  **null** when the query fails and an empty list only when there genuinely are no reminders. An
-  empty list instructs `reschedule` to cancel everything, so flattening the two silently disarmed a
-  user's whole calendar on any transient failure. The worker returns `Result.retry()` on null.
+  **null** when any of its reads fails (Calendars, Instances, Reminders or Attendees) and an empty
+  list only when there genuinely are no reminders. An empty list instructs `reschedule` to cancel
+  everything, so flattening the two silently disarmed a user's whole calendar on any transient
+  failure. `getLargestReminderOffsetMinutes` is nullable for the same reason: a failure read as 0
+  shrinks the horizon, and every reminder past it is cancelled. The worker returns
+  `Result.retry()` on either null. The UI readers (`getEvents`, `getReminderMinutesFor`) still
+  flatten failures to empty; do not route the reminder path through them.
+- **The reminder read keeps untitled events and drops cancelled and declined ones.**
+  `queryReminderInstances` is separate from `queryInstances` because the latter skips blank titles
+  for display. Cancelled means `Instances.STATUS == STATUS_CANCELED`. Declined is read from the
+  user's own `Attendees` row (`DeclinedEvents`), matched against the calendar owner through
+  `Attendee.normalizeAddress`, never from `SELF_ATTENDEE_STATUS`, for the reason given under that
+  column below.
+- **Reminder syncs run one at a time.** `WORK_NOW`, `WORK_OBSERVE` and `WORK_PERIODIC` can all be
+  running at once, and two interleaved passes lost each other's registry writes, orphaning alarms
+  that then fired for deleted events. `ReminderSyncWorker` holds a process-wide `Mutex` over the
+  read *and* the arming, so the pass that arms last is also the one that read last. The registry is
+  written with `commit()`: `apply()` only queues the write, and a worker process can die first.
 - **`ReminderSyncWorker` must re-arm the content trigger *last*.** The trigger is one-shot unique
   work, so the re-arm replaces the name the running job itself holds — and WorkManager cancels a
   running instance to make room. Re-arming first therefore cancelled the worker before it armed
   anything: the trigger looped forever while no alarm was ever scheduled. `ensureScheduled` uses
   `KEEP` for the same reason, so opening the app cannot kill an in-flight sync.
+- **Only the observer's own run may REPLACE the observer.** The observer request carries
+  `TAG_OBSERVE`; the worker's final re-arm uses REPLACE when it holds that tag and KEEP otherwise. A
+  REPLACE from a NOW or periodic run cancelled an observer run that had just been triggered, and the
+  calendar change it was about to read went unnoticed until the next one.
+- **Anything that changes what the sync would arm without touching the provider must call
+  `syncNow()`.** The content trigger only sees provider writes. Foscal's own hide toggle lives in
+  DataStore, so `CalendarsViewModel.toggleHidden` calls it; before it did, hidden calendars kept
+  notifying until the next unrelated sync.
 - **`syncNow()` is expedited only from API 31.** Below 31 WorkManager runs expedited work as a
   foreground service and calls `getForegroundInfo`, which `CoroutineWorker` does not implement: the
   work fails with "Not implemented" before `doWork` runs, so boot, app update, clock changes and

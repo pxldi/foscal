@@ -1,5 +1,6 @@
 package app.foscal.notifications
 
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.ComponentName
@@ -33,6 +34,7 @@ class AlarmReminderScheduler @Inject constructor(
         context.applicationContext.getSharedPreferences(REGISTRY_PREFS, Context.MODE_PRIVATE)
     }
 
+    @SuppressLint("ApplySharedPref")
     override fun reschedule(reminders: List<ScheduledReminder>): Int {
         val am = alarmManager ?: return 0
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
@@ -102,7 +104,9 @@ class AlarmReminderScheduler @Inject constructor(
             // Written even if the loop dies unexpectedly. The registry is the *only* record of what
             // is armed, so losing it strands every alarm set in this pass: the next reschedule
             // cannot cancel what it cannot name, and those alarms fire forever.
-            registry.edit().putStringSet(KEY_CODES, scheduled).apply()
+            // commit, not apply: apply only queues the disk write, and a worker process can die
+            // before it lands.
+            registry.edit().putStringSet(KEY_CODES, scheduled).commit()
         }
         return scheduled.size
     }
@@ -112,6 +116,7 @@ class AlarmReminderScheduler @Inject constructor(
      * alone. They survive an app update, so without this pass an upgrading user keeps a stale
      * alarm per event forever.
      */
+    @SuppressLint("ApplySharedPref")
     private fun cancelLegacyAlarms(am: AlarmManager, reminders: List<ScheduledReminder>) {
         if (registry.getBoolean(KEY_LEGACY_CLEARED, false)) return
         for (eventId in reminders.map { it.eventId }.toSet()) {
@@ -125,7 +130,7 @@ class AlarmReminderScheduler @Inject constructor(
                 }
             }
         }
-        registry.edit().putBoolean(KEY_LEGACY_CLEARED, true).apply()
+        registry.edit().putBoolean(KEY_LEGACY_CLEARED, true).commit()
     }
 
     private fun pendingIntent(

@@ -54,7 +54,8 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         if (action !in HandledActions) return
 
         val eventId = intent.getLongExtra(AlarmReminderScheduler.EXTRA_EVENT_ID, -1L)
-        val title = intent.getStringExtra(AlarmReminderScheduler.EXTRA_TITLE) ?: "Event"
+        val title = intent.getStringExtra(AlarmReminderScheduler.EXTRA_TITLE)
+            ?.takeIf { it.isNotBlank() } ?: "Event"
         val whenMillis = intent.getLongExtra(AlarmReminderScheduler.EXTRA_WHEN_MILLIS, 0L)
         val location = intent.getStringExtra(AlarmReminderScheduler.EXTRA_LOCATION) ?: ""
         val minutes = intent.getIntExtra(AlarmReminderScheduler.EXTRA_MINUTES, 0)

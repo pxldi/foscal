@@ -3,6 +3,7 @@ package app.foscal.notifications
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkerParameters
 import app.foscal.core.data.CalendarPermissionState
 import app.foscal.core.data.CalendarRepository
@@ -13,6 +14,8 @@ import app.foscal.widget.WidgetRefresher
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 import java.time.ZoneId
 
@@ -38,7 +41,11 @@ class ReminderSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val result = try {
-            sync()
+            // The three work names can run at once, and two passes interleaved used to lose each
+            // other's registry writes, orphaning alarms that then fired for deleted events. The
+            // lock covers the read as well as the arming, so the pass that arms last is also the
+            // one that read last.
+            syncLock.withLock { sync() }
         } finally {
             // Re-arm the single-use content trigger, last and unconditionally.
             //
@@ -52,7 +59,17 @@ class ReminderSyncWorker @AssistedInject constructor(
             //
             // Unconditionally, because the trigger is consumed by firing: one skipped re-arm and
             // the app stops noticing calendar changes until the periodic backstop runs.
-            syncScheduler.observeCalendarChanges()
+            //
+            // Only the observer's own run replaces the observer. Any other run uses KEEP: a
+            // REPLACE from there cancelled an observer run that had just been triggered, and the
+            // calendar change it was about to read went unnoticed. KEEP still re-creates an
+            // observer that has finished or been cancelled.
+            val policy = if (ReminderSyncScheduler.TAG_OBSERVE in tags) {
+                ExistingWorkPolicy.REPLACE
+            } else {
+                ExistingWorkPolicy.KEEP
+            }
+            syncScheduler.observeCalendarChanges(policy)
         }
         return result
     }
@@ -62,31 +79,40 @@ class ReminderSyncWorker @AssistedInject constructor(
         if (!permission.isGranted) {
             // Nothing to do, and nothing to undo: leaving the existing alarms armed is right, since
             // the user may re-grant at any time and those events have not gone anywhere.
-            status.record(ReminderSyncStatus.Outcome.NoPermission, armed = 0)
+            status.record(ReminderSyncStatus.Outcome.NoPermission, armed = null)
             return Result.success()
         }
 
         val now = Instant.now()
         val zone = ZoneId.systemDefault()
+        // A failed read at either step means retry, never reschedule: an empty list would cancel
+        // every armed alarm, and a horizon shrunk by an unread offset would cancel every reminder
+        // beyond it. Either way the user silently stops being reminded.
+        val largestOffset = repository.getLargestReminderOffsetMinutes()
+            ?: return readFailed()
         val horizonEnd = ReminderTrigger.horizonEnd(
             now = now,
             zone = zone,
-            largestOffsetMinutes = repository.getLargestReminderOffsetMinutes(),
+            largestOffsetMinutes = largestOffset,
         )
 
         val hidden = preferences.hiddenCalendarIds.first().mapNotNull(String::toLongOrNull).toSet()
         val reminders = repository.getUpcomingReminders(now, horizonEnd, zone, hidden)
-        if (reminders == null) {
-            // The provider could not be read. Retry rather than reschedule: passing an empty list on
-            // would cancel every armed alarm, which is the worst possible response to a transient
-            // failure — the user silently stops being reminded about anything.
-            status.record(ReminderSyncStatus.Outcome.ReadFailed, armed = 0)
-            return Result.retry()
-        }
+            ?: return readFailed()
 
         val armed = scheduler.reschedule(reminders)
         status.record(ReminderSyncStatus.Outcome.Success, armed = armed)
         widgetRefresher.refresh()
         return Result.success()
+    }
+
+    private suspend fun readFailed(): Result {
+        // armed = null: the alarms from the last pass are still set, so the count stays theirs.
+        status.record(ReminderSyncStatus.Outcome.ReadFailed, armed = null)
+        return Result.retry()
+    }
+
+    private companion object {
+        val syncLock = Mutex()
     }
 }

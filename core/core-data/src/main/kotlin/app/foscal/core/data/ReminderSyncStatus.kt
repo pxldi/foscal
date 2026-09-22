@@ -63,11 +63,15 @@ class ReminderSyncStatus @Inject constructor(
         )
     }
 
-    suspend fun record(outcome: Outcome, armed: Int) {
+    /**
+     * [armed] is null on a pass that left the alarms as they were, so the stored count still
+     * describes what is set rather than dropping to 0.
+     */
+    suspend fun record(outcome: Outcome, armed: Int?) {
         context.reminderStatusStore.edit { prefs ->
             prefs[LAST_SYNC_AT] = System.currentTimeMillis()
             prefs[LAST_OUTCOME] = outcome.name
-            prefs[ALARMS_ARMED] = armed
+            if (armed != null) prefs[ALARMS_ARMED] = armed
         }
     }
 

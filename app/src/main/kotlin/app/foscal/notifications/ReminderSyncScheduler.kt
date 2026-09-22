@@ -68,9 +68,9 @@ class ReminderSyncScheduler @Inject constructor(
      * flow did with `debounce(2s)`, except the system holds the timer, so a batch sync that starts
      * while the app is dead still coalesces.
      *
-     * [policy] is [ExistingWorkPolicy.REPLACE] when the caller knows the current trigger has been
-     * consumed and must be superseded; see the call in [ReminderSyncWorker] for why that call has to
-     * be the last thing a run does.
+     * [policy] is [ExistingWorkPolicy.REPLACE] only from the observer's own run, which knows its
+     * trigger has been consumed; see the call in [ReminderSyncWorker] for why that call has to be
+     * the last thing a run does, and why every other run passes KEEP.
      */
     fun observeCalendarChanges(policy: ExistingWorkPolicy = ExistingWorkPolicy.REPLACE) {
         val request = OneTimeWorkRequestBuilder<ReminderSyncWorker>()
@@ -83,6 +83,7 @@ class ReminderSyncScheduler @Inject constructor(
                     .setTriggerContentMaxDelay(TRIGGER_MAX_DELAY_SECONDS, TimeUnit.SECONDS)
                     .build(),
             )
+            .addTag(TAG_OBSERVE)
             .build()
         workManager.enqueueUniqueWork(WORK_OBSERVE, policy, request)
     }
@@ -111,6 +112,9 @@ class ReminderSyncScheduler @Inject constructor(
         const val WORK_PERIODIC = "foscal_reminder_sync_periodic"
         const val WORK_OBSERVE = "foscal_reminder_sync_observe"
         const val WORK_NOW = "foscal_reminder_sync_now"
+
+        /** Marks the observer's run, the only one allowed to replace the observer. */
+        const val TAG_OBSERVE = "foscal_reminder_sync_observer"
 
         private const val BACKSTOP_INTERVAL_HOURS = 6L
         private const val TRIGGER_DELAY_SECONDS = 10L

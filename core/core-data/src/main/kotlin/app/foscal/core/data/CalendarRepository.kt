@@ -241,8 +241,9 @@ interface CalendarRepository {
     suspend fun getEventsForExport(calendarIds: Set<Long>): List<ExportEvent>
 
     /**
-     * Reminders to arm between [from] and [to], resolved in [zone], or **null** if the calendar
-     * provider could not be read at all.
+     * Reminders to arm between [from] and [to], resolved in [zone], or **null** if any of the
+     * calendar, instance, reminder or attendee reads failed. Cancelled occurrences and events the
+     * user declined carry none.
      *
      * The null case matters: an empty list is an instruction to cancel every alarm, and a revoked
      * permission or a provider that is temporarily wedged used to be indistinguishable from
@@ -258,10 +259,12 @@ interface CalendarRepository {
     ): List<ScheduledReminder>?
 
     /**
-     * Largest offset, in minutes, of any reminder this app would deliver itself, or 0 if there are
-     * none. Drives how far ahead [getUpcomingReminders] has to look; see `ReminderTrigger.horizonEnd`.
+     * Largest offset, in minutes, of any reminder this app would deliver itself, 0 if there are
+     * none, or null if the provider could not be read. Drives how far ahead [getUpcomingReminders]
+     * has to look; see `ReminderTrigger.horizonEnd`. The null matters as much as it does there: a
+     * failure read as 0 shrinks the horizon, and every reminder beyond it gets cancelled.
      */
-    suspend fun getLargestReminderOffsetMinutes(): Int
+    suspend fun getLargestReminderOffsetMinutes(): Int?
 }
 
 @Singleton
@@ -1023,7 +1026,7 @@ class CalendarContractRepository @Inject constructor(
     override suspend fun getReminderMinutesFor(
         eventIds: Collection<Long>,
     ): Map<Long, List<Int>> = withContext(Dispatchers.IO) {
-        queryReminderMinutes(eventIds, notifiableOnly = false)
+        queryReminderMinutes(eventIds, notifiableOnly = false).orEmpty()
     }
 
     /**
@@ -1032,18 +1035,21 @@ class CalendarContractRepository @Inject constructor(
      * See [readReminderMinutes] for what [notifiableOnly] excludes. Offsets below zero are dropped
      * either way: the provider uses `MINUTES_DEFAULT` (-1) for "whatever the calendar's default is",
      * and treating that as an offset would arm an alarm one minute *after* the event began.
+     *
+     * Null when any chunk could not be read. A partial map would drop the reminders of every event
+     * in the failed chunk, and the scheduler cancels whatever is missing from its list.
      */
     private fun queryReminderMinutes(
         eventIds: Collection<Long>,
         notifiableOnly: Boolean,
-    ): Map<Long, List<Int>> {
+    ): Map<Long, List<Int>>? {
         if (eventIds.isEmpty()) return emptyMap()
         val out = mutableMapOf<Long, MutableList<Int>>()
         // SQLite caps a statement at 999 bound variables, so a large calendar has to be chunked
         // rather than passed as one IN clause.
         for (chunk in eventIds.distinct().chunked(500)) {
             val placeholders = chunk.joinToString(",") { "?" }
-            safeQuery(
+            val cursor = safeQuery(
                 CalendarContract.Reminders.CONTENT_URI,
                 arrayOf(
                     CalendarContract.Reminders.EVENT_ID,
@@ -1053,7 +1059,8 @@ class CalendarContractRepository @Inject constructor(
                 "${CalendarContract.Reminders.EVENT_ID} IN ($placeholders)",
                 chunk.map { it.toString() }.toTypedArray(),
                 null,
-            )?.use { c ->
+            ) ?: return null
+            cursor.use { c ->
                 while (c.moveToNext()) {
                     if (notifiableOnly && c.getInt(2) !in NOTIFIABLE_REMINDER_METHODS) continue
                     val minutes = c.getInt(1)
@@ -1326,7 +1333,8 @@ class CalendarContractRepository @Inject constructor(
         zone: ZoneId,
         excludedCalendarIds: Set<Long>,
     ): List<ScheduledReminder>? = withContext(Dispatchers.IO) {
-        // A failed read must not look like "no calendars"; see the interface KDoc.
+        // A failed read must not look like "no calendars"; see the interface KDoc. The same holds
+        // for every read below: each one returns null rather than a shorter list.
         val calendars = queryCalendars() ?: return@withContext null
         // Hidden calendars are hidden everywhere else in the app, so notifying for them is a
         // reminder about an event the user cannot see. This is also the only lever a user has to
@@ -1339,19 +1347,24 @@ class CalendarContractRepository @Inject constructor(
             .toSet()
         if (calendarIds.isEmpty()) return@withContext emptyList()
 
-        val events = getEvents(calendarIds, from, to)
+        val events = queryReminderInstances(calendarIds, from, to) ?: return@withContext null
         if (events.isEmpty()) return@withContext emptyList()
 
+        val eventIds = events.map { it.id }.toSet()
         // One batched Reminders query instead of one per event: a busy month easily produces
         // several hundred occurrences, and the per-event query made this an N+1 across a binder
         // boundary. Occurrences of a series share the master's reminder rows, so key on event id.
-        val minutesByEvent = queryReminderMinutes(
-            eventIds = events.map { it.id }.toSet(),
-            notifiableOnly = true,
+        val minutesByEvent = queryReminderMinutes(eventIds, notifiableOnly = true)
+            ?: return@withContext null
+        val attendeeRows = queryAttendeeStatuses(eventIds) ?: return@withContext null
+        val declined = DeclinedEvents.find(
+            rows = attendeeRows,
+            calendarOfEvent = events.associate { it.id to it.calendarId },
+            calendars = calendars,
         )
 
         val now = System.currentTimeMillis()
-        events.flatMap { event ->
+        events.filter { it.id !in declined }.flatMap { event ->
             minutesByEvent[event.id].orEmpty().mapNotNull { minutes ->
                 val reminder = ScheduledReminder.create(
                     eventId = event.id,
@@ -1368,15 +1381,76 @@ class CalendarContractRepository @Inject constructor(
         }
     }
 
-    override suspend fun getLargestReminderOffsetMinutes(): Int = withContext(Dispatchers.IO) {
-        var largest = 0
-        safeQuery(
+    /**
+     * The occurrences between [from] and [to] that could carry a reminder, or null if the query
+     * failed.
+     *
+     * Separate from [queryInstances] for two reasons. That reader skips untitled rows, which is a
+     * display choice and would silently drop their reminders here. And it flattens a failed query
+     * into an empty list, which the scheduler reads as "cancel everything".
+     *
+     * Cancelled occurrences are left out in the selection. A server marks a called-off meeting
+     * `STATUS:CANCELLED` and keeps the row, so without this it would still notify.
+     */
+    private fun queryReminderInstances(
+        calendarIds: Set<Long>,
+        from: Instant,
+        to: Instant,
+    ): List<Event>? {
+        val placeholders = calendarIds.joinToString(",") { "?" }
+        val selection = "${CalendarContract.Instances.CALENDAR_ID} IN ($placeholders)" +
+            " AND (${CalendarContract.Instances.STATUS} IS NULL" +
+            " OR ${CalendarContract.Instances.STATUS} != ${CalendarContract.Events.STATUS_CANCELED})"
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, from.toEpochMilli())
+        ContentUris.appendId(builder, to.toEpochMilli())
+        val cursor = safeQuery(
+            builder.build(),
+            INSTANCE_PROJECTION,
+            selection,
+            calendarIds.map { it.toString() }.toTypedArray(),
+            "${CalendarContract.Instances.BEGIN} ASC",
+        ) ?: return null
+        return cursor.use { c ->
+            buildList { while (c.moveToNext()) add(c.readInstanceRow()) }
+        }
+    }
+
+    /** Attendee rows for [eventIds], chunked like [queryReminderMinutes], or null on a failed read. */
+    private fun queryAttendeeStatuses(eventIds: Collection<Long>): List<AttendeeStatusRow>? {
+        val out = mutableListOf<AttendeeStatusRow>()
+        for (chunk in eventIds.distinct().chunked(500)) {
+            val placeholders = chunk.joinToString(",") { "?" }
+            val cursor = safeQuery(
+                CalendarContract.Attendees.CONTENT_URI,
+                arrayOf(
+                    CalendarContract.Attendees.EVENT_ID,
+                    CalendarContract.Attendees.ATTENDEE_EMAIL,
+                    CalendarContract.Attendees.ATTENDEE_STATUS,
+                ),
+                "${CalendarContract.Attendees.EVENT_ID} IN ($placeholders)",
+                chunk.map { it.toString() }.toTypedArray(),
+                null,
+            ) ?: return null
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    out += AttendeeStatusRow(eventId = c.getLong(0), email = c.getString(1), status = c.getInt(2))
+                }
+            }
+        }
+        return out
+    }
+
+    override suspend fun getLargestReminderOffsetMinutes(): Int? = withContext(Dispatchers.IO) {
+        val cursor = safeQuery(
             CalendarContract.Reminders.CONTENT_URI,
             arrayOf(CalendarContract.Reminders.MINUTES, CalendarContract.Reminders.METHOD),
             null,
             null,
             null,
-        )?.use { c ->
+        ) ?: return@withContext null
+        var largest = 0
+        cursor.use { c ->
             while (c.moveToNext()) {
                 if (c.getInt(1) !in NOTIFIABLE_REMINDER_METHODS) continue
                 largest = maxOf(largest, c.getInt(0))
