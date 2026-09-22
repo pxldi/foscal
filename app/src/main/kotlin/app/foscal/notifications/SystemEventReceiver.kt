@@ -55,6 +55,10 @@ class SystemEventReceiver : BroadcastReceiver() {
             Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
+            // Sent when the user grants exact alarms. Everything armed before then was inexact and
+            // may fire late, so it is re-armed at once instead of at the next sync. Spelled out
+            // because AlarmManager's constant is API 31 and this set is read on every version.
+            "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED",
             "android.intent.action.QUICKBOOT_POWERON",
             "com.htc.intent.action.QUICKBOOT_POWERON",
         )
