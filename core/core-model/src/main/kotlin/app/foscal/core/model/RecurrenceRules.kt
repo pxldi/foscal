@@ -121,6 +121,40 @@ object RecurrenceRules {
         )
     }
 
+    /**
+     * The instants in a provider `EXDATE` (or `RDATE`) column.
+     *
+     * The provider stores the RFC 5545 value without the property name, in one of the forms sync
+     * adapters write: UTC date-times (`20261001T080000Z`), local date-times after a zone
+     * (`Europe/Vienna;20261001T100000`), or dates (`20261001`, read as UTC midnight like every
+     * all-day value). Several properties are joined by newlines. Values that do not parse are
+     * skipped, so one odd entry cannot hide the rest.
+     */
+    fun parseProviderDates(value: String?): List<Instant> {
+        if (value.isNullOrBlank()) return emptyList()
+        return value.split('\n').flatMap { line ->
+            val semicolon = line.indexOf(';')
+            val zone = if (semicolon > 0) {
+                runCatching { ZoneId.of(line.substring(0, semicolon).trim()) }.getOrNull()
+            } else {
+                null
+            }
+            line.substring(semicolon + 1).split(',').mapNotNull { raw ->
+                val token = raw.trim()
+                runCatching {
+                    when {
+                        token.length == 8 -> LocalDate.parse(token, BASIC_ISO_DATE)
+                            .atStartOfDay(ZoneOffset.UTC).toInstant()
+                        token.endsWith("Z", ignoreCase = true) ->
+                            LocalDateTime.parse(token.dropLast(1), untilLocal).toInstant(ZoneOffset.UTC)
+                        else -> LocalDateTime.parse(token, untilLocal)
+                            .atZone(zone ?: ZoneOffset.UTC).toInstant()
+                    }
+                }.getOrNull()
+            }
+        }.distinct().sorted()
+    }
+
     /** The rule's parts in their written order, keys upper-cased, values untouched. */
     private fun parts(rrule: String?): List<Pair<String, String>> =
         rrule.orEmpty().split(';')

@@ -252,4 +252,23 @@ class IcsInteropTest {
         assertNotNull(value)
         return value!!
     }
+
+    // ------------------------------------------------------------- provider EXDATE column
+
+    @Test
+    fun `provider EXDATE values parse in every form sync adapters write`() {
+        assertEquals(
+            listOf(at("2026-10-01T08:00:00Z"), at("2026-10-08T08:00:00Z")),
+            RecurrenceRules.parseProviderDates("20261001T080000Z,20261008T080000Z"),
+        )
+        assertEquals(
+            listOf(at("2026-10-01T08:00:00Z")),
+            RecurrenceRules.parseProviderDates("Europe/Vienna;20261001T100000"),
+        )
+        assertEquals(
+            listOf(at("2026-10-01T00:00:00Z"), at("2026-10-02T08:00:00Z")),
+            RecurrenceRules.parseProviderDates("20261001\n20261002T080000Z,garbage"),
+        )
+        assertTrue(RecurrenceRules.parseProviderDates(null).isEmpty())
+    }
 }

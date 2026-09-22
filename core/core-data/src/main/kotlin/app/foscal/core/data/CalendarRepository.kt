@@ -1244,6 +1244,7 @@ class CalendarContractRepository @Inject constructor(
         val masters = mutableListOf<Event>()
         val syncIdToMasterId = mutableMapOf<String, Long>()
         val exceptions = mutableListOf<ExceptionRow>()
+        val columnExdates = mutableMapOf<Long, List<Long>>()
 
         // Masters and exceptions come from one pass: splitting them into two queries would read the
         // same table twice and still need this join to be done in memory.
@@ -1276,11 +1277,18 @@ class CalendarContractRepository @Inject constructor(
                 if (event.title.isBlank()) continue
                 masters += event
                 c.getString(x)?.takeIf { it.isNotBlank() }?.let { syncIdToMasterId[it] = event.id }
+                // Cancelled occurrences live in two places: exception rows, which this app writes
+                // when a user deletes one occurrence, and the master's EXDATE column, which an
+                // import and a sync adapter write. Both have to reach the file.
+                RecurrenceRules.parseProviderDates(c.getString(x + 6))
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { dates -> columnExdates[event.id] = dates.map(Instant::toEpochMilli) }
             }
         }
 
         val overrides = mutableMapOf<Long, MutableList<EventOverride>>()
         val cancelled = mutableMapOf<Long, MutableList<Long>>()
+        for ((masterId, dates) in columnExdates) cancelled.getOrPut(masterId) { mutableListOf() } += dates
         for (row in exceptions) {
             val masterId = row.masterId ?: row.masterSyncId?.let { syncIdToMasterId[it] } ?: continue
             if (row.cancelled) {
@@ -1302,7 +1310,7 @@ class CalendarContractRepository @Inject constructor(
                 overrides = overrides[master.id]
                     ?.sortedBy { it.originalInstanceTime }
                     .orEmpty(),
-                cancelledOccurrences = cancelled[master.id]?.sorted().orEmpty(),
+                cancelledOccurrences = cancelled[master.id]?.distinct()?.sorted().orEmpty(),
             )
         }
     }
@@ -1746,6 +1754,7 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Events.ORIGINAL_INSTANCE_TIME,
             CalendarContract.Events.ORIGINAL_ALL_DAY,
             CalendarContract.Events.STATUS,
+            CalendarContract.Events.EXDATE,
         )
 
         /**
