@@ -5,6 +5,12 @@ import java.time.ZoneId
 
 enum class Frequency { NONE, DAILY, WEEKLY, MONTHLY, YEARLY }
 
+/** Who may see an event's details: iCalendar CLASS, the provider's `ACCESS_LEVEL`. */
+enum class EventAccess { PUBLIC, PRIVATE, CONFIDENTIAL }
+
+/** Whether an event blocks time: iCalendar TRANSP, the provider's `AVAILABILITY`. */
+enum class EventAvailability { BUSY, FREE }
+
 /**
  * The zone to persist for an event that should stay anchored to [original].
  *

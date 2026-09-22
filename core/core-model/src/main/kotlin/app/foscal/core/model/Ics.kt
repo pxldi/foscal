@@ -50,6 +50,17 @@ data class IcsEvent(
     val organizer: Attendee? = null,
     /** ATTENDEE rows, organizer excluded. */
     val attendees: List<Attendee> = emptyList(),
+    /**
+     * `RANGE=THISANDFUTURE` on the RECURRENCE-ID: this override replaces its occurrence and every
+     * later one, not just the one.
+     */
+    val thisAndFuture: Boolean = false,
+    /** Extra occurrence starts (RDATE), each lasting as long as the event itself. */
+    val rdates: List<Instant> = emptyList(),
+    /** CLASS, or null when the file does not say. */
+    val access: EventAccess? = null,
+    /** TRANSP, or null when the file does not say. */
+    val availability: EventAvailability? = null,
 ) {
     /** Whether this VEVENT replaces one occurrence of another VEVENT with the same [uid]. */
     val isOverride: Boolean get() = recurrenceId != null
@@ -77,9 +88,19 @@ object Ics {
     private val dateTimeUtc = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
     private val dateTimeLocal = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
 
-    /** `ZoneId.of("UTC")`, not `ZoneOffset.UTC`: the latter's id is "Z", which the provider's
-     *  `EVENT_TIMEZONE` column does not accept. */
+    /**
+     * `ZoneId.of("UTC")`, not `ZoneOffset.UTC`, whose id is "Z". The provider stores "Z" and even
+     * expands it correctly, but only because `java.util.TimeZone` falls back to GMT for an id it
+     * does not know. "UTC" is the value AOSP itself writes (`Time.TIMEZONE_UTC`).
+     */
     private val UTC: ZoneId = ZoneId.of("UTC")
+
+    /**
+     * Longest VALARM offset kept, 4 weeks. A reminder further out than that is almost always a
+     * mistake in the file, and the reminder sync has to expand every occurrence up to the largest
+     * offset: one `-P520W` alarm made it read ten years of events on every pass.
+     */
+    const val MAX_REMINDER_MINUTES = 4 * 7 * 24 * 60
 
     // ---------------------------------------------------------------- writing
 
@@ -276,28 +297,55 @@ object Ics {
     // ---------------------------------------------------------------- reading
 
     /**
+     * What [readDocument] found: the events it could build, and how many VEVENTs it could not.
+     *
+     * [rejected] counts VEVENTs with no usable DTSTART, so an import can report them as skipped
+     * instead of letting them vanish from the file without a trace.
+     */
+    data class Document(val events: List<IcsEvent>, val rejected: Int)
+
+    /** The events in [text]; see [readDocument]. */
+    fun read(text: String, fallbackZone: ZoneId = ZoneId.systemDefault()): List<IcsEvent> =
+        readDocument(text, fallbackZone).events
+
+    /**
      * Parses every VEVENT in [text]. Unknown components (VTODO, VJOURNAL, VFREEBUSY) and unknown
      * properties are skipped rather than treated as errors — an `.ics` export from another app
      * routinely carries far more than this subset, and dropping the whole file over one unmodelled
      * property would make import useless in practice.
      *
-     * [fallbackZone] resolves floating times (no TZID, no trailing `Z`) and unknown TZIDs.
+     * [fallbackZone] resolves floating times (no TZID, no trailing `Z`) and TZIDs that nothing
+     * resolves, unless the calendar names its own zone in `X-WR-TIMEZONE`, as Google's exports do.
+     *
+     * Cancellations are applied here, so callers only ever see what the source app would show: a
+     * cancelled event or series is left out, a cancelled occurrence becomes an EXDATE on its
+     * series, and a cancelled `THISANDFUTURE` occurrence ends the series before it.
      */
-    fun read(text: String, fallbackZone: ZoneId = ZoneId.systemDefault()): List<IcsEvent> {
-        val events = mutableListOf<IcsEvent>()
+    fun readDocument(text: String, fallbackZone: ZoneId = ZoneId.systemDefault()): Document {
+        val lines = unfold(text).mapNotNull(::parseContentLine)
+        val (definitions, calendarZone) = readCalendarLevel(lines)
+        val zones = IcsTimeZones(definitions)
+        val namedZone = calendarZone?.let { zones.resolve(it, LocalDate.now().year) }
+        val fallback = namedZone ?: fallbackZone
+
+        val events = mutableListOf<Parsed>()
+        var rejected = 0
         val stack = ArrayDeque<String>()
         var draft: Draft? = null
         var triggerMinutes: Int? = null
+        var alarmAction: String? = null
 
-        for (raw in unfold(text)) {
-            val line = parseContentLine(raw) ?: continue
+        for (line in lines) {
             when (line.name) {
                 "BEGIN" -> {
                     val component = line.value.trim().uppercase()
                     stack.addLast(component)
                     when (component) {
-                        "VEVENT" -> draft = Draft()
-                        "VALARM" -> triggerMinutes = null
+                        "VEVENT" -> draft = Draft(zones)
+                        "VALARM" -> {
+                            triggerMinutes = null
+                            alarmAction = null
+                        }
                     }
                 }
 
@@ -305,13 +353,21 @@ object Ics {
                     val component = line.value.trim().uppercase()
                     when (component) {
                         "VEVENT" -> {
-                            draft?.build(fallbackZone)?.let { events += it }
+                            val built = draft?.build(fallback, namedZone)
+                            if (built != null) events += built else if (draft != null) rejected++
                             draft = null
                         }
 
                         "VALARM" -> {
-                            triggerMinutes?.let { draft?.reminders?.add(it) }
+                            // EMAIL and PROCEDURE alarms are the server's to deliver. A local
+                            // notification for one would duplicate a message the user already gets.
+                            val local = alarmAction == null || alarmAction in LOCAL_ALARM_ACTIONS
+                            val minutes = triggerMinutes
+                            if (local && minutes != null && minutes <= MAX_REMINDER_MINUTES) {
+                                draft?.reminders?.add(minutes)
+                            }
                             triggerMinutes = null
+                            alarmAction = null
                         }
                     }
                     if (stack.lastOrNull() == component) stack.removeLast()
@@ -323,17 +379,162 @@ object Ics {
                         // Guarding on the innermost component is what keeps VTIMEZONE's own
                         // DTSTART (inside STANDARD/DAYLIGHT) from overwriting the event's.
                         "VEVENT" -> current.property(line)
-                        "VALARM" -> if (line.name == "TRIGGER") {
-                            triggerMinutes = parseTrigger(line)
+                        "VALARM" -> when (line.name) {
+                            "TRIGGER" -> triggerMinutes = parseTrigger(line)
+                            "ACTION" -> alarmAction = line.value.trim().uppercase()
                         }
                     }
                 }
             }
         }
-        return events
+        return Document(applyCancellations(events), rejected)
     }
 
-    private class Draft {
+    private val LOCAL_ALARM_ACTIONS = setOf("DISPLAY", "AUDIO")
+
+    /**
+     * The VTIMEZONE definitions and `X-WR-TIMEZONE`, read before any VEVENT because a file may
+     * define its zones after the events that use them.
+     */
+    private fun readCalendarLevel(lines: List<ContentLine>): Pair<Map<String, VTimeZone>, String?> {
+        val definitions = mutableMapOf<String, VTimeZone>()
+        var calendarZone: String? = null
+        val stack = ArrayDeque<String>()
+        var tzid: String? = null
+        var location: String? = null
+        val observances = mutableListOf<VTimeZone.Observance>()
+        var observance: MutableMap<String, ContentLine>? = null
+
+        for (line in lines) {
+            when (line.name) {
+                "BEGIN" -> {
+                    val component = line.value.trim().uppercase()
+                    stack.addLast(component)
+                    when (component) {
+                        "VTIMEZONE" -> {
+                            tzid = null
+                            location = null
+                            observances.clear()
+                        }
+                        "STANDARD", "DAYLIGHT" -> observance = mutableMapOf()
+                    }
+                }
+
+                "END" -> {
+                    val component = line.value.trim().uppercase()
+                    when (component) {
+                        "STANDARD", "DAYLIGHT" -> {
+                            observance?.let { parseObservance(it, daylight = component == "DAYLIGHT") }
+                                ?.let { observances += it }
+                            observance = null
+                        }
+
+                        "VTIMEZONE" -> tzid?.let {
+                            definitions[it] = VTimeZone(it, location, observances.toList())
+                        }
+                    }
+                    if (stack.lastOrNull() == component) stack.removeLast()
+                }
+
+                else -> when (stack.lastOrNull()) {
+                    "VCALENDAR" -> if (line.name == "X-WR-TIMEZONE") {
+                        calendarZone = line.value.trim().takeIf { it.isNotEmpty() }
+                    }
+                    "VTIMEZONE" -> when (line.name) {
+                        "TZID" -> tzid = line.value.trim().trim('"').takeIf { it.isNotEmpty() }
+                        "X-LIC-LOCATION" -> location = line.value.trim()
+                    }
+                    "STANDARD", "DAYLIGHT" -> observance?.put(line.name, line)
+                }
+            }
+        }
+        return definitions to calendarZone
+    }
+
+    private fun parseObservance(props: Map<String, ContentLine>, daylight: Boolean): VTimeZone.Observance? {
+        val start = props["DTSTART"]?.value?.trim()
+            ?.let { runCatching { LocalDateTime.parse(it.take(15), dateTimeLocal) }.getOrNull() }
+            ?: return null
+        val offsetTo = props["TZOFFSETTO"]?.value?.let(::parseOffset) ?: return null
+        val offsetFrom = props["TZOFFSETFROM"]?.value?.let(::parseOffset) ?: offsetTo
+        val rule = props["RRULE"]?.value.orEmpty().split(';').mapNotNull { part ->
+            val eq = part.indexOf('=')
+            if (eq <= 0) null else part.take(eq).trim().uppercase() to part.substring(eq + 1).trim()
+        }.toMap()
+        val byDay = rule["BYDAY"]?.let { Regex("^([+-]?\\d+)?([A-Z]{2})$").find(it.uppercase()) }
+        val ordinal = byDay?.groupValues?.get(1)?.takeIf { it.isNotEmpty() }?.toIntOrNull()
+            // A bare weekday with BYMONTHDAY=8..14 is "the second one", which Outlook writes too.
+            ?: rule["BYMONTHDAY"]?.split(',')?.firstOrNull()?.toIntOrNull()?.let { (it - 1) / 7 + 1 }
+        return VTimeZone.Observance(
+            daylight = daylight,
+            start = start,
+            offsetFrom = offsetFrom,
+            offsetTo = offsetTo,
+            month = rule["BYMONTH"]?.toIntOrNull(),
+            weekOrdinal = ordinal,
+            dayOfWeek = byDay?.groupValues?.get(2)?.let(::parseWeekday),
+        )
+    }
+
+    private fun parseOffset(text: String): ZoneOffset? {
+        val raw = text.trim()
+        val sign = raw.firstOrNull()?.takeIf { it == '+' || it == '-' } ?: return null
+        val digits = raw.drop(1)
+        if (digits.length != 4 && digits.length != 6) return null
+        return runCatching {
+            ZoneOffset.of("$sign${digits.substring(0, 2)}:${digits.substring(2, 4)}" +
+                if (digits.length == 6) ":${digits.substring(4, 6)}" else "")
+        }.getOrNull()
+    }
+
+    private fun parseWeekday(code: String): java.time.DayOfWeek? = when (code) {
+        "MO" -> java.time.DayOfWeek.MONDAY
+        "TU" -> java.time.DayOfWeek.TUESDAY
+        "WE" -> java.time.DayOfWeek.WEDNESDAY
+        "TH" -> java.time.DayOfWeek.THURSDAY
+        "FR" -> java.time.DayOfWeek.FRIDAY
+        "SA" -> java.time.DayOfWeek.SATURDAY
+        "SU" -> java.time.DayOfWeek.SUNDAY
+        else -> null
+    }
+
+    /**
+     * Applies STATUS:CANCELLED the way calendar apps display it.
+     *
+     * A cancelled override is folded into its series as an EXDATE, or as an end to the series when
+     * it carries `RANGE=THISANDFUTURE`. A cancelled series takes its overrides with it, and a
+     * cancelled one-off event is left out.
+     */
+    private fun applyCancellations(parsed: List<Parsed>): List<IcsEvent> {
+        val cancelled = parsed.filter { it.cancelled }.map { it.event }
+        val cancelledSeries = cancelled.filter { !it.isOverride }.mapNotNull { it.uid }.toSet()
+        val cancelledOverrides = cancelled
+            .filter { it.isOverride && it.uid != null && it.uid !in cancelledSeries }
+            .groupBy { it.uid!! }
+        return parsed
+            .filterNot { it.cancelled }
+            .map { it.event }
+            .filterNot { it.isOverride && it.uid in cancelledSeries }
+            .map { event ->
+                val cancellations = event.uid?.takeIf { !event.isOverride }?.let { cancelledOverrides[it] }
+                    ?: return@map event
+                val (following, single) = cancellations.partition { it.thisAndFuture }
+                val end = following.mapNotNull { it.recurrenceId }.minOrNull()
+                event.copy(
+                    rrule = end?.let { RecurrenceRules.truncateBefore(event.rrule, it, event.allDay) }
+                        ?: event.rrule,
+                    exdates = (event.exdates + single.mapNotNull { it.recurrenceId })
+                        .filter { end == null || it < end }
+                        .distinct()
+                        .sorted(),
+                )
+            }
+    }
+
+    /** A built VEVENT and whether it said STATUS:CANCELLED, which [applyCancellations] resolves. */
+    private class Parsed(val event: IcsEvent, val cancelled: Boolean)
+
+    private class Draft(private val zones: IcsTimeZones) {
         var uid: String? = null
         var title: String? = null
         var location: String? = null
@@ -343,8 +544,13 @@ object Ics {
         var duration: Long? = null
         var rrule: String? = null
         var recurrenceId: DateValue? = null
+        var thisAndFuture = false
+        var cancelled = false
+        var access: EventAccess? = null
+        var availability: EventAvailability? = null
         var organizer: Attendee? = null
         val exdates = mutableListOf<DateValue>()
+        val rdates = mutableListOf<DateValue>()
         val reminders = mutableListOf<Int>()
         val attendees = mutableListOf<Attendee>()
 
@@ -352,23 +558,43 @@ object Ics {
             when (line.name) {
                 "ORGANIZER" -> organizer = parseAttendee(line, isOrganizer = true)
                 "ATTENDEE" -> parseAttendee(line, isOrganizer = false)?.let { attendees += it }
-                "RECURRENCE-ID" -> recurrenceId = parseDateValue(line)
-                // EXDATE is multi-valued: one property can carry a whole comma-separated list, and
-                // a VEVENT may repeat the property as well. Both forms accumulate.
+                "RECURRENCE-ID" -> {
+                    recurrenceId = parseDateToken(line.value, line.params, zones)
+                    thisAndFuture = line.params["RANGE"]?.equals("THISANDFUTURE", ignoreCase = true) == true
+                }
+                // EXDATE and RDATE are multi-valued: one property can carry a whole comma-separated
+                // list, and a VEVENT may repeat the property as well. Both forms accumulate.
                 "EXDATE" -> exdates += splitUnquoted(line.value, ',')
-                    .mapNotNull { parseDateToken(it, line.params) }
+                    .mapNotNull { parseDateToken(it, line.params, zones) }
+                // A PERIOD value is "start/end" or "start/duration"; only its start is kept, and the
+                // occurrence lasts as long as the event itself.
+                "RDATE" -> rdates += splitUnquoted(line.value, ',')
+                    .mapNotNull { parseDateToken(it.substringBefore('/'), line.params - "VALUE", zones) }
                 "UID" -> uid = line.value.trim().takeIf { it.isNotEmpty() }
                 "SUMMARY" -> title = unescape(line.value)
                 "LOCATION" -> location = unescape(line.value).takeIf { it.isNotBlank() }
                 "DESCRIPTION" -> description = unescape(line.value).takeIf { it.isNotBlank() }
-                "DTSTART" -> start = parseDateValue(line)
-                "DTEND" -> end = parseDateValue(line)
+                "DTSTART" -> start = parseDateToken(line.value, line.params, zones)
+                "DTEND" -> end = parseDateToken(line.value, line.params, zones)
                 "DURATION" -> duration = parseDuration(line.value)
                 "RRULE" -> rrule = line.value.trim().takeIf { it.isNotBlank() }
+                "STATUS" -> cancelled = line.value.trim().equals("CANCELLED", ignoreCase = true)
+                "CLASS" -> access = when (line.value.trim().uppercase()) {
+                    "PUBLIC" -> EventAccess.PUBLIC
+                    "PRIVATE" -> EventAccess.PRIVATE
+                    "CONFIDENTIAL" -> EventAccess.CONFIDENTIAL
+                    else -> null
+                }
+                "TRANSP" -> availability = when (line.value.trim().uppercase()) {
+                    "OPAQUE" -> EventAvailability.BUSY
+                    "TRANSPARENT" -> EventAvailability.FREE
+                    else -> null
+                }
             }
         }
 
-        fun build(fallbackZone: ZoneId): IcsEvent? {
+        /** [calendarZone] is `X-WR-TIMEZONE`, which a floating time then reports as its zone. */
+        fun build(fallbackZone: ZoneId, calendarZone: ZoneId?): Parsed? {
             val startValue = start ?: return null
             val allDay = startValue.dateOnly
             val startInstant = startValue.toInstant(fallbackZone)
@@ -381,21 +607,32 @@ object Ics {
                 allDay -> startInstant.plus(java.time.Duration.ofDays(1))
                 else -> startInstant
             }
-            return IcsEvent(
+            // A DATE in EXDATE or RDATE on a timed series names a day, and the occurrence it means
+            // is the one at the series' own wall time that day. Read as UTC midnight it matched
+            // no occurrence at all, so the exclusion silently did nothing.
+            val onSeriesDay = { value: DateValue ->
+                if (value.dateOnly && !allDay) {
+                    value.date.atTime(startValue.time!!.toLocalTime())
+                        .atZone(startValue.zone ?: fallbackZone).toInstant()
+                } else {
+                    value.toInstant(fallbackZone)
+                }
+            }
+            val event = IcsEvent(
                 title = title?.takeIf { it.isNotBlank() } ?: "(No title)",
                 start = startInstant,
                 end = if (endInstant.isBefore(startInstant)) startInstant else endInstant,
                 allDay = allDay,
                 location = location,
                 description = description,
-                timezone = if (allDay) null else startValue.zone?.id,
+                timezone = if (allDay) null else (startValue.zone ?: calendarZone)?.id,
                 // An override describes one occurrence; any RRULE on it would be a second series.
                 rrule = if (recurrenceId != null) null else rrule,
                 reminderMinutes = reminders.distinct().sorted(),
                 uid = uid,
                 recurrenceId = recurrenceId?.toInstant(fallbackZone),
                 recurrenceIdAllDay = recurrenceId?.dateOnly == true,
-                exdates = exdates.map { it.toInstant(fallbackZone) }.distinct().sorted(),
+                exdates = exdates.map(onSeriesDay).distinct().sorted(),
                 organizer = organizer,
                 // Most exporters list the organizer as an ATTENDEE too, so that they get an entry in
                 // the guest list alongside the answer they gave. Keeping both would show the same
@@ -411,7 +648,12 @@ object Ics {
                                 Attendee.normalizeAddress(it.email)
                         } == true
                     },
+                thisAndFuture = recurrenceId != null && thisAndFuture,
+                rdates = rdates.map(onSeriesDay).filter { it != startInstant }.distinct().sorted(),
+                access = access,
+                availability = availability,
             )
+            return Parsed(event, cancelled)
         }
     }
 
@@ -459,15 +701,9 @@ object Ics {
         }
     }
 
-    private fun parseDateValue(line: ContentLine): DateValue? =
-        parseDateToken(line.value, line.params)
-
     /** One DATE / DATE-TIME value, which for a multi-valued property is one item of its list. */
-    private fun parseDateToken(raw: String, params: Map<String, String>): DateValue? {
+    private fun parseDateToken(raw: String, params: Map<String, String>, zones: IcsTimeZones): DateValue? {
         val value = raw.trim()
-        val zone = params["TZID"]?.let { tzid ->
-            runCatching { ZoneId.of(tzid.trim().trim('"')) }.getOrNull()
-        }
         val dateOnly = params["VALUE"]?.equals("DATE", ignoreCase = true) == true ||
             (value.length == 8 && 'T' !in value)
         return runCatching {
@@ -477,6 +713,7 @@ object Ics {
                 val utc = value.endsWith("Z", ignoreCase = true)
                 val core = if (utc) value.dropLast(1) else value
                 val time = LocalDateTime.parse(core, dateTimeLocal)
+                val zone = params["TZID"]?.let { zones.resolve(it, time.year) }
                 // A trailing Z states the zone as surely as a TZID does. Reporting it as "no zone"
                 // would make the caller fall back to the device zone, which re-anchors a recurring
                 // series' wall time and shifts every occurrence across a DST boundary.
