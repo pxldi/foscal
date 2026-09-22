@@ -9,6 +9,7 @@ import app.foscal.core.model.AccentColor
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.ThemeMode
 import app.foscal.ics.IcsTransfer
+import app.foscal.notifications.ReminderSyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -119,6 +120,7 @@ class CalendarsViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: UserPreferencesRepository,
     private val icsTransfer: IcsTransfer,
+    private val syncScheduler: ReminderSyncScheduler,
 ) : ViewModel() {
 
     private val transferState = MutableStateFlow(TransferState())
@@ -212,6 +214,9 @@ class CalendarsViewModel @Inject constructor(
             val id = row.calendar.id.toString()
             val next = if (row.isHidden) current - id else current + id
             prefs.setHiddenCalendars(next)
+            // The reminder sync skips hidden calendars, but this toggle lives in DataStore and
+            // writes nothing to the provider, so no content trigger would ever re-run it.
+            syncScheduler.syncNow()
         }
     }
 
