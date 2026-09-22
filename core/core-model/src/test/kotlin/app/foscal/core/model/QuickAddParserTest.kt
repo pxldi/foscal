@@ -135,4 +135,76 @@ class QuickAddParserTest {
         assertEquals(LocalTime.of(9, 30), r.time)
         assertEquals("Dentist", r.title)
     }
+
+    @Test
+    fun `impossible times stay in the title without throwing`() {
+        for (input in listOf("Lunch 3:75pm", "Lunch 25:00", "Lunch 99am", "Lunch 12:60", "Lunch 13pm", "Lunch 0am")) {
+            val r = QuickAddParser.parse(input, today)
+            assertNull(input, r.time)
+            assertEquals(input, input, r.title)
+        }
+    }
+
+    @Test
+    fun `an impossible time does not hide a valid one after it`() {
+        val r = QuickAddParser.parse("Room 3:75pm or 4pm", today)
+        assertEquals(LocalTime.of(16, 0), r.time)
+        assertEquals("Room 3:75pm or", r.title)
+    }
+
+    @Test
+    fun `every prefix of a typed time parses without throwing`() {
+        val typed = "Lunch 3:75pm tomorrow"
+        for (end in 1..typed.length) QuickAddParser.parse(typed.take(end), today)
+    }
+
+    @Test
+    fun `only the matched weekday is removed from the title`() {
+        val r = QuickAddParser.parse("Wedding on Wed", today)
+        assertEquals(today, r.date)
+        assertEquals("Wedding on", r.title)
+    }
+
+    @Test
+    fun `an abbreviation in capitals is an acronym`() {
+        val r = QuickAddParser.parse("SAT prep", today)
+        assertNull(r.date)
+        assertEquals("SAT prep", r.title)
+    }
+
+    @Test
+    fun `a day word that starts a name is not a weekday`() {
+        val r = QuickAddParser.parse("Ski trip Sun Valley", today)
+        assertNull(r.date)
+        assertEquals("Ski trip Sun Valley", r.title)
+    }
+
+    @Test
+    fun `a day word before lowercase text or a time is still a weekday`() {
+        // Today is Wednesday 2026-07-08; Sunday is 2026-07-12.
+        assertEquals(LocalDate.of(2026, 7, 12), QuickAddParser.parse("Brunch Sun 11am", today).date)
+        assertEquals(LocalDate.of(2026, 7, 11), QuickAddParser.parse("Hike sat morning", today).date)
+    }
+
+    @Test
+    fun `a rejected day word does not hide a real weekday later`() {
+        val r = QuickAddParser.parse("SAT prep friday", today)
+        assertEquals(LocalDate.of(2026, 7, 10), r.date)
+        assertEquals("SAT prep", r.title)
+    }
+
+    @Test
+    fun `next overrides the name rule`() {
+        val r = QuickAddParser.parse("Call next Sun Mum", today)
+        assertEquals(LocalDate.of(2026, 7, 12), r.date)
+        assertEquals("Call Mum", r.title)
+    }
+
+    @Test
+    fun `the name rules cost a title-case or shouted abbreviation its date`() {
+        // The price of reading "Sun Valley" and "SAT prep" as names. Spelled out, the day still counts.
+        assertNull(QuickAddParser.parse("Sat Dinner with Mum", today).date)
+        assertNull(QuickAddParser.parse("GYM FRI", today).date)
+        assertEquals(LocalDate.of(2026, 7, 11), QuickAddParser.parse("Saturday Dinner with Mum", today).date)
+    }
 }
