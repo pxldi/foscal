@@ -53,6 +53,7 @@ import app.foscal.ui.agenda.AgendaViewModel
 import app.foscal.ui.calendars.CalendarsViewModel
 import app.foscal.ui.calendars.ImportIcsDialog
 import app.foscal.ui.common.TodayPill
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.month.MonthRoute
 import app.foscal.ui.month.MonthViewModel
 import app.foscal.ui.week.TimelineRoute
@@ -190,6 +191,7 @@ fun HomeRoute(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { FeedbackSnackbarHost() },
         bottomBar = {
             BottomAppBar(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,

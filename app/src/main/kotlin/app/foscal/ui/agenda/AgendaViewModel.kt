@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.withoutPendingDeletes
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -120,6 +122,7 @@ private const val AGENDA_PAGE_DAYS = 120L
 class AgendaViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: Preferences,
+    private val pendingDeletes: PendingDeletes,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
@@ -141,6 +144,7 @@ class AgendaViewModel @Inject constructor(
         .flatMapLatest { (ids, b) ->
             repository.observeEvents(ids, b.from, b.to)
         }
+        .withoutPendingDeletes(pendingDeletes)
 
     val state: StateFlow<AgendaUiState> = combine(calendarIds, events, window, today) { ids, evts, range, currentDate ->
         val firstVisible = currentDate.minusDays(range.pastDays)

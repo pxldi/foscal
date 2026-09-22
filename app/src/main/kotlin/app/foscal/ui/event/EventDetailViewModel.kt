@@ -9,6 +9,7 @@ import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.ui.editor.RecurrenceScope
+import app.foscal.ui.feedback.PendingDeletes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,6 +59,7 @@ data class EventDetailUiState(
 @HiltViewModel
 class EventDetailViewModel @Inject constructor(
     private val repository: CalendarRepository,
+    private val pendingDeletes: PendingDeletes,
     prefs: Preferences,
 ) : ViewModel() {
 
@@ -76,26 +78,22 @@ class EventDetailViewModel @Inject constructor(
     fun dismissDelete() = _state.update { it.copy(deletePrompt = false) }
 
     /**
-     * Removes the event, at the breadth [scope] asks for.
+     * Removes the event, at the breadth [scope] asks for, once its Undo has gone unused.
      *
-     * The same three repository calls the editor makes, rather than a trip through the editor to
-     * reach its delete: this screen already knows which occurrence the user is looking at, and
-     * opening a form in order to throw its subject away is a strange way to spend a tap. [scope]
-     * is ignored for an event that does not repeat, where there is only one thing it could mean.
+     * Handled here rather than by a trip through the editor to reach its delete: this screen
+     * already knows which occurrence the user is looking at, and opening a form in order to throw
+     * its subject away is a strange way to spend a tap. [scope] is ignored for an event that does
+     * not repeat, where there is only one thing it could mean.
      */
     fun delete(scope: RecurrenceScope) {
         val event = _state.value.event ?: return
-        _state.update { it.copy(deletePrompt = false) }
-        viewModelScope.launch {
-            val gone = when {
-                event.isRecurring && scope == RecurrenceScope.SINGLE ->
-                    repository.deleteEventInstance(event.id, event.start.toEpochMilli())
-                event.isRecurring && scope == RecurrenceScope.THIS_AND_FOLLOWING ->
-                    repository.deleteEventFollowing(event.id, event.start.toEpochMilli())
-                else -> repository.deleteEvent(event.id)
-            }
-            if (gone) _state.update { it.copy(deleted = true) }
-        }
+        pendingDeletes.request(
+            eventId = event.id,
+            instanceStartMillis = event.start.toEpochMilli(),
+            scope = if (event.isRecurring) scope else RecurrenceScope.ALL_EVENTS,
+            title = event.title,
+        )
+        _state.update { it.copy(deletePrompt = false, deleted = true) }
     }
 
     fun reply(status: AttendeeStatus) {

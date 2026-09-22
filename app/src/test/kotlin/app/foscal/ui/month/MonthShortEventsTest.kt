@@ -5,6 +5,7 @@ import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
+import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,7 @@ class MonthShortEventsTest {
 
     @Test
     fun `showing all keeps every event`() = runTest(dispatcher) {
-        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 0))
+        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 0), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
         assertEquals(
@@ -53,7 +54,7 @@ class MonthShortEventsTest {
 
     @Test
     fun `a half-hour threshold drops the fifteen-minute standup`() = runTest(dispatcher) {
-        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 30))
+        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 30), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
         assertEquals(
@@ -65,7 +66,7 @@ class MonthShortEventsTest {
     // The boundary is inclusive: an event exactly as long as the threshold is not "under" it.
     @Test
     fun `an hour threshold keeps an event of exactly an hour`() = runTest(dispatcher) {
-        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 60))
+        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 60), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
         assertEquals(
@@ -76,7 +77,7 @@ class MonthShortEventsTest {
 
     @Test
     fun `an all-day event survives every threshold`() = runTest(dispatcher) {
-        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 120))
+        val vm = MonthViewModel(repo(), FakePreferences(monthMinimum = 120), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
         assertEquals(

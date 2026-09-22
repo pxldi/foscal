@@ -4,9 +4,12 @@ import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
+import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
+import app.foscal.ui.feedback.UserMessages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -33,7 +36,7 @@ class WeekViewModelTest {
     @Test
     fun `paging inside the loaded window never goes back to the provider`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
-        val vm = WeekViewModel(repo, FakePreferences())
+        val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), UserMessages())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
         assertEquals(1, repo.observedWindows.size)
@@ -47,7 +50,7 @@ class WeekViewModelTest {
     @Test
     fun `paging off the end of the window loads a new one`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
-        val vm = WeekViewModel(repo, FakePreferences())
+        val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), UserMessages())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -64,7 +67,7 @@ class WeekViewModelTest {
             calendars = listOf(testCalendar()),
             events = listOf(timedEvent(1, at(faraway, 9), at(faraway, 10), title = "Later")),
         )
-        val vm = WeekViewModel(repo, FakePreferences())
+        val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), UserMessages())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -93,7 +96,7 @@ class WeekViewModelTest {
                     timedEvent(2, at(monday.plusDays(2), 9), at(monday.plusDays(2), 10), title = "Wed"),
                 ),
             )
-            val vm = WeekViewModel(repo, FakePreferences())
+            val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), UserMessages())
             backgroundScope.launch(dispatcher) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -114,7 +117,7 @@ class WeekViewModelTest {
             events = listOf(event),
             reminderMinutes = listOf(30, 5),
         )
-        val vm = WeekViewModel(repo, FakePreferences())
+        val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), UserMessages())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -128,8 +131,30 @@ class WeekViewModelTest {
     }
 
     @Test
+    fun `a refused move puts the block back and says so`() = runTest(dispatcher) {
+        val monday = WeekViewModel.startOfWeek(today)
+        val event = timedEvent(1, at(monday, 9), at(monday, 10), title = "Mon")
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()), events = listOf(event))
+        repo.refuseWrites = true
+        val messages = UserMessages()
+        val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), messages)
+        advanceUntilIdle()
+
+        vm.moveEvent(event, at(monday, 11).toEpochMilli(), at(monday, 12).toEpochMilli())
+        advanceUntilIdle()
+
+        assertEquals(1, vm.moveRefusals.value)
+        assertEquals("Couldn't move the event", messages.messages.first())
+    }
+
+    @Test
     fun `navigation moves by the current span and back to today`() = runTest(dispatcher) {
-        val vm = WeekViewModel(FakeCalendarRepository(calendars = listOf(testCalendar())), FakePreferences())
+        val vm = WeekViewModel(
+            FakeCalendarRepository(calendars = listOf(testCalendar())),
+            FakePreferences(),
+            testPendingDeletes(),
+            UserMessages(),
+        )
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -147,6 +172,8 @@ class WeekViewModelTest {
             val vm = WeekViewModel(
                 FakeCalendarRepository(calendars = listOf(testCalendar())),
                 FakePreferences(),
+                testPendingDeletes(),
+                UserMessages(),
             )
             backgroundScope.launch(dispatcher) { vm.state.collect {} }
             advanceUntilIdle()
@@ -173,6 +200,8 @@ class WeekViewModelTest {
         val vm = WeekViewModel(
             FakeCalendarRepository(calendars = listOf(testCalendar())),
             prefs,
+            testPendingDeletes(),
+            UserMessages(),
         )
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()

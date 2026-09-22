@@ -37,6 +37,9 @@ class FakeCalendarRepository(
     var lastWritten: EventInput? = null
         private set
 
+    /** When true, every event write is refused the way the provider refuses one. */
+    var refuseWrites = false
+
     /** Overrides what [getEventsForExport] returns; null falls back to the [events] fixture. */
     var exportEvents: List<ExportEvent>? = null
 
@@ -174,6 +177,7 @@ class FakeCalendarRepository(
         lastCreated = input
         lastWritten = input
         created += input
+        if (refuseWrites) return null
         // Distinct ids per call: an import creates several masters and then addresses each by the
         // id it got back, which a constant would collapse into one.
         return nextEventId++
@@ -182,12 +186,12 @@ class FakeCalendarRepository(
     override suspend fun updateEvent(eventId: Long, input: EventInput): Boolean {
         lastOp = Op.UPDATE
         lastWritten = input
-        return true
+        return !refuseWrites
     }
 
     override suspend fun deleteEvent(eventId: Long): Boolean {
         lastOp = Op.DELETE
-        return true
+        return !refuseWrites
     }
 
     override suspend fun updateEventInstance(
@@ -198,7 +202,7 @@ class FakeCalendarRepository(
         lastOp = Op.UPDATE_INSTANCE
         lastWritten = input
         instanceUpdates += Triple(eventId, instanceStartMillis, input)
-        return true
+        return !refuseWrites
     }
 
     override suspend fun updateEventFollowing(
@@ -212,18 +216,18 @@ class FakeCalendarRepository(
         followingUpdates += Triple(eventId, instanceStartMillis, input)
         lastCreated = input
         lastWritten = input
-        return true
+        return !refuseWrites
     }
 
     override suspend fun deleteEventInstance(eventId: Long, instanceStartMillis: Long): Boolean {
         lastOp = Op.DELETE_INSTANCE
         instanceDeletes += eventId to instanceStartMillis
-        return true
+        return !refuseWrites
     }
 
     override suspend fun deleteEventFollowing(eventId: Long, instanceStartMillis: Long): Boolean {
         lastOp = Op.DELETE_FOLLOWING
-        return true
+        return !refuseWrites
     }
 
     override suspend fun getReminderMinutes(eventId: Long): List<Int> = reminderMinutes

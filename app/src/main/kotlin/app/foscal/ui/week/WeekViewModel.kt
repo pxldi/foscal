@@ -11,6 +11,9 @@ import app.foscal.core.model.RecurrenceRules
 import app.foscal.core.model.resolveEventTimezone
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.editor.RecurrenceScope
+import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.feedback.withoutPendingDeletes
 import app.foscal.ui.util.DayWindow
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.visibleCalendarIds
@@ -18,6 +21,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -25,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
@@ -55,6 +60,8 @@ data class WeekUiState(
 class WeekViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: Preferences,
+    private val pendingDeletes: PendingDeletes,
+    private val messages: UserMessages,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
@@ -98,6 +105,7 @@ class WeekViewModel @Inject constructor(
         .flatMapLatest { (ids, w) ->
             repository.observeEvents(ids, w.startInstant(zone), w.endInstant(zone))
         }
+        .withoutPendingDeletes(pendingDeletes)
 
     /**
      * Grouped once per load rather than once per swipe. The map is handed to the screen as-is, so
@@ -173,6 +181,14 @@ class WeekViewModel @Inject constructor(
         _anchor.value = if (_spanDays.value == 7) startOfWeek(now, weekStart) else now
     }
 
+    private val _moveRefusals = MutableStateFlow(0)
+
+    /**
+     * Counts the moves the provider refused. The grid holds a dropped block where it landed until
+     * new data arrives, and a refused write sends none, so this is its cue to put the block back.
+     */
+    val moveRefusals: StateFlow<Int> = _moveRefusals.asStateFlow()
+
     /**
      * Puts [event] down at a new time, at the breadth [scope] asks for.
      *
@@ -229,7 +245,7 @@ class WeekViewModel @Inject constructor(
                 color = color,
             )
 
-            when {
+            val moved = when {
                 !event.isRecurring ->
                     repository.updateEvent(event.id, input(start, end, keepRule = false))
 
@@ -255,9 +271,9 @@ class WeekViewModel @Inject constructor(
                     // master's DTSTART to the dropped time instead would move the series to
                     // *this* occurrence's date, which for anything past the first is a jump of
                     // however many repeats have already happened.
-                    val master = repository.getEventOccurrence(event.id, 0L) ?: return@launch
+                    val master = repository.getEventOccurrence(event.id, 0L)
                     val delta = newStartMillis - event.start.toEpochMilli()
-                    repository.updateEvent(
+                    master != null && repository.updateEvent(
                         event.id,
                         input(
                             master.start.plusMillis(delta),
@@ -266,6 +282,10 @@ class WeekViewModel @Inject constructor(
                         ),
                     )
                 }
+            }
+            if (!moved) {
+                _moveRefusals.update { it + 1 }
+                messages.post("Couldn't move the event")
             }
         }
     }

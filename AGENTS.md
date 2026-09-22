@@ -487,6 +487,19 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   for those frames, so a successful move read as a jump backwards and then forwards. `EventDrag`
   now carries a `committed` flag and is released by new data arriving, by `revertMoveSignal` (the
   scope dialog dismissed), or by a timeout if the write is refused and neither happens.
+- **A delete waits 10 s before it reaches the provider, and Undo only cancels the wait.**
+  `PendingDeletes` (`ui/feedback`) holds each delete from the detail screen or the editor while a
+  snackbar offers Undo, then makes the same three repository calls the screens used to make. Do not
+  "simplify" this into delete-then-recreate. A recreated series loses its exception rows and its id,
+  and on a synced calendar the new event reaches the server with its guest list, which is a fresh
+  invitation from the user. Month, Week, Agenda and Search hide a pending delete through
+  `withoutPendingDeletes`; a new list of events needs the same call. A delete still waiting when
+  the process dies never happens, which leaves the event in place.
+- **A refused write says so, through `UserMessages`.** Every create, update and delete returns
+  whether the provider took it. The editor and quick add stay open with the user's input on a
+  refusal, and a refused drag bumps `WeekViewModel.moveRefusals` so the grid drops its preview at
+  once. There is one `SnackbarHostState`, created in `FoscalNavHost`; a screen shows messages by
+  mounting `FeedbackSnackbarHost()` in its Scaffold.
 - **`launch()` on an `ActivityResultLauncher` can throw.** `CREATE_DOCUMENT` and `OPEN_DOCUMENT`
   need a documents provider, and stripped ROMs, some work profiles and the ATD emulator images do
   not ship one — the `ActivityNotFoundException` comes out of a click handler and takes the app

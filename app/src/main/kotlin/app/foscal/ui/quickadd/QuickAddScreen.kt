@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.QuickAddParser
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.rememberTimeFormatter
@@ -62,6 +63,7 @@ fun QuickAddRoute(
     }
 
     Scaffold(
+        snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
                 title = { Text("Quick add") },

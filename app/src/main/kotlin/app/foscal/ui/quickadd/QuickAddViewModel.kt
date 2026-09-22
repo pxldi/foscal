@@ -10,6 +10,7 @@ import app.foscal.core.model.EventInput
 import app.foscal.core.model.Frequency
 import app.foscal.core.model.QuickAddParser
 import app.foscal.core.model.QuickAddResult
+import app.foscal.ui.feedback.UserMessages
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,7 @@ data class QuickAddUiState(
 class QuickAddViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val prefs: Preferences,
+    private val messages: UserMessages,
 ) : ViewModel() {
 
     private val zone: ZoneId = ZoneId.systemDefault()
@@ -72,7 +74,7 @@ class QuickAddViewModel @Inject constructor(
             val parsed = QuickAddParser.parse(current.query)
             val start = resolveStart(parsed)
             val end = if (parsed.allDay) start.plusMillis(86_400_000L) else start.plusSeconds(3_600L)
-            repository.createEvent(
+            val created = repository.createEvent(
                 EventInput(
                     calendarId = current.selectedCalendarId!!,
                     title = parsed.title,
@@ -93,8 +95,11 @@ class QuickAddViewModel @Inject constructor(
                         ),
                     ),
                 ),
-            )
-            mutate { it.copy(saving = false, finished = true) }
+            ) != null
+            // Kept open with the text still in the field, so the user can retry or pick another
+            // calendar instead of retyping it.
+            mutate { it.copy(saving = false, finished = created) }
+            if (!created) messages.post("Couldn't add the event")
         }
     }
 
