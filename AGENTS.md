@@ -598,12 +598,17 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 - **All-day events are written with zone `"UTC"`, never `ZoneOffset.UTC.id`, which is `"Z"`.** The
   provider stores `"Z"` and even expands it, but only because `java.util.TimeZone` falls back to
   GMT for an id it does not know.
-- **Timed events export as UTC, deliberately.** A `TZID` parameter is only usable by the reader if
-  the file also carries that zone's full VTIMEZONE with its DST rules; emitting a one-block
-  VTIMEZONE with today's offset is worse than none, because it silently shifts occurrences on the
-  other side of a DST boundary. Import still honours `TZID` and preserves it, so Foscal→Foscal
-  round-trips keep the authored zone. A trailing `Z` is reported as the zone `UTC`, not as "no
-  zone": falling back to the device zone there would re-anchor a recurring series' wall time.
+- **Timed events export as wall time with a `TZID`, plus a generated VTIMEZONE.** A UTC `DTSTART`
+  plus an RRULE repeats at a fixed UTC time, so a weekly 10:00 Vienna series exported in summer
+  came back at 09:00 from late October, in Foscal and in every other reader. `IcsZoneWriter` builds
+  each zone's block from `ZoneRules.transitionRules`, current rules only and starting in 1970: that
+  is the shape Outlook understands, and every reader that knows the IANA name ignores the block
+  anyway. Java states the EU rule as "Sunday on or after the 25th"; the writer turns that back into
+  `BYDAY=-1SU`, and `IcsZoneWriterTest` checks every zone's rule against Java's own transition
+  dates. UTC, fixed offsets and unparseable zones still export as UTC, which is exact for them.
+  EXDATE and RECURRENCE-ID use the event's zone too. A trailing `Z` on import is reported as the
+  zone `UTC`, not as "no zone": falling back to the device zone there would re-anchor a recurring
+  series' wall time.
 - **An all-day `DTEND` is exclusive and must be strictly later than `DTSTART`.** The provider
   really does hold all-day rows written with `DTEND == DTSTART`, and exporting those verbatim
   produces a VEVENT covering zero days that strict parsers reject, so `Ics.write` clamps them to a

@@ -107,14 +107,10 @@ object Ics {
     /**
      * Serializes [events] into a complete VCALENDAR document.
      *
-     * Timed events are written in UTC rather than with a TZID parameter. A TZID that does not
-     * resolve on the reading side is only usable if the file also carries the matching VTIMEZONE
-     * component with its full DST rules, and emitting a *wrong* VTIMEZONE (one STANDARD block with
-     * today's offset) is worse than not emitting one: it silently shifts every occurrence on the
-     * other side of a DST boundary. UTC instants are unambiguous everywhere. The trade-off is that
-     * a recurring event exported across a DST change keeps its absolute time rather than its wall
-     * time; [IcsEvent.timezone] is preserved on import so round-tripping through Foscal itself is
-     * unaffected.
+     * A timed event whose zone has DST is written as wall time with a `TZID`, and the file carries
+     * a VTIMEZONE for every such zone. A UTC start plus an RRULE repeats at a fixed UTC time, so a
+     * weekly 10:00 Vienna series came back at 09:00 once winter time began. Events in UTC, in a
+     * fixed offset or in a zone nothing can parse stay in UTC, which is exact for them.
      */
     fun write(events: List<IcsEvent>, stamp: Instant = Instant.now()): String {
         val sb = StringBuilder()
@@ -122,8 +118,13 @@ object Ics {
         sb.line("VERSION:2.0")
         sb.line("PRODID:-//Foscal//Foscal Calendar//EN")
         sb.line("CALSCALE:GREGORIAN")
+        val zones = events.filterNot { it.allDay }
+            .mapNotNull { IcsZoneWriter.namedZone(it.timezone) }
+            .distinctBy { it.id }
+        for (zone in zones) IcsZoneWriter.lines(zone).forEach { sb.line(it) }
         val stampValue = stamp.atZone(ZoneOffset.UTC).format(dateTimeUtc)
         for (event in events) {
+            val zone = if (event.allDay) null else IcsZoneWriter.namedZone(event.timezone)
             sb.line("BEGIN:VEVENT")
             sb.line("UID:${event.uid ?: syntheticUid(event)}")
             sb.line("DTSTAMP:$stampValue")
@@ -131,9 +132,7 @@ object Ics {
                 if (event.recurrenceIdAllDay) {
                     sb.line("RECURRENCE-ID;VALUE=DATE:${utcDate(occurrence)}")
                 } else {
-                    sb.line(
-                        "RECURRENCE-ID:${occurrence.atZone(ZoneOffset.UTC).format(dateTimeUtc)}",
-                    )
+                    sb.line(timeProperty("RECURRENCE-ID", listOf(occurrence), zone))
                 }
             }
             if (event.allDay) {
@@ -145,8 +144,8 @@ object Ics {
                 val endDate = maxOf(utcLocalDate(event.end), utcLocalDate(event.start).plusDays(1))
                 sb.line("DTEND;VALUE=DATE:${endDate.format(BASIC_ISO_DATE)}")
             } else {
-                sb.line("DTSTART:${event.start.atZone(ZoneOffset.UTC).format(dateTimeUtc)}")
-                sb.line("DTEND:${event.end.atZone(ZoneOffset.UTC).format(dateTimeUtc)}")
+                sb.line(timeProperty("DTSTART", listOf(event.start), zone))
+                sb.line(timeProperty("DTEND", listOf(event.end), zone))
             }
             sb.line("SUMMARY:${escape(event.title)}")
             event.location?.takeIf { it.isNotBlank() }
@@ -165,10 +164,7 @@ object Ics {
                 if (event.allDay) {
                     sb.line("EXDATE;VALUE=DATE:${exdates.joinToString(",") { utcDate(it) }}")
                 } else {
-                    val values = exdates.joinToString(",") {
-                        it.atZone(ZoneOffset.UTC).format(dateTimeUtc)
-                    }
-                    sb.line("EXDATE:$values")
+                    sb.line(timeProperty("EXDATE", exdates, zone))
                 }
             }
             for (minutes in event.reminderMinutes.distinct().sorted()) {
@@ -183,6 +179,14 @@ object Ics {
         sb.line("END:VCALENDAR")
         return sb.toString()
     }
+
+    /** [name] with [instants] as UTC values, or as wall times in [zone] when there is one. */
+    private fun timeProperty(name: String, instants: List<Instant>, zone: ZoneId?): String =
+        if (zone == null) {
+            "$name:" + instants.joinToString(",") { it.atZone(ZoneOffset.UTC).format(dateTimeUtc) }
+        } else {
+            "$name;TZID=${zone.id}:" + instants.joinToString(",") { it.atZone(zone).format(dateTimeLocal) }
+        }
 
     private fun utcDate(instant: Instant): String =
         utcLocalDate(instant).format(BASIC_ISO_DATE)
