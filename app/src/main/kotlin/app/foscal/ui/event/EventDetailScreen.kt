@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -98,6 +99,7 @@ import app.foscal.core.ui.theme.Motion
 import app.foscal.location.openInMaps
 import app.foscal.ui.common.DeleteEventDialog
 import app.foscal.ui.editor.RecurrenceScope
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.timeFormatter
@@ -135,6 +137,9 @@ fun EventDetailScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // The Scaffold places a snackbar above its content insets, which are zero here so the
+        // header can run under the status bar. Without the padding it lands under the gesture bar.
+        snackbarHost = { FeedbackSnackbarHost(Modifier.navigationBarsPadding()) },
     ) { padding ->
         val phase = when {
             state.loading -> "loading"

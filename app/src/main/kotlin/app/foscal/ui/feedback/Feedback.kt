@@ -7,6 +7,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -24,7 +25,8 @@ import javax.inject.Inject
 val LocalSnackbarHostState = staticCompositionLocalOf { SnackbarHostState() }
 
 @Composable
-fun FeedbackSnackbarHost() = SnackbarHost(LocalSnackbarHostState.current)
+fun FeedbackSnackbarHost(modifier: Modifier = Modifier) =
+    SnackbarHost(LocalSnackbarHostState.current, modifier)
 
 @HiltViewModel
 class FeedbackViewModel @Inject constructor(

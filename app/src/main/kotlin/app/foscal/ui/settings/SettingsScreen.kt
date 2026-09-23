@@ -96,6 +96,7 @@ import app.foscal.ui.calendars.PendingDelete
 import app.foscal.ui.calendars.TransferState
 import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.home.BehaviourViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,6 +119,7 @@ fun SettingsScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
                 title = {

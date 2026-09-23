@@ -37,6 +37,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.location.openInMaps
+import app.foscal.ui.feedback.FeedbackSnackbarHost
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -118,6 +119,7 @@ fun LocationViewerRoute(
     }
 
     Scaffold(
+        snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
                 title = {
