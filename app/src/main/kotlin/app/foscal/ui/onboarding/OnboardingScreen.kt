@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +75,10 @@ import app.foscal.core.model.AccentColor
 import app.foscal.core.model.ThemeMode
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
+import app.foscal.ui.permission.CalendarAccessOff
+import app.foscal.ui.permission.isDeniedForGood
+import app.foscal.ui.permission.openAppSettings
+import app.foscal.ui.permission.openNotificationSettings
 import app.foscal.ui.settings.AccentPicker
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -108,6 +113,9 @@ fun OnboardingRoute(
     val context = LocalContext.current
     var step by remember { mutableStateOf(OnboardingStep.WELCOME) }
 
+    // After two denials "Get started" relaunched a request Android no longer shows, so the button
+    // did nothing at all. This switches the welcome step to a way out through settings.
+    var calendarDeniedForGood by rememberSaveable { mutableStateOf(false) }
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
@@ -116,14 +124,27 @@ fun OnboardingRoute(
             context,
             Manifest.permission.READ_CALENDAR,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (granted) step = OnboardingStep.PREPARING
+        if (granted) {
+            step = OnboardingStep.PREPARING
+        } else {
+            calendarDeniedForGood = isDeniedForGood(context, Manifest.permission.READ_CALENDAR)
+        }
     }
 
     var notificationsEnabled by remember { mutableStateOf(hasNotificationPermission(context)) }
+    // The same dead end for notifications: the switch relaunched a request Android no longer shows.
+    var notificationsDeniedForGood by rememberSaveable { mutableStateOf(false) }
+    // Set while the user is in notification settings, so the switch catches up on the way back.
+    var awaitingNotificationSettings by rememberSaveable { mutableStateOf(false) }
+    val openNotificationSettingsAndWait = {
+        awaitingNotificationSettings = openNotificationSettings(context)
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         notificationsEnabled = granted
+        notificationsDeniedForGood =
+            !granted && isDeniedForGood(context, Manifest.permission.POST_NOTIFICATIONS)
     }
 
     LaunchedEffect(state.calendarPermissionGranted, step) {
@@ -159,7 +180,14 @@ fun OnboardingRoute(
 
     // The battery exemption is granted on a system screen, so its result only becomes visible on
     // the way back into the app.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshBatteryStatus() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshBatteryStatus()
+        if (awaitingNotificationSettings) {
+            awaitingNotificationSettings = false
+            notificationsEnabled = hasNotificationPermission(context)
+            if (notificationsEnabled) notificationsDeniedForGood = false
+        }
+    }
 
     Scaffold(
     ) { padding ->
@@ -199,6 +227,8 @@ fun OnboardingRoute(
             ) { current ->
                 when (current) {
                     OnboardingStep.WELCOME -> WelcomeStep(
+                        accessOff = calendarDeniedForGood,
+                        onOpenSettings = { openAppSettings(context) },
                         onStart = {
                             if (state.calendarPermissionGranted) {
                                 step = OnboardingStep.PREPARING
@@ -227,9 +257,12 @@ fun OnboardingRoute(
                         onAccentSelect = viewModel::setAccentColor,
                         onCustomAccentPick = viewModel::setCustomAccentColor,
                         notificationsEnabled = notificationsEnabled,
+                        notificationsDeniedForGood = notificationsDeniedForGood,
+                        onOpenNotificationSettings = openNotificationSettingsAndWait,
                         onNotificationsToggle = { want ->
                             when {
                                 !want -> notificationsEnabled = false
+                                notificationsDeniedForGood -> openNotificationSettingsAndWait()
                                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                                     !hasNotificationPermission(context) ->
                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -324,7 +357,7 @@ private fun StepProgress(active: Int) {
 }
 
 @Composable
-private fun WelcomeStep(onStart: () -> Unit) {
+private fun WelcomeStep(accessOff: Boolean, onOpenSettings: () -> Unit, onStart: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -353,14 +386,18 @@ private fun WelcomeStep(onStart: () -> Unit) {
             WelcomePoint("Day, week, month and agenda views.")
         }
         Spacer(Modifier.height(52.dp))
-        Button(
-            onClick = onStart,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(58.dp),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Text("Get started", fontWeight = FontWeight.SemiBold)
+        if (accessOff) {
+            CalendarAccessOff(onOpenSettings = onOpenSettings, modifier = Modifier.fillMaxWidth())
+        } else {
+            Button(
+                onClick = onStart,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Text("Get started", fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
@@ -448,6 +485,8 @@ private fun PersonalizeStep(
     onAccentSelect: (AccentColor) -> Unit,
     onCustomAccentPick: (Int) -> Unit,
     notificationsEnabled: Boolean,
+    notificationsDeniedForGood: Boolean,
+    onOpenNotificationSettings: () -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     batteryOptimized: Boolean,
     onOpenBatterySettings: () -> Unit,
@@ -481,6 +520,16 @@ private fun PersonalizeStep(
             checked = notificationsEnabled,
             onToggle = onNotificationsToggle,
         )
+        if (notificationsDeniedForGood && !notificationsEnabled) {
+            ActionCard(
+                icon = Icons.Outlined.Notifications,
+                title = "Notifications are off",
+                subtitle = "Android will not ask again. Allow notifications for Foscal in " +
+                    "settings to get reminders.",
+                buttonText = "Open notification settings",
+                onClick = onOpenNotificationSettings,
+            )
+        }
         // Only while it is still a problem. Once the exemption is granted the card has nothing to
         // offer, and leaving it on screen reads as a step that failed.
         if (notificationsEnabled && batteryOptimized) {

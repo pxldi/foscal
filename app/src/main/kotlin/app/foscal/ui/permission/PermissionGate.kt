@@ -1,11 +1,13 @@
 package app.foscal.ui.permission
 
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Button
@@ -15,7 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,10 +53,14 @@ fun PermissionGate(content: @Composable () -> Unit) {
     }
     val granted by permissionState.granted.collectAsStateWithLifecycle()
 
+    // Saved, because a rotation must not put the dead "Grant access" button back.
+    var deniedForGood by rememberSaveable { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) {
+    ) { results ->
         permissionState.refresh()
+        deniedForGood = results.values.any { !it } &&
+            isDeniedForGood(context, Manifest.permission.READ_CALENDAR)
     }
 
     LaunchedEffect(Unit) {
@@ -72,6 +81,16 @@ fun PermissionGate(content: @Composable () -> Unit) {
 
     if (granted) {
         content()
+    } else if (deniedForGood) {
+        // Granting in settings brings the user straight in: MainActivity refreshes the permission
+        // state in onResume, and [granted] flips.
+        CalendarAccessOff(
+            onOpenSettings = { openAppSettings(context) },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(28.dp)
+                .wrapContentHeight(),
+        )
     } else {
         Column(
             modifier = Modifier
