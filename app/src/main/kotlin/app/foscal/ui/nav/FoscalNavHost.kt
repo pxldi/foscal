@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -143,7 +144,9 @@ fun FoscalNavHost(
     var focusDate by remember { mutableStateOf<LocalDate?>(null) }
 
     // An .ics file another app handed over, waiting on the user to say which calendar it goes to.
-    var importIcsUri by remember { mutableStateOf<String?>(null) }
+    // Saveable because the launch intent is not routed again after a rotation, so this is the only
+    // thing keeping the dialog open across one.
+    var importIcsUri by rememberSaveable { mutableStateOf<String?>(null) }
 
     val startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.MAIN
 

@@ -40,7 +40,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingRoute = routeFor(intent)
+        // A recreated activity still holds its launch intent, and the request in it was carried
+        // out the first time: routing it again reopened the event or the import on every rotation.
+        if (savedInstanceState == null) pendingRoute = routeFor(intent)
         setContent {
             val onboardingDone by prefs.onboardingCompleted
                 .collectAsStateWithLifecycle(initialValue = null)
