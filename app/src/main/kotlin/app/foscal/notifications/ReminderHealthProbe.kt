@@ -197,7 +197,7 @@ object ReminderFixIntents {
  */
 object VendorSettings {
 
-    private val CANDIDATES = listOf(
+    internal val CANDIDATES = listOf(
         // Xiaomi / Redmi / POCO
         "com.miui.securitycenter" to "com.miui.permcenter.autostart.AutoStartManagementActivity",
         // Huawei / Honor
@@ -231,10 +231,20 @@ object VendorSettings {
     fun autostartIntent(context: Context): Intent? {
         resolved?.let { return it.intent }
         val pm = context.packageManager
-        val found = CANDIDATES
-            .map { (pkg, cls) -> Intent().setComponent(ComponentName(pkg, cls)) }
-            .firstOrNull { it.resolveActivity(pm) != null }
+        // Asked of the package manager, not of the Intent: Intent.resolveActivity hands back an
+        // explicit component unchecked, which made the first candidate "exist" on every phone.
+        val found = firstExisting(CANDIDATES) { pkg, cls ->
+            pm.resolveActivity(componentIntent(pkg, cls), 0) != null
+        }?.let { (pkg, cls) -> componentIntent(pkg, cls) }
         resolved = Result(found)
         return found
     }
+
+    internal fun firstExisting(
+        candidates: List<Pair<String, String>>,
+        exists: (pkg: String, cls: String) -> Boolean,
+    ): Pair<String, String>? = candidates.firstOrNull { (pkg, cls) -> exists(pkg, cls) }
+
+    private fun componentIntent(pkg: String, cls: String): Intent =
+        Intent().setComponent(ComponentName(pkg, cls))
 }
