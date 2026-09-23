@@ -475,6 +475,28 @@ class EventEditorViewModelTest {
     }
 
     @Test
+    fun `read-only calendars are not offered and their events cannot be saved`() = runTest(dispatcher) {
+        val subscription = calendar.copy(id = 3, displayName = "Holidays", accessLevel = 200)
+        repo = FakeCalendarRepository(
+            calendars = listOf(calendar, subscription),
+            events = listOf(recurring.copy(calendarId = 3)),
+            reminderMinutes = listOf(15),
+        )
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+
+        val state = vm.state.value
+        assertEquals(listOf(1L), state.availableCalendars.map { it.id })
+        assertTrue(state.calendarReadOnly)
+        assertFalse(state.canSave)
+
+        val fresh = newEventVm()
+        advanceUntilIdle()
+        assertEquals(listOf(1L), fresh.state.value.availableCalendars.map { it.id })
+        assertFalse(fresh.state.value.calendarReadOnly)
+    }
+
+    @Test
     fun `delete asks before it deletes`() = runTest(dispatcher) {
         val vm = recurringEditVm()
         advanceUntilIdle()

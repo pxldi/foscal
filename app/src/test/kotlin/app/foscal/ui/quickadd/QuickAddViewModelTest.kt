@@ -41,6 +41,17 @@ class QuickAddViewModelTest {
     }
 
     @Test
+    fun `read-only calendars are not offered`() = runTest(dispatcher) {
+        val readOnly = testCalendar().copy(id = 9, accessLevel = 200)
+        val repo = FakeCalendarRepository(calendars = listOf(readOnly, testCalendar()))
+        val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())
+        advanceUntilIdle()
+
+        assertEquals(listOf(testCalendar().id), vm.state.value.calendars.map { it.id })
+        assertEquals(testCalendar().id, vm.state.value.selectedCalendarId)
+    }
+
+    @Test
     fun `the 12-hour clock saves a bare 3 30 in the afternoon`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
         val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())

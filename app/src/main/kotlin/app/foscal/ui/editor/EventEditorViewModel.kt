@@ -97,12 +97,18 @@ data class EditorUiState(
     /** Set with [finished] when the editor closed on a delete rather than a save. */
     val deleted: Boolean = false,
     val scopePrompt: RecurrenceScopePrompt? = null,
+    /**
+     * The event being edited is on a calendar below contributor access. The detail screen offers
+     * no Edit for it, but another app can still send an EDIT intent, so the editor refuses too.
+     */
+    val calendarReadOnly: Boolean = false,
     /** The delete button was tapped and the confirmation is showing. */
     val deletePrompt: Boolean = false,
     /** Whether the user has changed anything since the editor loaded, so Back would lose it. */
     val dirty: Boolean = false,
 ) {
-    val canSave: Boolean get() = title.isNotBlank() && selectedCalendarId != null && !saving
+    val canSave: Boolean
+        get() = title.isNotBlank() && selectedCalendarId != null && !saving && !calendarReadOnly
 
     /**
      * Whether the guest list on this event is the user's to change.
@@ -203,7 +209,9 @@ class EventEditorViewModel @Inject constructor(
             globalReminderDefault = prefs.defaultReminderMinutes.first()
             calendarReminderDefaults = prefs.calendarReminderDefaults.first()
             val calendars = repository.getCalendars()
-            val visible = calendars.filter { it.visible && it.id.toString() !in hidden }
+            // Only calendars that take writes: a read-only one in the picker let the user save an
+            // event the provider refused or the next sync removed.
+            val visible = calendars.filter { it.visible && it.id.toString() !in hidden && it.isWritable }
             val recentLocations = repository.getRecentLocations()
             val mapsEnabled = prefs.osmMapsEnabled.first()
             if (eventId > 0L) {
@@ -252,6 +260,7 @@ class EventEditorViewModel @Inject constructor(
                         attendees = attendees,
                         color = repository.getEventColor(eventId),
                         originalTimezone = event.timezone,
+                        calendarReadOnly = calendars.firstOrNull { it.id == cal }?.isWritable == false,
                     ))
                     return@launch
                 }
@@ -325,7 +334,9 @@ class EventEditorViewModel @Inject constructor(
             val preferred = prefs.defaultCalendarId.first()?.takeIf { id ->
                 visible.any { it.id == id }
             }
-            val defaultCalendar = calArg ?: preferred ?: visible.firstOrNull()?.id
+            val defaultCalendar = calArg?.takeIf { id -> visible.any { it.id == id } }
+                ?: preferred
+                ?: visible.firstOrNull()?.id
             finishLoad(EditorUiState(
                 loading = false,
                 isEditing = false,

@@ -126,6 +126,7 @@ fun EventDetailScreen(
     }
 
     val event = state.event
+    val readOnly = state.calendar?.isWritable == false
 
     // No top bar. An app bar would paint its own surface across the top of the screen, and the
     // header's gradient would start underneath it — a grey band above a coloured one, with a seam
@@ -163,7 +164,10 @@ fun EventDetailScreen(
                         } else {
                             DetailContent(
                                 event = current,
-                                calendarName = state.calendar?.displayName ?: "Calendar",
+                                // Said here because the missing Edit and Delete would otherwise
+                                // look like a bug rather than like the calendar's rules.
+                                calendarName = (state.calendar?.displayName ?: "Calendar") +
+                                    if (readOnly) " · read-only" else "",
                                 reminderMinutes = state.reminderMinutes,
                                 attendees = state.attendees,
                                 selfEmail = state.selfAttendee?.email,
@@ -194,9 +198,9 @@ fun EventDetailScreen(
                         .align(Alignment.TopEnd)
                         .statusBarsPadding()
                         .padding(4.dp),
-                    onEdit = { onEdit(eventId, event.start.toEpochMilli()) },
+                    onEdit = { onEdit(eventId, event.start.toEpochMilli()) }.takeUnless { readOnly },
                     onDuplicate = { onDuplicate(eventId, event.start.toEpochMilli()) },
-                    onDelete = viewModel::askDelete,
+                    onDelete = viewModel::askDelete.takeUnless { readOnly },
                 )
             }
         }
@@ -222,14 +226,17 @@ fun EventDetailScreen(
 @Composable
 private fun DetailActions(
     modifier: Modifier = Modifier,
-    onEdit: () -> Unit,
+    /** Null on a read-only calendar, which hides the action. */
+    onEdit: (() -> Unit)?,
     onDuplicate: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (() -> Unit)?,
 ) {
     var open by remember { mutableStateOf(false) }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onEdit) {
-            Icon(Icons.Outlined.Edit, contentDescription = "Edit event")
+        if (onEdit != null) {
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Outlined.Edit, contentDescription = "Edit event")
+            }
         }
         Box {
             IconButton(onClick = { open = true }) {
@@ -244,20 +251,22 @@ private fun DetailActions(
                         onDuplicate()
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.DeleteOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    },
-                    onClick = {
-                        open = false
-                        onDelete()
-                    },
-                )
+                if (onDelete != null) {
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.DeleteOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = {
+                            open = false
+                            onDelete()
+                        },
+                    )
+                }
             }
         }
     }

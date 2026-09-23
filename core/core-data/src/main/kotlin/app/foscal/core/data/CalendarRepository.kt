@@ -350,6 +350,7 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Calendars.CALENDAR_COLOR,
             CalendarContract.Calendars.VISIBLE,
             CalendarContract.Calendars.SYNC_EVENTS,
+            CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
         )
         val out = mutableListOf<Calendar>()
         val cursor = safeQuery(
@@ -370,6 +371,7 @@ class CalendarContractRepository @Inject constructor(
                     color = c.getInt(5),
                     visible = c.getInt(6) == 1,
                     syncEnabled = c.getInt(7) == 1,
+                    accessLevel = if (c.isNull(8)) Calendar.ACCESS_OWNER else c.getInt(8),
                 )
             }
         }
@@ -1677,6 +1679,7 @@ class CalendarContractRepository @Inject constructor(
             timezone = getString(8),
             color = if (displayColor != 0) displayColor else calendarColor,
             rrule = getString(11),
+            readOnly = !isNull(12) && getInt(12) < Calendar.ACCESS_CONTRIBUTOR,
         )
     }
 
@@ -1756,6 +1759,7 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Instances.DISPLAY_COLOR,
             CalendarContract.Instances.CALENDAR_COLOR,
             CalendarContract.Instances.RRULE,
+            CalendarContract.Instances.CALENDAR_ACCESS_LEVEL,
         )
 
         /** Column order the master-row reader depends on; keep in sync with `readEventRow`. */

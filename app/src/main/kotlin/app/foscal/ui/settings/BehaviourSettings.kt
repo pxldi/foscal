@@ -140,7 +140,8 @@ fun NewEventSettings(
     // Hidden calendars are left out: nominating one would put new events somewhere you cannot see
     // them. "First available" leads, because it is the default and needs no decision.
     val options = listOf("" to "First available") +
-        calendars.filterNot { it.isHidden }.map { it.calendar.id.toString() to it.calendar.displayName }
+        calendars.filter { !it.isHidden && it.calendar.isWritable }
+            .map { it.calendar.id.toString() to it.calendar.displayName }
 
     when (picker) {
         EventPicker.Calendar -> ChoiceDialog(

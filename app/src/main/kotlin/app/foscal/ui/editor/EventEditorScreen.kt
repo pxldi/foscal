@@ -230,6 +230,14 @@ private fun EditorForm(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        if (state.calendarReadOnly) {
+            Text(
+                "This event's calendar is read-only, so it cannot be changed here.",
+                modifier = rowPadding,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         // Title
         Section {
             // Held here as a TextFieldValue rather than read straight off the state, because the
@@ -512,7 +520,7 @@ private fun EditorForm(
         }
 
         AnimatedVisibility(
-            visible = state.isEditing,
+            visible = state.isEditing && !state.calendarReadOnly,
             enter = fadeIn(tween(Motion.DurationMedium)),
             exit = fadeOut(tween(Motion.DurationMedium)),
         ) {

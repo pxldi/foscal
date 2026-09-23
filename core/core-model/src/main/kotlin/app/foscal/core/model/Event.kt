@@ -22,6 +22,11 @@ data class Event(
     val rrule: String? = null,
     /** The iCalendar UID (`Events.UID_2445`). Read only where export needs it; null elsewhere. */
     val uid: String? = null,
+    /**
+     * Whether the event's calendar is below contributor access, so it cannot be moved or edited.
+     * Read from Instances; a row read from the Events table leaves it false.
+     */
+    val readOnly: Boolean = false,
 ) {
     val durationMillis: Long
         get() = end.toEpochMilli() - start.toEpochMilli()
