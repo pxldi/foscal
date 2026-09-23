@@ -132,15 +132,19 @@ fun OnboardingRoute(
     }
 
     var notificationsEnabled by remember { mutableStateOf(hasNotificationPermission(context)) }
+    // The same dead end for notifications: the switch relaunched a request Android no longer shows.
+    var notificationsDeniedForGood by rememberSaveable { mutableStateOf(false) }
     // Set while the user is in notification settings, so the switch catches up on the way back.
     var awaitingNotificationSettings by rememberSaveable { mutableStateOf(false) }
+    val openNotificationSettingsAndWait = {
+        awaitingNotificationSettings = openNotificationSettings(context)
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         notificationsEnabled = granted
-        if (!granted && isDeniedForGood(context, Manifest.permission.POST_NOTIFICATIONS)) {
-            awaitingNotificationSettings = openNotificationSettings(context)
-        }
+        notificationsDeniedForGood =
+            !granted && isDeniedForGood(context, Manifest.permission.POST_NOTIFICATIONS)
     }
 
     LaunchedEffect(state.calendarPermissionGranted, step) {
@@ -181,6 +185,7 @@ fun OnboardingRoute(
         if (awaitingNotificationSettings) {
             awaitingNotificationSettings = false
             notificationsEnabled = hasNotificationPermission(context)
+            if (notificationsEnabled) notificationsDeniedForGood = false
         }
     }
 
@@ -252,9 +257,12 @@ fun OnboardingRoute(
                         onAccentSelect = viewModel::setAccentColor,
                         onCustomAccentPick = viewModel::setCustomAccentColor,
                         notificationsEnabled = notificationsEnabled,
+                        notificationsDeniedForGood = notificationsDeniedForGood,
+                        onOpenNotificationSettings = openNotificationSettingsAndWait,
                         onNotificationsToggle = { want ->
                             when {
                                 !want -> notificationsEnabled = false
+                                notificationsDeniedForGood -> openNotificationSettingsAndWait()
                                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                                     !hasNotificationPermission(context) ->
                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -477,6 +485,8 @@ private fun PersonalizeStep(
     onAccentSelect: (AccentColor) -> Unit,
     onCustomAccentPick: (Int) -> Unit,
     notificationsEnabled: Boolean,
+    notificationsDeniedForGood: Boolean,
+    onOpenNotificationSettings: () -> Unit,
     onNotificationsToggle: (Boolean) -> Unit,
     batteryOptimized: Boolean,
     onOpenBatterySettings: () -> Unit,
@@ -510,6 +520,16 @@ private fun PersonalizeStep(
             checked = notificationsEnabled,
             onToggle = onNotificationsToggle,
         )
+        if (notificationsDeniedForGood && !notificationsEnabled) {
+            ActionCard(
+                icon = Icons.Outlined.Notifications,
+                title = "Notifications are off",
+                subtitle = "Android will not ask again. Allow notifications for Foscal in " +
+                    "settings to get reminders.",
+                buttonText = "Open notification settings",
+                onClick = onOpenNotificationSettings,
+            )
+        }
         // Only while it is still a problem. Once the exemption is granted the card has nothing to
         // offer, and leaving it on screen reads as a step that failed.
         if (notificationsEnabled && batteryOptimized) {
