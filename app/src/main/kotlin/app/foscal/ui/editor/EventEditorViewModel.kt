@@ -31,7 +31,7 @@ import java.time.ZoneOffset
 import javax.inject.Inject
 
 /** Which action is awaiting a "this event vs. all events" choice for a recurring series. */
-enum class RecurrenceScopePrompt { SAVE, DELETE }
+enum class RecurrenceScopePrompt { SAVE }
 
 /** How widely a recurring edit or delete applies. */
 enum class RecurrenceScope { SINGLE, THIS_AND_FOLLOWING, ALL_EVENTS }
@@ -97,6 +97,10 @@ data class EditorUiState(
     /** Set with [finished] when the editor closed on a delete rather than a save. */
     val deleted: Boolean = false,
     val scopePrompt: RecurrenceScopePrompt? = null,
+    /** The delete button was tapped and the confirmation is showing. */
+    val deletePrompt: Boolean = false,
+    /** Whether the user has changed anything since the editor loaded, so Back would lose it. */
+    val dirty: Boolean = false,
 ) {
     val canSave: Boolean get() = title.isNotBlank() && selectedCalendarId != null && !saving
 
@@ -137,7 +141,7 @@ data class EditorUiState(
 
 @HiltViewModel
 class EventEditorViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val repository: CalendarRepository,
     private val prefs: Preferences,
     private val messages: UserMessages,
@@ -155,6 +159,9 @@ class EventEditorViewModel @Inject constructor(
      */
     private var globalReminderDefault: Int? = null
     private var calendarReminderDefaults: Map<Long, Int?> = emptyMap()
+
+    /** The draft as loaded, which [EditorUiState.dirty] is measured against. Null until loaded. */
+    private var loadedDraft: EditorDraft? = null
 
     private val _state = MutableStateFlow(EditorUiState())
     val state: StateFlow<EditorUiState> = _state.asStateFlow()
@@ -210,7 +217,7 @@ class EventEditorViewModel @Inject constructor(
                     val startZ = event.start.atZone(zone)
                     val endZ = event.end.atZone(zone)
                     val spec = RecurrenceRules.parse(event.rrule, zone)
-                    _state.value = EditorUiState(
+                    finishLoad(EditorUiState(
                         loading = false,
                         eventId = eventId,
                         isEditing = true,
@@ -245,7 +252,7 @@ class EventEditorViewModel @Inject constructor(
                         attendees = attendees,
                         color = repository.getEventColor(eventId),
                         originalTimezone = event.timezone,
-                    )
+                    ))
                     return@launch
                 }
             }
@@ -260,7 +267,7 @@ class EventEditorViewModel @Inject constructor(
                     val startZ = source.start.atZone(zone)
                     val endZ = source.end.atZone(zone)
                     val spec = RecurrenceRules.parse(source.rrule, zone)
-                    _state.value = EditorUiState(
+                    finishLoad(EditorUiState(
                         loading = false,
                         isEditing = false,
                         title = source.title,
@@ -300,7 +307,7 @@ class EventEditorViewModel @Inject constructor(
                         // not quietly replace them with that calendar's default.
                         remindersTouched = true,
                         color = repository.getEventColor(copyFrom),
-                    )
+                    ))
                     return@launch
                 }
             }
@@ -319,7 +326,7 @@ class EventEditorViewModel @Inject constructor(
                 visible.any { it.id == id }
             }
             val defaultCalendar = calArg ?: preferred ?: visible.firstOrNull()?.id
-            _state.value = EditorUiState(
+            finishLoad(EditorUiState(
                 loading = false,
                 isEditing = false,
                 availableCalendars = visible,
@@ -337,8 +344,19 @@ class EventEditorViewModel @Inject constructor(
                 mapsEnabled = mapsEnabled,
                 description = prefill.description,
                 reminderMinutes = listOfNotNull(defaultReminderFor(defaultCalendar)),
-            )
+            ))
         }
+    }
+
+    /**
+     * Publishes the loaded state, with the user's saved draft laid over it when Android recreated
+     * the editor after killing the process.
+     */
+    private fun finishLoad(loaded: EditorUiState) {
+        val baseline = loaded.toDraft()
+        loadedDraft = baseline
+        val restored = EditorDraft.readFrom(savedStateHandle)?.let(loaded::withDraft)
+        _state.value = restored?.copy(dirty = restored.toDraft().differsFrom(baseline)) ?: loaded
     }
 
     private fun nextHourFromNow() =
@@ -355,8 +373,8 @@ class EventEditorViewModel @Inject constructor(
     fun updateLocation(value: String) = mutate { it.copy(location = value) }
     fun updateDescription(value: String) = mutate { it.copy(description = value) }
     fun updateAllDay(value: Boolean) = mutate { it.copy(allDay = value) }
-    fun updateStartDate(date: LocalDate) = mutate { it.copy(startDate = date).dragEndToStart() }
-    fun updateStartTime(time: LocalTime) = mutate { it.copy(startTime = time).dragEndToStart() }
+    fun updateStartDate(date: LocalDate) = mutate { it.withStart(date, it.startTime) }
+    fun updateStartTime(time: LocalTime) = mutate { it.withStart(it.startDate, time) }
     fun updateEndDate(date: LocalDate) = mutate { it.copy(endDate = date).dragStartToEnd() }
     fun updateEndTime(time: LocalTime) = mutate { it.copy(endTime = time).dragStartToEnd() }
     fun updateFrequency(freq: Frequency) = mutate {
@@ -459,25 +477,29 @@ class EventEditorViewModel @Inject constructor(
         performSave(RecurrenceScope.ALL_EVENTS)
     }
 
+    /** Asks first. For a series the same dialog also asks how much of it to delete. */
     fun delete() {
         val current = _state.value
         if (!current.isEditing || current.eventId == 0L) return
-        if (current.isRecurring) {
-            mutate { it.copy(scopePrompt = RecurrenceScopePrompt.DELETE) }
-            return
-        }
-        performDelete(RecurrenceScope.ALL_EVENTS)
+        mutate { it.copy(deletePrompt = true) }
+    }
+
+    fun dismissDeletePrompt() = mutate { it.copy(deletePrompt = false) }
+
+    fun confirmDelete(scope: RecurrenceScope) {
+        if (!_state.value.deletePrompt) return
+        mutate { it.copy(deletePrompt = false) }
+        performDelete(scope)
     }
 
     fun dismissScopePrompt() = mutate { it.copy(scopePrompt = null) }
 
-    /** Resolves a recurrence scope prompt by applying the edit/delete at the chosen scope. */
+    /** Resolves a recurrence scope prompt by applying the edit at the chosen scope. */
     fun resolveScope(scope: RecurrenceScope) {
         val prompt = _state.value.scopePrompt ?: return
         mutate { it.copy(scopePrompt = null) }
         when (prompt) {
             RecurrenceScopePrompt.SAVE -> performSave(scope)
-            RecurrenceScopePrompt.DELETE -> performDelete(scope)
         }
     }
 
@@ -577,7 +599,18 @@ class EventEditorViewModel @Inject constructor(
         }
     }
 
-    private fun mutate(transform: (EditorUiState) -> EditorUiState) = _state.update(transform)
+    /**
+     * Applies [transform] and, once the editor has loaded, recomputes [EditorUiState.dirty] and
+     * writes the draft to the saved state, so a process death loses nothing typed so far.
+     */
+    private fun mutate(transform: (EditorUiState) -> EditorUiState) {
+        val baseline = loadedDraft
+        _state.update { current ->
+            val next = transform(current)
+            if (baseline == null) next else next.copy(dirty = next.toDraft().differsFrom(baseline))
+        }
+        if (baseline != null) _state.value.toDraft().writeTo(savedStateHandle)
+    }
 }
 
 /**
@@ -589,13 +622,21 @@ private fun EditorUiState.isInverted(): Boolean =
     else endDate.atTime(endTime).isBefore(startDate.atTime(startTime))
 
 /**
+ * Moves the start to [date] at [time] and the end by the same amount, so the event keeps its
+ * length. Keeping the old end turned a 21:00 to 22:00 event moved to 20:30 into a 90-minute one.
+ * The shift is in wall-clock time, so an event moved across a DST change keeps its hours.
+ */
+private fun EditorUiState.withStart(date: LocalDate, time: LocalTime): EditorUiState {
+    val shift = java.time.Duration.between(startDate.atTime(startTime), date.atTime(time))
+    val end = endDate.atTime(endTime).plus(shift)
+    return copy(startDate = date, startTime = time, endDate = end.toLocalDate(), endTime = end.toLocalTime())
+}
+
+/**
  * Nothing downstream rejects an event that ends before it starts: the provider stores it, the
  * timeline lays it out with a negative height, and `formatDuration` hands the recurring path a
- * negative DURATION. So moving one endpoint past the other drags the other along instead of
- * letting the pair go inverted.
+ * negative DURATION. So moving the end before the start drags the start along instead of letting
+ * the pair go inverted.
  */
-private fun EditorUiState.dragEndToStart(): EditorUiState =
-    if (isInverted()) copy(endDate = startDate, endTime = startTime) else this
-
 private fun EditorUiState.dragStartToEnd(): EditorUiState =
     if (isInverted()) copy(startDate = endDate, startTime = endTime) else this

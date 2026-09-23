@@ -1,5 +1,6 @@
 package app.foscal.ui.editor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -17,9 +18,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -38,6 +41,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ButtonDefaults
@@ -93,6 +97,7 @@ import app.foscal.core.model.Frequency
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.CalendarColors
+import app.foscal.ui.common.DeleteEventDialog
 import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
@@ -133,11 +138,33 @@ fun EventEditorRoute(
         }
     }
 
-    state.scopePrompt?.let { prompt ->
+    state.scopePrompt?.let {
         RecurrenceScopeDialog(
-            verb = if (prompt == RecurrenceScopePrompt.DELETE) "Delete" else "Change",
+            verb = "Change",
             onScope = viewModel::resolveScope,
             onDismiss = viewModel::dismissScopePrompt,
+        )
+    }
+
+    if (state.deletePrompt) {
+        DeleteEventDialog(
+            recurring = state.isRecurring,
+            onDelete = viewModel::confirmDelete,
+            onDismiss = viewModel::dismissDeletePrompt,
+        )
+    }
+
+    // Back and the arrow both used to close a filled-in editor without a word.
+    var confirmDiscard by rememberSaveable { mutableStateOf(false) }
+    val leave = { if (state.dirty) confirmDiscard = true else onBack() }
+    BackHandler(enabled = state.dirty && !state.finished) { confirmDiscard = true }
+    if (confirmDiscard) {
+        DiscardChangesDialog(
+            onDiscard = {
+                confirmDiscard = false
+                onBack()
+            },
+            onKeepEditing = { confirmDiscard = false },
         )
     }
 
@@ -151,7 +178,7 @@ fun EventEditorRoute(
                 ),
                 title = { Text(if (state.isEditing) "Edit event" else "New event") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = leave) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel")
                     }
                 },
@@ -166,9 +193,13 @@ fun EventEditorRoute(
         Crossfade(
             targetState = state.loading,
             animationSpec = tween(Motion.DurationMedium),
+            // The app draws edge to edge, so the window is not resized for the keyboard, and the
+            // notes and guest fields at the bottom were typed into out of sight.
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding(),
             label = "editorCrossfade",
         ) { loading ->
             if (loading) {
@@ -506,6 +537,20 @@ private fun EditorForm(
         }
         Spacer(Modifier.height(48.dp))
     }
+}
+
+@Composable
+private fun DiscardChangesDialog(onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onKeepEditing,
+        title = { Text("Discard changes?") },
+        confirmButton = {
+            TextButton(onClick = onDiscard) {
+                Text("Discard", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onKeepEditing) { Text("Keep editing") } },
+    )
 }
 
 @Composable
