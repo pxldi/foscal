@@ -155,17 +155,16 @@
             android:exported="false" />
 
         <!--
-          Every action here is a protected broadcast the system alone can send, so exporting the
-          receiver does not let another app trigger it. See SystemEventReceiver for why each one
-          invalidates the armed alarms.
+          Exported only because the system sends these from outside the app. Every action listed is
+          a protected broadcast in AOSP's framework manifest, so no other app can send one; keep it
+          that way when adding an action. See SystemEventReceiver for why each one invalidates the
+          armed alarms.
         -->
         <receiver
             android:name=".notifications.SystemEventReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
