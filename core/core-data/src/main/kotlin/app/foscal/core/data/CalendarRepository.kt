@@ -821,7 +821,7 @@ class CalendarContractRepository @Inject constructor(
         rebaseCount: Boolean,
     ): Boolean = withContext(Dispatchers.IO) {
         val master = loadMaster(eventId) ?: return@withContext false
-        val occurrencesBefore = countInstancesBefore(eventId, master.dtStart, instanceStartMillis)
+        val occurrencesBefore = countOccurrencesBefore(eventId, master, instanceStartMillis)
             ?: return@withContext false
         // The following series takes the user's edited values. When the recurrence rule was left
         // untouched, keep the original pattern but rebase a COUNT end so the series length is
@@ -870,6 +870,7 @@ class CalendarContractRepository @Inject constructor(
         val syncId: String?,
         val calendarId: Long,
         val duration: String?,
+        val exdate: String?,
     ) {
         fun zone(): ZoneId = timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
             ?: ZoneId.systemDefault()
@@ -884,6 +885,7 @@ class CalendarContractRepository @Inject constructor(
             CalendarContract.Events._SYNC_ID,
             CalendarContract.Events.CALENDAR_ID,
             CalendarContract.Events.DURATION,
+            CalendarContract.Events.EXDATE,
         )
         return safeQuery(
             ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId),
@@ -901,25 +903,34 @@ class CalendarContractRepository @Inject constructor(
                 syncId = c.getString(4)?.takeIf { it.isNotBlank() },
                 calendarId = c.getLong(5),
                 duration = c.getString(6),
+                exdate = c.getString(7),
             )
         }
     }
 
     /**
-     * Number of occurrences of [eventId] whose start is in [fromMillis, toExclusiveMillis), or
-     * null if the provider could not be asked. Zero is a real answer that rebases a COUNT, so a
-     * failed query must not look like it.
+     * How many occurrences the master's rule generated before [splitMillis], or null if the
+     * provider could not be asked. Zero is a real answer that rebases a COUNT, so a failed query
+     * must not look like it.
      *
-     * Instances lists an overridden occurrence under the exception's own id and a cancelled one
-     * not at all, so both are missing from this count and a COUNT rebased from it runs long by
-     * that many. The rule itself would have to be expanded to do better.
+     * COUNT counts every occurrence the rule generates, including ones later edited or removed, and
+     * Instances lists none of those under the master: an edited occurrence appears under the
+     * exception's own id, and a cancelled one or one in the EXDATE column not at all. Counting
+     * Instances alone made the new series one occurrence too long for each. The three sources are
+     * joined by start time, so an occurrence listed in two of them counts once.
      */
-    private fun countInstancesBefore(
-        eventId: Long,
-        fromMillis: Long,
-        toExclusiveMillis: Long,
-    ): Int? {
-        if (toExclusiveMillis <= fromMillis) return 0
+    private fun countOccurrencesBefore(eventId: Long, master: MasterEvent, splitMillis: Long): Int? {
+        if (splitMillis <= master.dtStart) return 0
+        val inRange = { millis: Long -> millis >= master.dtStart && millis < splitMillis }
+        val starts = mutableSetOf<Long>()
+        starts += instanceStartsBefore(eventId, master.dtStart, splitMillis) ?: return null
+        starts += exceptionStarts(eventId, master)?.filter(inRange) ?: return null
+        starts += RecurrenceRules.parseProviderDates(master.exdate).map(Instant::toEpochMilli).filter(inRange)
+        return starts.size
+    }
+
+    /** Starts of the master's own Instances rows in [fromMillis, toExclusiveMillis). */
+    private fun instanceStartsBefore(eventId: Long, fromMillis: Long, toExclusiveMillis: Long): List<Long>? {
         // Query the Instances window ending one ms before the split so the box itself excludes it;
         // guard the BEGIN bound too in case the box is inclusive at either edge.
         val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
@@ -932,11 +943,36 @@ class CalendarContractRepository @Inject constructor(
             arrayOf(eventId.toString()),
             null,
         )?.use { c ->
-            var n = 0
-            while (c.moveToNext()) {
-                if (c.getLong(0) < toExclusiveMillis) n++
+            buildList {
+                while (c.moveToNext()) {
+                    val begin = c.getLong(0)
+                    if (begin < toExclusiveMillis) add(begin)
+                }
             }
-            n
+        }
+    }
+
+    /**
+     * `ORIGINAL_INSTANCE_TIME` of every exception row of the master, edited or cancelled, matched
+     * the way [deleteExceptionsFrom] matches them.
+     */
+    private fun exceptionStarts(masterId: Long, master: MasterEvent): List<Long>? {
+        val link = if (master.syncId != null) {
+            "(${CalendarContract.Events.ORIGINAL_ID} = ? OR ${CalendarContract.Events.ORIGINAL_SYNC_ID} = ?)"
+        } else {
+            "${CalendarContract.Events.ORIGINAL_ID} = ?"
+        }
+        val args = listOfNotNull(masterId.toString(), master.syncId, master.calendarId.toString())
+        return safeQuery(
+            CalendarContract.Events.CONTENT_URI,
+            arrayOf(CalendarContract.Events.ORIGINAL_INSTANCE_TIME),
+            "$link AND ${CalendarContract.Events.CALENDAR_ID} = ?",
+            args.toTypedArray(),
+            null,
+        )?.use { c ->
+            buildList {
+                while (c.moveToNext()) if (!c.isNull(0)) add(c.getLong(0))
+            }
         }
     }
 
