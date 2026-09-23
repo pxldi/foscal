@@ -465,13 +465,16 @@ private fun WeekHeader(firstDayOfWeek: DayOfWeek, showWeekNumbers: Boolean) {
             Dates.weekStartLabels(locale, firstDayOfWeek)
         }
         labels.forEachIndexed { index, label ->
+            // By the day, not the column: with a Sunday start the last two columns are Friday and
+            // Saturday, and they were coloured as the weekend.
+            val day = firstDayOfWeek.plus(index.toLong())
             Text(
                 label,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = if (index >= 5) {
+                color = if (day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY) {
                     app.foscal.core.ui.theme.weekendLabelColor()
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
@@ -644,7 +647,7 @@ private fun EmptyStateHint() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "No visible calendars. Tap the gear to enable one.",
+            "No visible calendars. Turn one on under Calendars in the view menu.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

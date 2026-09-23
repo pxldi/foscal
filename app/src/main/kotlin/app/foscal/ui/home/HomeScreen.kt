@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.DayTapAction
+import app.foscal.ui.agenda.AgendaItem
 import app.foscal.ui.agenda.AgendaRoute
 import app.foscal.ui.agenda.AgendaViewModel
 import app.foscal.ui.calendars.CalendarsViewModel
@@ -227,10 +228,19 @@ fun HomeRoute(
                 floatingActionButton = {
                     FloatingActionButton(
                         onClick = {
-                            // In Month view the `+` means "add to the day I have selected"; there
-                            // is no other way to say which day, and a generic new event would
-                            // ignore the selection the user just made.
-                            val date = monthState.selectedDate.takeIf { current == CalendarView.Month }
+                            // The `+` adds to the day being looked at. In Month that is the
+                            // selected day; in the timeline views it is the day the page is built
+                            // around, and in Agenda the first day on screen. Elsewhere it used to
+                            // add to today, however far the user had paged. Today itself keeps the
+                            // default start, the next whole hour.
+                            val date = when (current) {
+                                CalendarView.Month -> monthState.selectedDate
+                                CalendarView.Agenda -> agendaState.items
+                                    .drop(agendaListState.firstVisibleItemIndex)
+                                    .firstNotNullOfOrNull { (it as? AgendaItem.Day)?.day?.date }
+                                    ?.takeIf { it != agendaState.today }
+                                else -> focusedDate.takeIf { it != timelineState.today }
+                            }
                             if (date == null) {
                                 onOpenEditor(null, null, null)
                             } else {

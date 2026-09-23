@@ -58,6 +58,8 @@ data class AgendaUiState(
      */
     val windowStart: LocalDate = today,
     val windowEnd: LocalDate = today,
+    /** False until the first read has come back, so an empty list can be told from a pending one. */
+    val loaded: Boolean = false,
 ) {
     /** [days] with a [AgendaItem.MonthHeader] inserted wherever the month changes. */
     val items: List<AgendaItem> = buildList {
@@ -160,6 +162,7 @@ class AgendaViewModel @Inject constructor(
             today = currentDate,
             windowStart = firstVisible,
             windowEnd = lastVisible,
+            loaded = true,
         )
     }.stateIn(
         viewModelScope,

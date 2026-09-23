@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,9 +53,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.LocalIsDarkTheme
@@ -71,7 +75,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -99,8 +102,11 @@ private val BlockGap = 3.dp
  */
 private val MinBlockHeight = 16.dp
 
-/** How close the current time has to be to an hour before that hour's label steps aside. */
-private val NowLabelClearance = 16.dp
+/** Half the height of the now label, which is centred on the now line. */
+private val NowLabelClearance = 8.dp
+
+/** The height of an 11sp hour label, which hangs below its grid line. */
+private val HourLabelHeight = 16.dp
 
 val TimelineEndInset = 4.dp
 
@@ -228,6 +234,14 @@ fun TimelineLayout(
     val is24Hour = LocalUse24HourClock.current
     val locale = currentLocale()
     val nowLabelFmt = remember(is24Hour, locale) { timeFormatter(is24Hour, locale) }
+    // The gutter is 54dp. "10:40 PM" in bold did not fit it, and "12 PM" is as much as an hour
+    // label needs; the now line and the labels around it already say which half of the day it is.
+    val hourLabelFmt = remember(is24Hour, locale) {
+        java.time.format.DateTimeFormatter.ofPattern(if (is24Hour) "HH:mm" else "h a", locale)
+    }
+    val gutterNowFmt = remember(is24Hour, locale) {
+        java.time.format.DateTimeFormatter.ofPattern(if (is24Hour) "HH:mm" else "h:mm", locale)
+    }
     var selection by remember { mutableStateOf<TimeSelection?>(null) }
     // Where a tap has parked a new-event block, waiting for a second tap to open the editor. Held
     // here rather than in the day column so tapping another day moves the one block instead of
@@ -311,15 +325,20 @@ fun TimelineLayout(
                             ) {
                                 // The hour gives way to the current time when the two would land
                                 // on each other. "12:07" printed over "12:00" is unreadable, and
-                                // of the two the one you already know is the hour.
+                                // of the two the one you already know is the hour. The hour label
+                                // hangs below its line and the now label is centred on its own,
+                                // so the clearance is wider below the line than above it.
+                                val offset = hourHeight * (nowFractionalHour - h)
                                 val eclipsed = showNowLabel &&
-                                    hourHeight * abs(nowFractionalHour - h) < NowLabelClearance
+                                    offset > -NowLabelClearance && offset < HourLabelHeight + NowLabelClearance
                                 if (!eclipsed) {
                                     Text(
                                         // The whole time, not just the hour. "05" beside a grid
                                         // line is a label you have to decode; "05:00" is one you
                                         // read.
-                                        "${"%02d".format(h)}:00",
+                                        java.time.LocalTime.of(h, 0).format(hourLabelFmt),
+                                        maxLines = 1,
+                                        softWrap = false,
                                         modifier = Modifier.padding(end = 10.dp),
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -616,15 +635,17 @@ fun TimelineLayout(
                 if (showNowLabel) {
                     Box(
                         Modifier
-                            .width(54.dp)
-                            .offset(y = hourHeight * nowFractionalHour - 8.dp),
+                            .width(TimelineGutterWidth)
+                            .offset(y = hourHeight * nowFractionalHour - NowLabelClearance),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
                         // Coloured text, not a filled chip. The chip was the loudest thing on a
                         // screen whose whole job is the events, and it was shouting the one fact
                         // the user can also read off the clock in their status bar.
                         Text(
-                            nowZ.format(nowLabelFmt),
+                            nowZ.format(gutterNowFmt),
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(end = 10.dp),
                             color = nowColor,
                             fontSize = 11.sp,
@@ -1057,6 +1078,15 @@ private fun EventBlock(
                     fontSize = titleScale,
                     maxLines = maxTitleLines,
                     overflow = TextOverflow.Ellipsis,
+                    // A word wider than a week column used to be cut at whatever letter ran out of
+                    // room ("plannin/g"). Hyphenation breaks it at a syllable, with a hyphen. The
+                    // line height is the title's own; the inherited body style spaced 10sp lines
+                    // 24sp apart, a third of a block's height for each line.
+                    style = LocalTextStyle.current.copy(
+                        hyphens = Hyphens.Auto,
+                        lineBreak = LineBreak.Paragraph,
+                        lineHeight = 1.2.em,
+                    ),
                 )
             }
         }
@@ -1096,6 +1126,13 @@ internal data class PositionedEvent(
 /** How much of its container's width a nested event gives up on the left. */
 private const val NestIndent = 0.12f
 
+/**
+ * How far below its container's top an event has to start to be nested inside it. A child drawn on
+ * top from the container's first line covered the container's title, so one that starts sooner
+ * goes beside it instead.
+ */
+private val NestTitleClearance = 14.dp
+
 internal fun layoutTimed(
     events: List<Event>,
     hourHeight: Dp,
@@ -1105,7 +1142,8 @@ internal fun layoutTimed(
     // Longest first among events that start together, so a container is always seen before the
     // things inside it and the containment stack below never has to look backwards.
     val sorted = events.sortedWith(compareBy<Event> { it.start }.thenByDescending { it.end })
-    val children = nestingOf(sorted)
+    val minLeadMillis = (NestTitleClearance / hourHeight * 3_600_000f).toLong()
+    val children = nestingOf(sorted, minLeadMillis)
     val out = mutableListOf<PositionedEvent>()
     place(children[sorted.size], sorted, children, 0f, 1f, 0, hourHeight, zone, out)
     // Painter's order: a nested block has to be drawn after the block it sits inside.
@@ -1118,11 +1156,13 @@ internal fun layoutTimed(
  * Works as a stack because [sorted] is in start order: once the innermost open container no longer
  * encloses the event we are placing, nothing deeper can either.
  */
-private fun nestingOf(sorted: List<Event>): List<MutableList<Int>> {
+private fun nestingOf(sorted: List<Event>, minLeadMillis: Long): List<MutableList<Int>> {
     val children = List(sorted.size + 1) { mutableListOf<Int>() }
     val open = ArrayDeque<Int>()
     for (i in sorted.indices) {
-        while (open.isNotEmpty() && !encloses(sorted[open.last()], sorted[i])) open.removeLast()
+        while (open.isNotEmpty() && !encloses(sorted[open.last()], sorted[i], minLeadMillis)) {
+            open.removeLast()
+        }
         children[open.lastOrNull() ?: sorted.size].add(i)
         open.addLast(i)
     }
@@ -1130,14 +1170,16 @@ private fun nestingOf(sorted: List<Event>): List<MutableList<Int>> {
 }
 
 /**
- * Whether [outer] wholly contains [inner] *and* is strictly larger.
+ * Whether [outer] wholly contains [inner] and [inner] starts at least [minLeadMillis] later.
  *
  * Two events on exactly the same slot enclose each other by the loose reading, which would make one
- * of them a child of the other for no reason. They are peers, and peers go side by side.
+ * of them a child of the other for no reason. They are peers, and peers go side by side. So is one
+ * that starts with its container, or so soon after that it would be drawn over the container's
+ * title.
  */
-private fun encloses(outer: Event, inner: Event): Boolean =
-    outer.start <= inner.start && outer.end >= inner.end &&
-        (outer.start < inner.start || outer.end > inner.end)
+private fun encloses(outer: Event, inner: Event, minLeadMillis: Long): Boolean =
+    outer.end >= inner.end &&
+        inner.start.toEpochMilli() - outer.start.toEpochMilli() >= maxOf(minLeadMillis, 1L)
 
 /**
  * Lay a set of sibling events out across the band `[left, right)` and recurse into what they hold.
