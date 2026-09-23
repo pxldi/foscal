@@ -546,6 +546,15 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   then description; when the whole location *is* the matched URL, the detail screen suppresses the
   location card, because it would repeat the Join card and its `geo:` intent would search a map for
   a URL. A location that merely contains a link still names a real place and keeps its card.
+- **The editor's draft is written to its `SavedStateHandle` on every change.** `EditorDraft` holds
+  only what the user can change, as primitives and string lists, because the Bundle takes nothing
+  else and the app has no serialization library. On restore the editor loads the event as usual
+  and lays the draft over it, so calendars and the event's identity are always fresh. `dirty` is the
+  draft compared with the one loaded; the Back and arrow prompts read it. A new field in
+  `EditorUiState` that the user can change needs a place in `EditorDraft`, or a process death
+  quietly drops it.
+- **Screens with a text field need `imePadding()`.** The app draws edge to edge, so the window is
+  not resized for the keyboard: quick add's "Add event" and the editor's lower fields sat under it.
 - **Never re-anchor an event's time zone.** `EventInput.timezone` must carry the edited
   event's original `EVENT_TIMEZONE`; the editor keeps it in
   `EditorUiState.originalTimezone`. Rewriting it to the device zone preserves the chosen

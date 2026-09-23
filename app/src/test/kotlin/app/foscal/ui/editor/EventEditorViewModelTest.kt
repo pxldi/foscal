@@ -146,16 +146,23 @@ class EventEditorViewModelTest {
     }
 
     @Test
-    fun `moving the start past the end drags the end forward with it`() = runTest(dispatcher) {
-        val vm = newEventVm()
+    fun `moving the start moves the end with it`() = runTest(dispatcher) {
+        val vm = recurringEditVm()
         advanceUntilIdle()
-        val endDate = vm.state.value.endDate
+        val before = vm.state.value
+        val length = java.time.Duration.between(
+            before.startDate.atTime(before.startTime),
+            before.endDate.atTime(before.endTime),
+        )
 
-        vm.updateStartDate(endDate.plusDays(5))
+        // The audit's case: 21:00 moved to 20:30 kept its 22:00 end.
+        vm.updateStartTime(before.startTime.minusMinutes(30))
+        vm.updateStartDate(before.startDate.plusDays(5))
 
         val state = vm.state.value
-        assertEquals(endDate.plusDays(5), state.startDate)
-        assertEquals(endDate.plusDays(5), state.endDate)
+        val start = state.startDate.atTime(state.startTime)
+        assertEquals(before.startDate.plusDays(5).atTime(before.startTime.minusMinutes(30)), start)
+        assertEquals(start.plus(length), state.endDate.atTime(state.endTime))
     }
 
     @Test
@@ -441,7 +448,7 @@ class EventEditorViewModelTest {
         advanceUntilIdle()
         a.delete()
         advanceUntilIdle()
-        a.resolveScope(RecurrenceScope.SINGLE)
+        a.confirmDelete(RecurrenceScope.SINGLE)
         advanceUntilIdle()
         assertEquals(FakeCalendarRepository.Op.DELETE_INSTANCE, repo.lastOp)
 
@@ -451,7 +458,7 @@ class EventEditorViewModelTest {
         advanceUntilIdle()
         b.delete()
         advanceUntilIdle()
-        b.resolveScope(RecurrenceScope.THIS_AND_FOLLOWING)
+        b.confirmDelete(RecurrenceScope.THIS_AND_FOLLOWING)
         advanceUntilIdle()
         assertEquals(FakeCalendarRepository.Op.DELETE_FOLLOWING, repo.lastOp)
 
@@ -461,10 +468,74 @@ class EventEditorViewModelTest {
         advanceUntilIdle()
         c.delete()
         advanceUntilIdle()
-        c.resolveScope(RecurrenceScope.ALL_EVENTS)
+        c.confirmDelete(RecurrenceScope.ALL_EVENTS)
         advanceUntilIdle()
         assertEquals(FakeCalendarRepository.Op.DELETE, repo.lastOp)
         assertTrue(c.state.value.deleted)
+    }
+
+    @Test
+    fun `delete asks before it deletes`() = runTest(dispatcher) {
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+
+        vm.delete()
+        assertTrue(vm.state.value.deletePrompt)
+        assertFalse(vm.state.value.finished)
+        assertTrue(pendingDeletes.pending.value.isEmpty())
+
+        vm.dismissDeletePrompt()
+        assertFalse(vm.state.value.deletePrompt)
+        // A confirm with no prompt showing is a stale tap and does nothing.
+        vm.confirmDelete(RecurrenceScope.ALL_EVENTS)
+        assertFalse(vm.state.value.finished)
+        assertTrue(pendingDeletes.pending.value.isEmpty())
+    }
+
+    @Test
+    fun `an untouched editor is not dirty and an edit makes it so`() = runTest(dispatcher) {
+        val vm = recurringEditVm()
+        advanceUntilIdle()
+        assertFalse(vm.state.value.dirty)
+
+        vm.toggleCustomRecurrence()
+        assertFalse(vm.state.value.dirty)
+
+        vm.updateTitle("Standup!")
+        assertTrue(vm.state.value.dirty)
+
+        vm.updateTitle("Standup")
+        assertFalse(vm.state.value.dirty)
+    }
+
+    @Test
+    fun `a draft survives the process being killed`() = runTest(dispatcher) {
+        val handle = SavedStateHandle(
+            mapOf("eventId" to "10", "start" to start.toEpochMilli().toString()),
+        )
+        val first = EventEditorViewModel(handle, repo, FakePreferences(), messages, pendingDeletes)
+        advanceUntilIdle()
+        first.updateTitle("Retro")
+        first.updateLocation("Room 4")
+        first.updateStartTime(first.state.value.startTime.plusHours(2))
+        first.toggleReminder(60)
+        first.updateGuestDraft("carol@example.org")
+        val typed = first.state.value
+
+        // A new view model over the same saved state is what Android builds after a process death.
+        val second = EventEditorViewModel(handle, repo, FakePreferences(), messages, pendingDeletes)
+        advanceUntilIdle()
+        val restored = second.state.value
+
+        assertEquals("Retro", restored.title)
+        assertEquals("Room 4", restored.location)
+        assertEquals(typed.startTime, restored.startTime)
+        assertEquals(typed.endTime, restored.endTime)
+        assertEquals(typed.reminderMinutes, restored.reminderMinutes)
+        assertEquals(typed.attendees, restored.attendees)
+        assertEquals("carol@example.org", restored.guestDraft)
+        assertEquals(10L, restored.eventId)
+        assertTrue(restored.dirty)
     }
 
     @Test
@@ -472,7 +543,7 @@ class EventEditorViewModelTest {
         val vm = recurringEditVm()
         advanceUntilIdle()
         vm.delete()
-        vm.resolveScope(RecurrenceScope.ALL_EVENTS)
+        vm.confirmDelete(RecurrenceScope.ALL_EVENTS)
 
         // The editor closes straight away, but nothing has reached the provider yet.
         assertTrue(vm.state.value.finished)
