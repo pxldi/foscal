@@ -143,7 +143,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
         val tapPi = PendingIntent.getActivity(
             context, key, tapIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)

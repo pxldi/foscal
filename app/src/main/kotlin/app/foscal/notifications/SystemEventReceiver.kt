@@ -42,10 +42,9 @@ class SystemEventReceiver : BroadcastReceiver() {
 
     private companion object {
         /**
-         * `QUICKBOOT_POWERON` and its HTC-specific spelling are what several OEMs send instead of
-         * `BOOT_COMPLETED` when resuming from their fast-boot state. The manifest has always
-         * registered for them; the previous receiver then rejected them in code, so on exactly the
-         * devices that need the workaround, reminders never came back after a restart.
+         * Every action here is a protected broadcast, which is what makes exporting the receiver
+         * safe. `QUICKBOOT_POWERON` and its HTC spelling used to be here too; they are not
+         * protected, so any app could send them and make Foscal run a sync.
          */
         val HANDLED_ACTIONS = setOf(
             // LOCKED_BOOT_COMPLETED is deliberately absent: receiving it requires
@@ -59,8 +58,6 @@ class SystemEventReceiver : BroadcastReceiver() {
             // may fire late, so it is re-armed at once instead of at the next sync. Spelled out
             // because AlarmManager's constant is API 31 and this set is read on every version.
             "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED",
-            "android.intent.action.QUICKBOOT_POWERON",
-            "com.htc.intent.action.QUICKBOOT_POWERON",
         )
     }
 }

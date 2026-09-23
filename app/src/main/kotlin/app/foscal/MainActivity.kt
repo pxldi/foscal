@@ -1,12 +1,15 @@
 package app.foscal
 
 import android.content.Intent
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -40,7 +43,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingRoute = routeFor(intent)
+        // A recreated activity still holds its launch intent, and the request in it was carried
+        // out the first time: routing it again reopened the event or the import on every rotation.
+        if (savedInstanceState == null) pendingRoute = routeFor(intent)
         setContent {
             val onboardingDone by prefs.onboardingCompleted
                 .collectAsStateWithLifecycle(initialValue = null)
@@ -65,6 +70,21 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
+            }
+            // enableEdgeToEdge() on its own picks icon colours from the system's dark mode, so a
+            // forced Light or Dark theme put light icons on a light bar or dark on dark.
+            DisposableEffect(darkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(
+                        AndroidColor.TRANSPARENT,
+                        AndroidColor.TRANSPARENT,
+                    ) { darkTheme },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        LightNavigationScrim,
+                        DarkNavigationScrim,
+                    ) { darkTheme },
+                )
+                onDispose {}
             }
             FoscalTheme(
                 darkTheme = darkTheme,
@@ -112,5 +132,9 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN_EVENT_ID = "open_event_id"
         const val EXTRA_OPEN_INSTANCE_START = "open_instance_start"
         const val EXTRA_OPEN_QUICK_ADD = "open_quick_add"
+
+        // The scrims enableEdgeToEdge() uses by default, which androidx does not make public.
+        private val LightNavigationScrim = AndroidColor.argb(0xe6, 0xff, 0xff, 0xff)
+        private val DarkNavigationScrim = AndroidColor.argb(0x80, 0x1b, 0x1b, 0x1b)
     }
 }

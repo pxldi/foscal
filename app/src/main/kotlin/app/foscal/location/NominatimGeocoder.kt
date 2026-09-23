@@ -75,6 +75,6 @@ class NominatimGeocoder @Inject constructor() {
     private companion object {
         const val BASE_URL = "https://nominatim.openstreetmap.org"
         const val TIMEOUT_MS = 10_000
-        val USER_AGENT = "Foscal/${BuildConfig.VERSION_NAME} (github.com/foscal)"
+        val USER_AGENT = "Foscal/${BuildConfig.VERSION_NAME} (github.com/pxldi-labs/foscal)"
     }
 }
