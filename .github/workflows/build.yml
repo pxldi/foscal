@@ -13,6 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The job only reads the code: artifacts and the cache use the runner's own token, not this one.
+# A public repo runs this workflow for forks' pull requests too, so it gets no more than that.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
