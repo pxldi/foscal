@@ -29,12 +29,20 @@ object QuickAddParser {
     private val time24 = Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b""")
     private val allDayPhrase = Regex("""(?i)\ball[\s-]?day\b""")
 
-    fun parse(input: String, today: LocalDate = LocalDate.now()): QuickAddResult {
+    /**
+     * [use24Hour] is the user's clock setting. With the 12-hour clock a bare "3:30" means the
+     * afternoon; see [findTime].
+     */
+    fun parse(
+        input: String,
+        today: LocalDate = LocalDate.now(),
+        use24Hour: Boolean = true,
+    ): QuickAddResult {
         var text = input.trim()
         val allDay = allDayPhrase.containsMatchIn(text)
         if (allDay) text = allDayPhrase.replace(text, " ")
 
-        val time = findTime(text)?.also { text = text.replaceRange(it.first, " ") }?.second
+        val time = findTime(text, use24Hour)?.also { text = text.replaceRange(it.first, " ") }?.second
         val dateMatch = findDate(text, today)?.also { text = text.replaceRange(it.first, " ") }?.second
 
         val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "(Untitled)" }
@@ -44,7 +52,7 @@ object QuickAddParser {
     // Each finder skips a match whose numbers are out of range and keeps looking. The parser runs
     // on every keystroke inside composition, so an impossible time such as "3:75pm" must leave the
     // text alone rather than reach LocalTime.of and throw.
-    private fun findTime(text: String): Pair<IntRange, LocalTime>? {
+    private fun findTime(text: String, use24Hour: Boolean): Pair<IntRange, LocalTime>? {
         time12.findAll(text).forEach { m ->
             val hour = m.groupValues[1].toInt()
             val minute = m.groupValues[2].ifBlank { "0" }.toInt()
@@ -56,7 +64,7 @@ object QuickAddParser {
         time24.find(text)?.let { m ->
             val hour = m.groupValues[1].toInt()
             val minute = m.groupValues[2].toInt()
-            return m.range to LocalTime.of(hour, minute)
+            return m.range to LocalTime.of(if (use24Hour) hour else twelveHourGuess(m.groupValues[1]), minute)
         }
         Regex("""(?i)\bnoon\b""").find(text)?.let {
             return it.range to LocalTime.of(12, 0)
@@ -65,6 +73,16 @@ object QuickAddParser {
             return it.range to LocalTime.of(0, 0)
         }
         return null
+    }
+
+    /**
+     * The hour a 12-hour user means by a bare "h:mm". 1 to 6 is the afternoon, because nobody
+     * adds a 3:30 call at night; 7 to 11 is the morning and 12 is noon. An hour of 13 or more, or
+     * one written with a leading zero, is already 24-hour and is read as written.
+     */
+    private fun twelveHourGuess(written: String): Int {
+        val hour = written.toInt()
+        return if (written.startsWith("0") || hour !in 1..6) hour else hour + 12
     }
 
     private fun findDate(text: String, today: LocalDate): Pair<IntRange, LocalDate>? {

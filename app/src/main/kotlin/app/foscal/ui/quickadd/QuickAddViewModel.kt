@@ -33,7 +33,6 @@ data class QuickAddUiState(
     val saving: Boolean = false,
     val finished: Boolean = false,
 ) {
-    val preview: QuickAddResult get() = QuickAddParser.parse(query)
     val canSave: Boolean get() = !loading && !saving && selectedCalendarId != null
 }
 
@@ -66,12 +65,13 @@ class QuickAddViewModel @Inject constructor(
 
     fun selectCalendar(id: Long) = mutate { it.copy(selectedCalendarId = id) }
 
-    fun save() {
+    /** [use24Hour] must be the value the preview was parsed with, so the event matches it. */
+    fun save(use24Hour: Boolean) {
         val current = _state.value
         if (!current.canSave) return
         mutate { it.copy(saving = true) }
         viewModelScope.launch {
-            val parsed = QuickAddParser.parse(current.query)
+            val parsed = QuickAddParser.parse(current.query, use24Hour = use24Hour)
             val start = resolveStart(parsed)
             val end = if (parsed.allDay) start.plusMillis(86_400_000L) else start.plusSeconds(3_600L)
             val created = repository.createEvent(

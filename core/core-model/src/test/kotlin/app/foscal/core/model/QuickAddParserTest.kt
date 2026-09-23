@@ -99,6 +99,35 @@ class QuickAddParserTest {
     }
 
     @Test
+    fun `the 24-hour clock reads a bare time as written`() {
+        val time = { text: String -> QuickAddParser.parse(text, today, use24Hour = true).time }
+        assertEquals(LocalTime.of(3, 30), time("Call 3:30"))
+        assertEquals(LocalTime.of(9, 0), time("Call 9:00"))
+        assertEquals(LocalTime.of(12, 15), time("Call 12:15"))
+    }
+
+    @Test
+    fun `the 12-hour clock reads 1 to 6 as afternoon, 7 to 11 as morning and 12 as noon`() {
+        val time = { text: String -> QuickAddParser.parse(text, today, use24Hour = false).time }
+        assertEquals(LocalTime.of(13, 0), time("Call 1:00"))
+        assertEquals(LocalTime.of(15, 30), time("Call 3:30"))
+        assertEquals(LocalTime.of(18, 59), time("Call 6:59"))
+        assertEquals(LocalTime.of(7, 0), time("Call 7:00"))
+        assertEquals(LocalTime.of(11, 45), time("Call 11:45"))
+        assertEquals(LocalTime.of(12, 15), time("Call 12:15"))
+    }
+
+    @Test
+    fun `the 12-hour clock leaves explicit times alone`() {
+        val time = { text: String -> QuickAddParser.parse(text, today, use24Hour = false).time }
+        assertEquals(LocalTime.of(15, 30), time("Call 15:30"))
+        assertEquals(LocalTime.of(0, 30), time("Call 0:30"))
+        assertEquals(LocalTime.of(3, 30), time("Call 03:30"))
+        assertEquals(LocalTime.of(3, 30), time("Call 3:30am"))
+        assertEquals(LocalTime.of(15, 30), time("Call 3:30pm"))
+    }
+
+    @Test
     fun `noon and midnight`() {
         assertEquals(LocalTime.of(12, 0), QuickAddParser.parse("Lunch noon", today).time)
         assertEquals(LocalTime.of(0, 0), QuickAddParser.parse("Walk midnight", today).time)

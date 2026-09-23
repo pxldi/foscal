@@ -34,10 +34,24 @@ class QuickAddViewModelTest {
         advanceUntilIdle()
 
         vm.updateQuery("Dentist tomorrow 3pm")
-        vm.save()
+        vm.save(use24Hour = true)
         advanceUntilIdle()
 
         assertTrue(vm.state.value.finished)
+    }
+
+    @Test
+    fun `the 12-hour clock saves a bare 3 30 in the afternoon`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())
+        advanceUntilIdle()
+
+        vm.updateQuery("Call 3:30")
+        vm.save(use24Hour = false)
+        advanceUntilIdle()
+
+        val start = repo.created.single().start.atZone(java.time.ZoneId.systemDefault())
+        assertEquals(java.time.LocalTime.of(15, 30), start.toLocalTime())
     }
 
     @Test
@@ -49,7 +63,7 @@ class QuickAddViewModelTest {
         advanceUntilIdle()
 
         vm.updateQuery("Dentist tomorrow 3pm")
-        vm.save()
+        vm.save(use24Hour = true)
         advanceUntilIdle()
 
         val state = vm.state.value

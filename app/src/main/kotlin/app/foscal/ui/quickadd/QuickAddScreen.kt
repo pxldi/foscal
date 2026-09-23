@@ -88,7 +88,7 @@ fun QuickAddRoute(
                     state = state,
                     onQueryChange = viewModel::updateQuery,
                     onSelectCalendar = viewModel::selectCalendar,
-                    onSave = viewModel::save,
+                    onSave = { use24Hour -> viewModel.save(use24Hour) },
                 )
             }
         }
@@ -101,9 +101,10 @@ private fun QuickAddForm(
     state: QuickAddUiState,
     onQueryChange: (String) -> Unit,
     onSelectCalendar: (Long) -> Unit,
-    onSave: () -> Unit,
+    onSave: (use24Hour: Boolean) -> Unit,
 ) {
-    val parsed = remember(state.query) { QuickAddParser.parse(state.query) }
+    val use24Hour = LocalUse24HourClock.current
+    val parsed = remember(state.query, use24Hour) { QuickAddParser.parse(state.query, use24Hour = use24Hour) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -134,7 +135,7 @@ private fun QuickAddForm(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
         ) {
-            TextButton(onClick = onSave, enabled = state.canSave) {
+            TextButton(onClick = { onSave(use24Hour) }, enabled = state.canSave) {
                 Text("Add event", fontWeight = FontWeight.SemiBold)
             }
         }
