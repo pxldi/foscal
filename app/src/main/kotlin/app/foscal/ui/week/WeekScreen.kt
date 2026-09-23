@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.ui.theme.Motion
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
+import app.foscal.core.ui.theme.weekendLabelColor
 import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.common.TimelineEndInset
@@ -121,7 +122,7 @@ fun TimelineRoute(
                 ),
                 title = {
                     Text(
-                        formatSpanRange(state.anchor, state.spanDays, currentLocale()),
+                        formatSpanRange(state.anchor, state.spanDays, currentLocale(), state.today.year),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -273,10 +274,13 @@ private fun TimelineDayHeader(
                     )
                     .padding(vertical = 2.dp),
             ) {
+                val weekend = date.dayOfWeek == java.time.DayOfWeek.SATURDAY ||
+                    date.dayOfWeek == java.time.DayOfWeek.SUNDAY
                 Text(
                     date.dayOfWeek.getDisplayName(java.time.format.TextStyle.NARROW, locale),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // The same gold the month grid gives its weekend columns.
+                    color = if (weekend) weekendLabelColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Box(
                     modifier = Modifier
@@ -299,17 +303,28 @@ private fun TimelineDayHeader(
     }
 }
 
-/** "Mon, Aug 17" for a single day; "Aug 17 – 23" or "Jul 30 – Aug 5" for a range. */
-private fun formatSpanRange(start: LocalDate, spanDays: Int, locale: Locale): String {
+/**
+ * "Mon, Aug 17" for a single day; "Aug 17 – 23" or "Jul 30 – Aug 5" for a range. Outside
+ * [currentYear] the year is added, as the month header does, since paging a week at a time gives
+ * no other clue which year is on screen: "Dec 28, 2026 – Jan 3, 2027".
+ */
+internal fun formatSpanRange(start: LocalDate, spanDays: Int, locale: Locale, currentYear: Int): String {
+    val end = start.plusDays((spanDays - 1L).coerceAtLeast(0L))
+    val withYear = start.year != currentYear || end.year != currentYear
     if (spanDays <= 1) {
-        return start.format(DateTimeFormatter.ofPattern("EEE, MMM d", locale))
+        val pattern = if (withYear) "EEE, MMM d, yyyy" else "EEE, MMM d"
+        return start.format(DateTimeFormatter.ofPattern(pattern, locale))
     }
-    val end = start.plusDays(spanDays - 1L)
     val f = DateTimeFormatter.ofPattern("MMM d", locale)
-    return if (start.month == end.month) {
-        val month = start.month.getDisplayName(java.time.format.TextStyle.SHORT, locale)
-        "$month ${start.dayOfMonth} – ${end.dayOfMonth}"
-    } else {
-        "${start.format(f)} – ${end.format(f)}"
+    return when {
+        start.year != end.year -> {
+            val y = DateTimeFormatter.ofPattern("MMM d, yyyy", locale)
+            "${start.format(y)} – ${end.format(y)}"
+        }
+        start.month == end.month -> {
+            val month = start.month.getDisplayName(java.time.format.TextStyle.SHORT, locale)
+            "$month ${start.dayOfMonth} – ${end.dayOfMonth}" + if (withYear) ", ${start.year}" else ""
+        }
+        else -> "${start.format(f)} – ${end.format(f)}" + if (withYear) ", ${start.year}" else ""
     }
 }

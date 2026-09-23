@@ -41,7 +41,7 @@ fun ViewGlyph(view: CalendarView, tint: Color, modifier: Modifier = Modifier) {
             CalendarView.Agenda -> drawAgenda(tint, stroke)
             CalendarView.Day -> drawPanes(tint, stroke, columns = 1)
             CalendarView.ThreeDay -> drawPanes(tint, stroke, columns = 3)
-            CalendarView.Week -> drawPanes(tint, stroke, columns = 5)
+            CalendarView.Week -> drawPanes(tint, stroke, columns = 7)
             CalendarView.Month -> drawPanes(tint, stroke, columns = 4, rows = 4)
         }
     }
@@ -59,9 +59,12 @@ private fun DrawScope.drawPanes(tint: Color, stroke: Float, columns: Int, rows: 
         cornerRadius = CornerRadius(2.5.dp.toPx()),
         style = Stroke(stroke),
     )
+    // Seven panes at the frame's own stroke close up into a solid block at icon size, so the
+    // week's dividers are drawn finer.
+    val divider = if (columns > 4) stroke * 0.55f else stroke
     for (i in 1 until columns) {
         val x = inset + width * i / columns
-        drawLine(tint, Offset(x, inset), Offset(x, inset + height), stroke)
+        drawLine(tint, Offset(x, inset), Offset(x, inset + height), divider)
     }
     for (i in 1 until rows) {
         val y = inset + height * i / rows

@@ -159,6 +159,8 @@ private data class AgendaEdges(
     val total: Int,
     val windowStart: LocalDate,
     val windowEnd: LocalDate,
+    /** Loaded and still nothing to show, so no list exists to scroll to either end of. */
+    val emptyAfterLoad: Boolean,
 )
 
 /**
@@ -195,8 +197,22 @@ private fun AgendaPaging(
                 total = info.totalItemsCount,
                 windowStart = current.windowStart,
                 windowEnd = current.windowEnd,
+                emptyAfterLoad = current.loaded && current.items.isEmpty(),
             )
         }.distinctUntilChanged().collect { edges ->
+            // Nothing within the first two months either way used to be the end of the agenda:
+            // with no rows there was no edge to scroll to, so nothing asked for the next page.
+            if (edges.emptyAfterLoad) {
+                if (requestedStart != edges.windowStart) {
+                    requestedStart = edges.windowStart
+                    older()
+                }
+                if (requestedEnd != edges.windowEnd) {
+                    requestedEnd = edges.windowEnd
+                    newer()
+                }
+                return@collect
+            }
             if (edges.total == 0) return@collect
             if (edges.first <= AgendaPrefetchRows && requestedStart != edges.windowStart) {
                 requestedStart = edges.windowStart
@@ -221,7 +237,7 @@ private fun AgendaEmpty(hasVisibleCalendars: Boolean, modifier: Modifier = Modif
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            if (hasVisibleCalendars) "No events in the loaded agenda range."
+            if (hasVisibleCalendars) "No events."
             else "No visible calendars. Open Settings to enable one.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

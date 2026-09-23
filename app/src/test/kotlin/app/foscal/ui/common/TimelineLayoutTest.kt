@@ -167,6 +167,24 @@ class TimelineLayoutTest {
         assertEquals("a block nothing covers is visible all the way down", long.heightDp, long.visibleDp)
     }
 
+    /**
+     * A stand-up at the start of a workshop, nested and drawn on top, covered the workshop's title.
+     * An event that starts with its container, or too soon after for the container's first line,
+     * goes beside it instead.
+     */
+    @Test
+    fun anEventStartingWithItsContainer_goesBesideItRatherThanOverItsTitle() {
+        for (lead in listOf(0, 5, 10)) {
+            val positioned = layoutTimed(
+                listOf(eventAt(9 * 60, 12 * 60), eventAt(9 * 60 + lead, 9 * 60 + 30)),
+                60.dp,
+                zone,
+            )
+            assertTrue("lead $lead: neither is nested", positioned.all { it.depth == 0 })
+            assertEquals("lead $lead", setOf(0f, 0.5f), positioned.map { it.leftFraction }.toSet())
+        }
+    }
+
     /** Back-to-back events are not an overlap: the second gets the full width back. */
     @Test
     fun backToBackEvents_bothKeepTheFullColumn() {
