@@ -154,11 +154,15 @@ fun routeFor(request: RouteRequest): IntentRoute {
 private fun RouteRequest.isCalendarFile(): Boolean {
     if (uri.isNullOrEmpty()) return false
     if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND) return false
+    // The import reads through ContentResolver, which cannot open a web address, so offering one
+    // would only end in a failed import.
+    if (uri.substringBefore(':').lowercase() !in FILE_SCHEMES) return false
     if (mimeType in CALENDAR_MIME_TYPES) return true
     return uri.substringBefore('?').endsWith(".ics", ignoreCase = true)
 }
 
 private val CALENDAR_MIME_TYPES = setOf(Ics.MIME_TYPE, "text/x-vcalendar")
+private val FILE_SCHEMES = setOf("content", "file")
 
 private const val PATH_EVENTS = "events"
 private const val PATH_TIME = "time"

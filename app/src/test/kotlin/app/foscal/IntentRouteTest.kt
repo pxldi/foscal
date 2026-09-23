@@ -118,6 +118,20 @@ class IntentRouteTest {
     }
 
     @Test
+    fun `an ics file on the web is not offered for import`() {
+        for (uri in listOf("https://example.org/invite.ics", "HTTP://example.org/feed")) {
+            val route = routeFor(
+                RouteRequest(
+                    action = "android.intent.action.VIEW",
+                    uri = uri,
+                    mimeType = "text/calendar",
+                ),
+            )
+            assertEquals(uri, IntentRoute.None, route)
+        }
+    }
+
+    @Test
     fun `a shared ics file offers to import`() {
         val route = routeFor(
             RouteRequest(
