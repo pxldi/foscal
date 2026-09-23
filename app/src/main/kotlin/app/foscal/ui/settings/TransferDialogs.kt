@@ -161,7 +161,8 @@ fun ImportTargetDialog(
                     .heightIn(max = 360.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
-                calendars.forEach { calendar ->
+                // A read-only calendar refuses the inserts, so it is not offered.
+                calendars.filter { it.isWritable }.forEach { calendar ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

@@ -40,6 +40,8 @@ fun ImportIcsDialog(
     onDismiss: () -> Unit,
 ) {
     val message = transfer.message
+    // A read-only calendar refuses the inserts, so it is not offered.
+    val targets = calendars.filter { it.isWritable }
     AlertDialog(
         onDismissRequest = { if (!transfer.busy) onDismiss() },
         title = { Text(if (message == null) "Import into" else "Import") },
@@ -62,12 +64,12 @@ fun ImportIcsDialog(
                     Text("Working…")
                 }
 
-                calendars.isEmpty() -> Text("There is no calendar to import into yet.")
+                targets.isEmpty() -> Text("There is no calendar to import into yet.")
 
                 // Scrollable because this list is however many calendars the phone has, and an
                 // incoming file is exactly when the user cannot go and tidy them up first.
                 else -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                    calendars.forEach { calendar ->
+                    targets.forEach { calendar ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -497,7 +497,9 @@ fun TimelineLayout(
                                         // titles.
                                         .height(drawnHeight),
                                     onClick = { onEventClick(pe.event.id, pe.event.start.toEpochMilli()) },
-                                    onMove = onEventMove?.let { move ->
+                                    // A read-only calendar would refuse the write, so its events
+                                    // do not lift at all.
+                                    onMove = onEventMove?.takeUnless { pe.event.readOnly }?.let { move ->
                                         { deltaDays, deltaMinutes ->
                                             val start = pe.event.start.atZone(zone)
                                                 .plusDays(deltaDays.toLong())
@@ -512,7 +514,7 @@ fun TimelineLayout(
                                             )
                                         }
                                     },
-                                    onMovePreview = if (onEventMove != null) {
+                                    onMovePreview = if (onEventMove != null && !pe.event.readOnly) {
                                         { deltaDays, deltaMinutes ->
                                             eventDrag = EventDrag(
                                                 eventId = pe.event.id,
