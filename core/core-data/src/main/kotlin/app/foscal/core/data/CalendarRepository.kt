@@ -136,7 +136,12 @@ interface CalendarRepository {
      */
     suspend fun getEventColor(eventId: Long): Int?
 
-    /** How many events sit on [calendarId]. Shown before offering to delete it. */
+    /**
+     * How many events sit on [calendarId], counted the way the user sees them: a recurring series
+     * is one event, its edited and cancelled occurrences are not events of their own. Shown before
+     * deleting the calendar and in the export picker, whose total has to match what the export
+     * then reports.
+     */
     suspend fun countEvents(calendarId: Long): Int
 
     /**
@@ -622,15 +627,11 @@ class CalendarContractRepository @Inject constructor(
             safeUpdate(uri, values, null, null) > 0
         }
 
-    override suspend fun countEvents(calendarId: Long): Int = withContext(Dispatchers.IO) {
-        safeQuery(
-            CalendarContract.Events.CONTENT_URI,
-            arrayOf(CalendarContract.Events._ID),
-            "${CalendarContract.Events.CALENDAR_ID} = ? AND ${CalendarContract.Events.DELETED} = 0",
-            arrayOf(calendarId.toString()),
-            null,
-        )?.use { it.count } ?: 0
-    }
+    // Taken from the export read itself. A cheaper row count included exception rows, blank titles
+    // and orphaned exceptions, which the export leaves out, so the picker promised more than the
+    // file then held.
+    override suspend fun countEvents(calendarId: Long): Int =
+        getEventsForExport(setOf(calendarId)).size
 
     override suspend fun deleteLocalCalendar(calendarId: Long): Boolean =
         withContext(Dispatchers.IO) {

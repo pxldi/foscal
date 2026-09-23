@@ -10,12 +10,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -47,9 +49,55 @@ class SearchViewModelTest {
         vm.onQueryChange("dentist")
         advanceUntilIdle()
 
-        val titles = vm.results.value.map { it.title }
+        val titles = vm.results.value.events.map { it.title }
         assertEquals(2, titles.size)
         assertTrue(titles.all { it.contains("Dentist") })
+    }
+
+    @Test
+    fun `results name the query they answer only once the search has run`() = runTest(dispatcher) {
+        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        backgroundScope.launch(dispatcher) { vm.results.collect {} }
+
+        vm.onQueryChange("dentist")
+        advanceUntilIdle()
+        vm.onQueryChange("dentistry")
+        advanceTimeBy(100)
+
+        // The previous answer is still there, but it is not an answer to what is typed now.
+        assertFalse(vm.results.value.isFor("dentistry"))
+        assertEquals(2, vm.results.value.events.size)
+
+        advanceUntilIdle()
+        assertTrue(vm.results.value.isFor("dentistry"))
+        assertTrue(vm.results.value.events.isEmpty())
+    }
+
+    @Test
+    fun `nothing is answered before the first search completes`() = runTest(dispatcher) {
+        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        backgroundScope.launch(dispatcher) { vm.results.collect {} }
+
+        vm.onQueryChange("zzz")
+        assertFalse(vm.results.value.isFor("zzz"))
+
+        advanceUntilIdle()
+        assertTrue(vm.results.value.isFor("zzz"))
+        assertTrue(vm.results.value.events.isEmpty())
+    }
+
+    @Test
+    fun `loading more of the same query keeps it answered`() = runTest(dispatcher) {
+        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        backgroundScope.launch(dispatcher) { vm.results.collect {} }
+        vm.onQueryChange("dentist")
+        advanceUntilIdle()
+
+        vm.loadOlder()
+        advanceTimeBy(100)
+
+        assertTrue(vm.results.value.isFor("dentist"))
+        assertEquals(2, vm.results.value.events.size)
     }
 
     @Test
@@ -60,6 +108,6 @@ class SearchViewModelTest {
         vm.onQueryChange("dentist")
         advanceUntilIdle()
 
-        assertEquals(listOf("Dentist appointment"), vm.results.value.map { it.title })
+        assertEquals(listOf("Dentist appointment"), vm.results.value.events.map { it.title })
     }
 }

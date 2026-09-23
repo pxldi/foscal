@@ -42,9 +42,10 @@ class IcsTransfer @Inject constructor(
 ) {
 
     /**
-     * Writes every event on [calendarIds] to [target]. Returns how many events were written,
-     * counting a recurring series and each of its individually edited occurrences separately —
-     * they are separate VEVENTs in the file.
+     * Writes every event on [calendarIds] to [target]. Returns how many events were written, with
+     * a recurring series counted once however many edited occurrences it carries: the same number
+     * [CalendarRepository.countEvents] gives the export picker. The file holds more VEVENTs than
+     * that, one per edited occurrence.
      */
     suspend fun export(target: Uri, calendarIds: Set<Long>): Int = withContext(Dispatchers.IO) {
         val exports = repository.getEventsForExport(calendarIds)
@@ -64,7 +65,7 @@ class IcsTransfer @Inject constructor(
         val stream = context.contentResolver.openOutputStream(target, "wt")
             ?: throw IOException("Could not open $target for writing")
         stream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-        events.size
+        exports.size
     }
 
     /** Reads [source] and creates every event it contains on [calendarId]; see [writeImported]. */

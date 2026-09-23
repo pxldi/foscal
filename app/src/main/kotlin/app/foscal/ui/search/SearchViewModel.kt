@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import java.time.ZoneId
@@ -44,7 +45,7 @@ class SearchViewModel @Inject constructor(
 
     private val calendarIds = visibleCalendarIds(repository, prefs)
 
-    val results: StateFlow<List<Event>> = combine(query, calendarIds, window, today) { q, ids, range, currentDate ->
+    val results: StateFlow<SearchResults> = combine(query, calendarIds, window, today) { q, ids, range, currentDate ->
         SearchRequest(q, ids, range, currentDate)
     }
         .debounce(250)
@@ -54,14 +55,15 @@ class SearchViewModel @Inject constructor(
                 val to = request.today.plusYears(request.range.futureYears).atStartOfDay(zone).toInstant()
                 emit(repository.searchEvents(request.calendarIds, request.query, from, to))
             }
+                // A result deleted from its detail screen is still in the provider during the undo
+                // window, and this list is what the user comes back to.
+                .withoutPendingDeletes(pendingDeletes)
+                .map { SearchResults(answers = request.query, events = it) }
         }
-        // A result deleted from its detail screen is still in the provider during the undo
-        // window, and this list is what the user comes back to.
-        .withoutPendingDeletes(pendingDeletes)
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            emptyList(),
+            SearchResults(),
         )
 
     fun onQueryChange(value: String) {
@@ -76,6 +78,20 @@ class SearchViewModel @Inject constructor(
     fun loadNewer() {
         window.value = window.value.copy(futureYears = window.value.futureYears + SEARCH_PAGE_YEARS)
     }
+}
+
+/**
+ * The events found for the query in [answers], or no answer yet when that is null.
+ *
+ * The query travels with its results so the screen can tell "nothing found" from "not searched
+ * yet". Without it, every keystroke showed "No matching events." for the debounce and the read.
+ */
+data class SearchResults(
+    val answers: String? = null,
+    val events: List<Event> = emptyList(),
+) {
+    /** Whether these results are the finished search for [query]. */
+    fun isFor(query: String): Boolean = answers == query
 }
 
 private data class SearchRequest(

@@ -8,6 +8,7 @@ import app.foscal.core.model.Event
 import app.foscal.core.model.EventInput
 import app.foscal.core.model.ExportEvent
 import app.foscal.core.model.ScheduledReminder
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.Instant
@@ -51,6 +52,15 @@ class FakeCalendarRepository(
 
     /** Every single-occurrence cancellation, as (masterId, originalInstanceTime). */
     val instanceDeletes = mutableListOf<Pair<Long, Long>>()
+
+    /** Every whole-event delete attempted, in order, refused or not. */
+    val deletedIds = mutableListOf<Long>()
+
+    /** Events whose whole-event delete is refused, while every other write goes through. */
+    var refuseDeleteOf: Set<Long> = emptySet()
+
+    /** How long a whole-event delete takes, so a test can look at the middle of one. */
+    var deleteDelayMillis = 0L
 
     private var nextEventId = 1L
 
@@ -191,7 +201,9 @@ class FakeCalendarRepository(
 
     override suspend fun deleteEvent(eventId: Long): Boolean {
         lastOp = Op.DELETE
-        return !refuseWrites
+        if (deleteDelayMillis > 0) delay(deleteDelayMillis)
+        deletedIds += eventId
+        return !refuseWrites && eventId !in refuseDeleteOf
     }
 
     override suspend fun updateEventInstance(

@@ -502,7 +502,12 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   and on a synced calendar the new event reaches the server with its guest list, which is a fresh
   invitation from the user. Month, Week, Agenda and Search hide a pending delete through
   `withoutPendingDeletes`; a new list of events needs the same call. A delete still waiting when
-  the process dies never happens, which leaves the event in place.
+  the process dies never happens, which leaves the event in place. There is one wait for all of
+  them, not one per delete: a second delete restarts the 10 s for every delete still waiting, the
+  one snackbar reads "Deleted 2 events" and its Undo cancels both, and they are written together.
+  With a timer each, the first of two deletes was written while the snackbar offered Undo only for
+  the second. The snackbar follows `undoable` (not yet claimed for writing) and the views follow
+  `pending` (not yet written), so the Undo leaves the moment it can no longer work.
 - **A refused write says so, through `UserMessages`.** Every create, update and delete returns
   whether the provider took it. The editor and quick add stay open with the user's input on a
   refusal, and a refused drag bumps `WeekViewModel.moveRefusals` so the grid drops its preview at

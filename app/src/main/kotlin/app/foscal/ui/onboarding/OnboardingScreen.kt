@@ -111,7 +111,8 @@ fun OnboardingRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var step by remember { mutableStateOf(OnboardingStep.WELCOME) }
+    // Saveable so a rotation mid-setup does not send the user back to the welcome screen.
+    var step by rememberSaveable { mutableStateOf(OnboardingStep.WELCOME) }
 
     // After two denials "Get started" relaunched a request Android no longer shows, so the button
     // did nothing at all. This switches the welcome step to a way out through settings.
@@ -171,7 +172,9 @@ fun OnboardingRoute(
     }
 
     LaunchedEffect(state.setupComplete) {
-        if (state.setupComplete) step = OnboardingStep.SETTLING
+        // Only from the calendar step. The view model outlives a rotation, so this runs again
+        // with setupComplete already true, and would replay the pause from the last step.
+        if (state.setupComplete && step == OnboardingStep.CALENDARS) step = OnboardingStep.SETTLING
     }
 
     LaunchedEffect(state.finished) {
