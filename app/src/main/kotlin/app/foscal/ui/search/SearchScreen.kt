@@ -67,7 +67,10 @@ fun SearchRoute(
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
-    val results by viewModel.results.collectAsStateWithLifecycle()
+    val search by viewModel.results.collectAsStateWithLifecycle()
+    // Until the search for this query lands, the events are still the previous query's.
+    val answered = search.isFor(query)
+    val results = search.events
     val zone = viewModel.zone
     val todayFlow = remember(zone) { Dates.todayFlow(zone) }
     val today by todayFlow.collectAsStateWithLifecycle(initialValue = LocalDate.now(zone))
@@ -85,9 +88,9 @@ fun SearchRoute(
         olderRequestedAt = null
         newerRequestedAt = null
     }
-    LaunchedEffect(query, results) {
+    LaunchedEffect(query, results, answered) {
         val q = query.trim()
-        if (q.isNotEmpty() && positionedQuery != q && results.isNotEmpty()) {
+        if (answered && q.isNotEmpty() && positionedQuery != q && results.isNotEmpty()) {
             positionedQuery = q
             val now = java.time.Instant.now()
             val index = results.indexOfFirst { !it.start.isBefore(now) }
@@ -95,14 +98,14 @@ fun SearchRoute(
             listState.scrollToItem(index.coerceAtLeast(0))
         }
     }
-    LaunchedEffect(listState, results.size, query) {
+    LaunchedEffect(listState, results.size, query, answered) {
         snapshotFlow {
             val visible = listState.layoutInfo.visibleItemsInfo
             val first = visible.firstOrNull()?.index ?: -1
             val last = visible.lastOrNull()?.index ?: -1
             Triple(first, last, listState.isScrollInProgress)
         }.distinctUntilChanged().collect { (first, last, isScrolling) ->
-            if (query.isBlank() || results.isEmpty()) return@collect
+            if (!answered || query.isBlank() || results.isEmpty()) return@collect
             if (!isScrolling) return@collect
             val firstStart = results.first().start.toEpochMilli()
             val lastStart = results.last().start.toEpochMilli()
@@ -160,6 +163,9 @@ fun SearchRoute(
         val q = query.trim()
         when {
             q.isEmpty() -> EmptyState("Search by title, location, or notes.", padding)
+            // Blank while the first search for a query runs: the hint no longer applies and
+            // "no matches" is not known yet.
+            results.isEmpty() && !answered -> Box(Modifier.fillMaxSize().padding(padding))
             results.isEmpty() -> EmptyState("No matching events.", padding)
             else -> LazyColumn(
                 modifier = Modifier
