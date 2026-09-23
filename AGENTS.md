@@ -2,11 +2,17 @@
 
 ## Toolchain
 
-**Do not set `JAVA_HOME` or `ANDROID_HOME` yourself — the environment already provides
-them, and overriding them is how you break the build.** Run `./gradlew` directly.
+This section describes the **dev container**. On the maintainer's workstation nothing sets the
+variables for you: JDK 17 is at `~/.local/android-dev/jdk` and the SDK at
+`~/.local/android-dev/android-sdk`, so pass them per command
+(`env JAVA_HOME=… ANDROID_HOME=… ./gradlew …`). Check which one you are on with the `echo` below
+before doing either.
 
-Earlier revisions of this file hardcoded a toolchain under `/home/pxldi/.local/android-dev/`.
-That path does not exist in the current dev container (JDK 17 is at `/usr/local/jdk-17`, the
+**In the container, do not set `JAVA_HOME` or `ANDROID_HOME` yourself — the environment already
+provides them, and overriding them is how you break the build.** Run `./gradlew` directly.
+
+Earlier revisions of this file hardcoded the workstation toolchain under
+`/home/pxldi/.local/android-dev/`. That path does not exist in the current dev container (JDK 17 is at `/usr/local/jdk-17`, the
 SDK at `/usr/local/android-sdk`), and exporting the old paths fails *deceptively*: Gradle
 rejects the bogus `JAVA_HOME` outright, while a bare `java -version` still appears to work
 because it falls back to the system `java` on `PATH`. If you must confirm the toolchain,
@@ -139,18 +145,18 @@ from here. `adb devices` is the authority on whether one is attached.
 
 ## Current status
 
-Beta. Working: Month / Week / Agenda / Settings tabs (bottom nav — Settings is a
-tab in `HomeScreen`'s `AnimatedContent`, not a separate nav destination; the
-selected tab is `rememberSaveable` so returning from detail/editor preserves the
-current tab), event create/edit/delete, recurring events
+Beta. Working: five views (Agenda, Day, 3 Days, Week, Month), picked from a bottom sheet the
+view button in the bottom bar opens. `HomeScreen` swaps them in an `AnimatedContent`, and the
+view last used is stored as a preference. Settings is its own nav destination
+(`Routes.SETTINGS`), reached from the same sheet. Event create/edit/delete, recurring events
 (this-vs-all-events, exceptions), reminders/notifications, attendees with a
 join-video-call action, real calendar colors,
 offline local calendars, `.ics` import/export via the system document picker,
 permission-first onboarding. Week view is the shared
 hourly `TimelineLayout` with long-press drag-to-create (snapped to ten minutes, with a
 pill above the block naming the range), tap-to-park-then-tap-to-open for a
-default-length event, and long-press drag-to-move for timed events; recurring timed
-moves are stored as single occurrence exceptions. How events are *drawn* — colour
+default-length event, and long-press drag-to-move for timed events; a drop on a
+recurring event asks this / this and following / all, like an edit. How events are *drawn* — colour
 strength, title size, whether titles wrap — is the "Calendar style" settings page.
 Export asks which calendars to write (checkboxes, with each one's event count) and
 import can make the calendar it is about to import into without leaving the dialog.
@@ -159,9 +165,9 @@ gradient, and edit plus an overflow (Duplicate, Delete) float top-right. Duplica
 goes through `Routes.editorCopy`, whose `copyFrom` argument makes the editor read an
 existing event and then forget where it came from — everything carries across, the
 RRULE verbatim included, except the attendee list, because saving attendees is a
-scheduling message rather than a copy. There is no separate Day view — it was dropped as
-redundant (Week's schedule + Agenda cover it). See the README "Current status"
-and "Roadmap" sections for the full picture and what's next.
+scheduling message rather than a copy. Day and 3 Days are the same `TimelineLayout` with one
+or three columns. See the README "Current status" and "Roadmap" sections for the full picture
+and what's next.
 
 ## Design system
 
@@ -174,7 +180,7 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `core-ui/.../theme/Type.kt` → `FoscalTypography`; display+headline styles
   are Bricolage, everything else Hanken. Reach for `BricolageFamily` directly
   only for numerals/headers that need the voice.
-- **Accent** — Cobalt `#1A73E8` (`FoscalBlue`) is the default, driving today,
+- **Accent** — Cobalt `#4355F4` (`FoscalBlue`) is the default, driving today,
   selection, buttons and the FAB. Users can switch to **Violet**, **Forest**, or a
   custom ARGB color in onboarding or Settings; the choice persists via
   `Preferences.accentColor`, with `Preferences.accentCustomColor` storing the
@@ -293,9 +299,8 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   out-of-month (black↔grey) coloring. The ViewModel fetches a ±2-month window so
   adjacent months are already populated. Tapping a day updates an inline preview
   panel under the grid (no modal) — there is no day-events bottom sheet.
-  Vertical swipes on the month grid are aliases for month navigation (up =
-  next month, down = previous month) and use dominant-axis drag detection so
-  diagonal gestures do not trigger both horizontal and vertical navigation.
+  Only horizontal swipes page the month. `pageOnSwipe` (`SwipeToPage.kt`) decides the axis
+  first and hands a vertical drag back untouched, so the page underneath still scrolls.
 - **The agenda's month headers are the only thing on screen naming the date.** An agenda skips
   empty days, so scrolling a few screens leaves no clue what month — let alone year — is being
   looked at. `AgendaUiState.items` interleaves an `AgendaItem.MonthHeader` wherever the month
@@ -321,7 +326,7 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   post the reminder immediately, so an event still weeks away arrived as "In 10m".
   `setExactAndAllowWhileIdle` gives the same delivery guarantees with none of that surface.
 - **A reminder notification must state its lead time from the moment it is posted**
-  (`leadLabel` in `ReminderText.kt`), never from the reminder's configured offset. The offset is a
+  (`reminderWhen` in `ReminderText.kt`), never from the reminder's configured offset. The offset is a
   claim about when the alarm was *meant* to fire; printing it directly makes the notification repeat
   that claim no matter when it actually arrived, which hides both doze delays and misfires.
 - **Only `METHOD_DEFAULT` / `METHOD_ALERT` / `METHOD_ALARM` reminder rows become local alarms.**
@@ -420,10 +425,13 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   dispatcher, so calling it without the switch ANRs the settings screen on a slow device — which is
   how this was found. `VendorSettings.autostartIntent` caches its result for the same reason: it
   costs one `resolveActivity` per candidate ROM and the answer cannot change at runtime.
-- **Offer the battery-optimization *list*, never `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.**
-  The one-tap dialog needs the `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission, which store policy
-  treats as restricted and grants only to a narrow set of app categories.
-  `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` needs no permission at all.
+- **The battery fix asks about Foscal directly, with two fallbacks.** `ReminderHealthProbe` opens
+  `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` for this package, which puts one dialog on screen
+  naming the app. The list screen left users hunting for Foscal among every app on the phone. The
+  direct action needs `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, which Play restricts to apps whose
+  core function is alarms and reminders; Foscal already makes that claim for `USE_EXACT_ALARM`,
+  and lint's `BatteryLife` warning is suppressed on that basis. When a ROM lacks the dialog, the
+  list screen and then the app's own settings page are tried.
 - **Anything resolved across a package boundary needs a `<queries>` entry.** From Android 11,
   `getPackageInfo` throws `NameNotFoundException` and `resolveActivity` returns null for undeclared
   packages — indistinguishable from the app genuinely not being installed. This covers DAVx⁵ and

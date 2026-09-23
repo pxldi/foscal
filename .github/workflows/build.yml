@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [master, main]
+    branches: [main]
   pull_request:
   # So a release build can still be produced on demand from a branch without pushing to main.
   workflow_dispatch:

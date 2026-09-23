@@ -9,9 +9,9 @@ that works both **fully offline** (local calendars) and **online** with any
 CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 [DAVx⁵](https://www.davx5.com).
 
-> Status: **beta**. The core calendar is functional and stable — month/week/agenda
-> views, event create/edit/delete, recurring events, reminders, and offline local
-> calendars all work. Rough edges remain (see [Roadmap](#roadmap)).
+> Status: **beta**. The core calendar is functional and stable: month, week, 3-day,
+> day and agenda views, event create/edit/delete, recurring events, reminders, and
+> offline local calendars all work. Rough edges remain (see [Roadmap](#roadmap)).
 
 ## Design goals
 
@@ -28,21 +28,22 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Working today**
 
-- Three calendar views in the bottom nav: **Month** (centered date numerals with
-  per-calendar color dots; whole-month grids that slide between months and fade
-  out-of-month days to grey, tap the month/year title to jump to a specific
-  month, with an inline day preview under the grid), **Week** (an hourly
-  schedule with a weekday strip, long-press drag-to-create, and long-press
-  drag-to-move timed events), and **Agenda** (a grouped schedule with pinned
-  month-and-year headers, a highlighted today, a "Today" jump button, and
-  endless loading of older and newer events as you scroll). Multi-day and
-  spanning all-day events render on every day they cover.
+- Five calendar views, picked from a sheet that the view button in the bottom bar
+  opens: **Month** (centered date numerals with per-calendar color dots;
+  whole-month grids that slide between months and fade out-of-month days to grey,
+  tap the month/year title to jump to a specific month, with an inline day
+  preview under the grid), **Week**, **3 Days** and **Day** (an hourly schedule
+  with a weekday strip, long-press drag-to-create, and long-press drag-to-move
+  timed events), and **Agenda** (a grouped schedule with pinned month-and-year
+  headers, a highlighted today, a "Today" jump button, and endless loading of
+  older and newer events as you scroll). The same sheet shows or hides each
+  calendar. Multi-day and spanning all-day events render on every day they cover.
 - **Custom design system** — the app's own visual voice: the *Bricolage
   Grotesque* display face on dates and titles, *Hanken Grotesque* for UI, a
   Cobalt accent, soft color-stripe event cards, a unified app/onboarding icon,
   and 24-hour time by default. Full light & dark support.
-- **Settings** is a fourth bottom-nav tab (it slides in alongside Month / Week /
-  Agenda) with appearance, date & time, calendar visibility, and reminder options.
+- **Settings**, opened from the view sheet, covers appearance, behaviour, calendars,
+  reminders, and import & export.
 - **Configurable accent** — pick **Cobalt / Violet / Forest** or a custom color
   in Settings; the whole UI re-tints instantly and the choice is persisted. On
   Android 12+ you can instead switch on **wallpaper colors** (Material You) and
@@ -88,8 +89,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   standard iCalendar file — choosing which calendars go into it, with each one's
   event count next to it — or import one into a calendar you pick, or into a new
   one made without leaving the dialog. Recurrence
-  rules, all-day spans, time zones, reminders and multi-line notes are carried
-  across, and so are attendees (`ORGANIZER` / `ATTENDEE` with their `PARTSTAT`), and so
+  rules, all-day spans, reminders and multi-line notes are carried across, and so
+  are time zones, written with their daylight-saving rules so a repeating event
+  keeps its wall time in other apps, and so are attendees (`ORGANIZER` / `ATTENDEE` with their `PARTSTAT`), and so
   are per-occurrence changes to a repeating event: a moved
   occurrence exports as a `RECURRENCE-ID` override and a deleted one as an
   `EXDATE`, both of which import back onto the series. Files are chosen through
@@ -108,13 +110,16 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Time-zone-aware editing UI and a world-clock style secondary zone.
-- Map preview on the event detail screen (attendees and join-video-call are done).
+- Translations, starting with German.
+- TalkBack and large-text support, with a non-drag way to move events.
+- Landscape, tablet and foldable layouts.
 
 **Later / future goals**
 
-- More unit/UI test coverage (repository, more view models, widget factory).
-- Play Store / F-Droid release: signing config, screenshots, store listing.
+- A time-zone picker in the editor.
+- Month and next-event widgets.
+- Instrumented tests against the real Calendar Provider.
+- Play Store / F-Droid release: screenshots, store listing.
 
 ## Tech stack
 
