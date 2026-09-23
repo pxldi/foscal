@@ -90,6 +90,7 @@ import app.foscal.core.model.Attendee
 import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Event
 import app.foscal.core.model.MeetingLinks
+import app.foscal.core.model.RecurrenceSummary
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.LocalIsDarkTheme
@@ -326,8 +327,10 @@ private fun DetailContent(
                     onClick = { openLink(context, url) },
                 )
             }
-            event.rrule?.takeIf { it.isNotBlank() }?.let {
-                DetailRow(Icons.Outlined.Repeat, describeRecurrence(it))
+            event.rrule?.takeIf { it.isNotBlank() }?.let { rrule ->
+                // The device zone, as the editor reads UNTIL, so both show the same end date.
+                val summary = RecurrenceSummary.describe(rrule, ZoneId.systemDefault(), currentLocale())
+                DetailRow(Icons.Outlined.Repeat, summary)
             }
             // A location that is nothing but the call link is already the Join row above, and
             // handing a URL to a `geo:` intent searches a map for it — so it is suppressed
@@ -765,20 +768,6 @@ private fun DetailRow(icon: ImageVector, text: AnnotatedString, onClick: (() -> 
                 modifier = Modifier.size(22.dp),
             )
         }
-    }
-}
-
-private fun describeRecurrence(rrule: String): String {
-    val freq = rrule.split(';')
-        .firstOrNull { it.startsWith("FREQ=") }
-        ?.substringAfter('=')
-        ?.uppercase()
-    return when (freq) {
-        "DAILY" -> "Every day"
-        "WEEKLY" -> "Every week"
-        "MONTHLY" -> "Every month"
-        "YEARLY" -> "Every year"
-        else -> "Repeats"
     }
 }
 

@@ -66,6 +66,34 @@ object RecurrenceRules {
         )
     }
 
+    /**
+     * Whether [parse] captures everything [rrule] says, so a [RecurrenceSpec] of it can be shown
+     * to the user as the whole rule. False for anything [parse] would lose: an unmodelled FREQ,
+     * BYMONTHDAY, BYSETPOS and the like, an ordinal BYDAY such as `-1FR` (which [parse] reads as
+     * plain Friday), BYDAY outside a weekly rule, or a malformed value.
+     */
+    fun isModelled(rrule: String?): Boolean {
+        val parts = parts(rrule)
+        if (parts.isEmpty() || parts.map { it.first }.toSet().size != parts.size) return false
+        val map = parts.toMap()
+        val freq = map["FREQ"]?.uppercase()
+        if (freq !in modelledFrequencies) return false
+        if (!modelledKeys.containsAll(map.keys)) return false
+        if (map["INTERVAL"]?.let { (it.toIntOrNull() ?: 0) > 0 } == false) return false
+        if (map["COUNT"]?.let { (it.toIntOrNull() ?: 0) > 0 } == false) return false
+        if ("COUNT" in map && "UNTIL" in map) return false
+        if (map["UNTIL"]?.let { parseUntilDate(it, ZoneOffset.UTC) != null } == false) return false
+        val byDay = map["BYDAY"] ?: return true
+        return freq == "WEEKLY" &&
+            byDay.split(',').all { it.trim().length == 2 && parseDayCode(it) != null }
+    }
+
+    private val modelledFrequencies = setOf("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
+
+    // WKST is not parsed but is allowed: it sets the day a week starts on, and a summary that names
+    // the interval and the weekdays stays true whatever that day is.
+    private val modelledKeys = setOf("FREQ", "INTERVAL", "COUNT", "UNTIL", "BYDAY", "WKST")
+
     fun build(spec: RecurrenceSpec, allDay: Boolean, zone: ZoneId): String? {
         if (spec.frequency == Frequency.NONE) return null
         val parts = mutableListOf("FREQ=${spec.frequency.name}")
