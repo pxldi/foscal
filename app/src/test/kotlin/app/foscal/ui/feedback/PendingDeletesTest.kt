@@ -90,6 +90,78 @@ class PendingDeletesTest {
     }
 
     @Test
+    fun `a second delete restarts the window for the first`() = runTest(dispatcher) {
+        deletes.request(10L, 1_000L, RecurrenceScope.ALL_EVENTS, "Standup")
+        advanceTimeBy(5_000L)
+        deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
+
+        // Past the first delete's own window: with the second one's Undo on screen, it waits.
+        advanceTimeBy(PendingDeletes.UNDO_WINDOW_MILLIS - 1)
+        assertNull(repo.lastOp)
+        assertEquals(listOf(10L, 11L), deletes.undoable.value.map { it.eventId })
+
+        advanceUntilIdle()
+        assertEquals(listOf(10L, 11L), repo.deletedIds)
+        assertTrue(deletes.pending.value.isEmpty())
+    }
+
+    @Test
+    fun `one undo cancels every delete it was offered for`() = runTest(dispatcher) {
+        deletes.request(10L, 1_000L, RecurrenceScope.ALL_EVENTS, "Standup")
+        advanceTimeBy(5_000L)
+        deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
+        assertEquals("Deleted 2 events", undoMessage(deletes.undoable.value))
+
+        deletes.undo(deletes.undoable.value.map { it.key })
+        advanceUntilIdle()
+
+        assertNull(repo.lastOp)
+        assertTrue(deletes.pending.value.isEmpty())
+        assertTrue(deletes.undoable.value.isEmpty())
+    }
+
+    @Test
+    fun `undoing one of two leaves the other to be written`() = runTest(dispatcher) {
+        deletes.request(10L, 1_000L, RecurrenceScope.ALL_EVENTS, "Standup")
+        deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
+
+        deletes.undo(deletes.undoable.value.last().key)
+        assertEquals("Deleted “Standup”", undoMessage(deletes.undoable.value))
+        advanceUntilIdle()
+
+        assertEquals(listOf(10L), repo.deletedIds)
+    }
+
+    @Test
+    fun `nothing is undoable once the write has started`() = runTest(dispatcher) {
+        repo.deleteDelayMillis = 1_000L
+        deletes.request(10L, 1_000L, RecurrenceScope.ALL_EVENTS, "Standup")
+        deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
+        advanceTimeBy(PendingDeletes.UNDO_WINDOW_MILLIS + 1)
+
+        // The snackbar goes the moment the batch is claimed, while both stay hidden until written.
+        assertTrue(deletes.undoable.value.isEmpty())
+        assertEquals(2, deletes.pending.value.size)
+        deletes.undo(deletes.pending.value.map { it.key })
+
+        advanceUntilIdle()
+        assertEquals(listOf(10L, 11L), repo.deletedIds)
+        assertTrue(deletes.pending.value.isEmpty())
+    }
+
+    @Test
+    fun `a refused delete does not stop the rest of the batch`() = runTest(dispatcher) {
+        repo.refuseDeleteOf = setOf(10L)
+        deletes.request(10L, 1_000L, RecurrenceScope.ALL_EVENTS, "Standup")
+        deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
+        advanceUntilIdle()
+
+        assertEquals(listOf(10L, 11L), repo.deletedIds)
+        assertEquals("Couldn't delete “Standup”", messages.messages.first())
+        assertTrue(deletes.pending.value.isEmpty())
+    }
+
+    @Test
     fun `each scope hides exactly the occurrences it will remove`() {
         val mon = timedEvent(10, at(day, 9), at(day, 10))
         val tue = timedEvent(10, at(day.plusDays(1), 9), at(day.plusDays(1), 10))

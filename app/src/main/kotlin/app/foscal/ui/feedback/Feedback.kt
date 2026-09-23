@@ -11,8 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 /**
@@ -34,29 +32,26 @@ class FeedbackViewModel @Inject constructor(
     val pendingDeletes: PendingDeletes,
 ) : ViewModel()
 
-/** Shows every posted message and an Undo for the newest pending delete. */
+/** Shows every posted message and one Undo for every delete still waiting. */
 @Composable
 fun FeedbackEffects(host: SnackbarHostState, viewModel: FeedbackViewModel) {
     LaunchedEffect(host, viewModel) {
         viewModel.messages.messages.collect { host.showSnackbar(it) }
     }
     LaunchedEffect(host, viewModel) {
-        viewModel.pendingDeletes.pending
-            .map { it.lastOrNull() }
-            .distinctUntilChanged()
-            .collectLatest { newest ->
-                newest ?: return@collectLatest
-                // Indefinite, because the delete's own timer decides when it is too late to undo.
-                // When the write goes through, the pending list changes, collectLatest cancels
-                // this call, and cancelling it dismisses the snackbar.
-                val result = host.showSnackbar(
-                    message = "Deleted “${newest.title}”",
-                    actionLabel = "Undo",
-                    duration = SnackbarDuration.Indefinite,
-                )
-                if (result == SnackbarResult.ActionPerformed) {
-                    viewModel.pendingDeletes.undo(newest.key)
-                }
+        viewModel.pendingDeletes.undoable.collectLatest { waiting ->
+            if (waiting.isEmpty()) return@collectLatest
+            // Indefinite, because PendingDeletes decides when it is too late to undo. A new delete
+            // or the write starting changes the list, collectLatest cancels this call, and
+            // cancelling it dismisses the snackbar.
+            val result = host.showSnackbar(
+                message = undoMessage(waiting),
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Indefinite,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.pendingDeletes.undo(waiting.map { it.key })
             }
+        }
     }
 }
