@@ -86,8 +86,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # A release of only docs, CI or refactoring has nothing a user would notice.
-          if [ ! -s git-cliff/NOTES.md ] || ! grep -q '[^[:space:]]' git-cliff/NOTES.md; then
+          # A release of only docs, CI or refactoring has nothing a user would notice. git-cliff
+          # still prints a bare version line for it, so look for a group heading instead.
+          if ! grep -q '^### ' git-cliff/NOTES.md 2>/dev/null; then
             echo "Maintenance release: no user-facing changes." > git-cliff/NOTES.md
           fi
           gh release create "$TAG" \
