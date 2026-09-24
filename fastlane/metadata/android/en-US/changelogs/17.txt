@@ -1,0 +1,9 @@
+Repeating events exported to .ics keep their time across a clock change.
+
+The editor asks before throwing changes away, keeps your draft if Android
+closes the app, and moving the start moves the end. Deleting two events in a
+row offers Undo for both.
+
+Read-only calendars can no longer be edited, moved or picked. Quick add reads
+3:30 as the afternoon on a 12-hour clock. If calendar access was denied,
+Foscal now shows how to allow it in settings.
