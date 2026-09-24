@@ -654,6 +654,19 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
 
 ## Conventions
 
+- **Commits follow [Conventional Commits](https://www.conventionalcommits.org).** The subject is
+  `type(scope): imperative summary`, for example `fix(editor): keep the draft across process
+  death`. Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`,
+  `style`, `revert`; the scope is optional and names the area (`editor`, `ics`, `reminders`,
+  `timeline`, `month`, `agenda`, `onboarding`, `settings`, `widget`). Mark a breaking change with
+  `!` after the type or a `BREAKING CHANGE:` footer. A pull request's `commits` job rejects any
+  other subject, because release notes are built from them.
+- **Release notes are generated, the F-Droid changelog is not.** On a tag, `release.yml` runs
+  git-cliff with `cliff.toml` over the commits since the previous tag and lists `feat`, `fix`,
+  `perf` and breaking changes; the other types stay out of the notes. So the type decides whether a
+  change reaches users' eyes: a user-visible fix filed as `refactor` disappears. The F-Droid text
+  in `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt` stays hand-written prose under
+  500 bytes. Preview the notes locally with `git cliff --unreleased`.
 - Kotlin only (no Java sources).
 - Follow Material 3 in Compose. Theme lives in `:core-ui`.
 - No comments unless they explain *why* something non-obvious is done.
