@@ -32,6 +32,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref_name }}
+          # The notes are the commits since the previous tag, so git-cliff needs every tag and
+          # the history between them.
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -69,11 +72,25 @@ jobs:
           FOSCAL_KEY_ALIAS: ${{ secrets.CALENDARIUM_KEY_ALIAS }}
           FOSCAL_KEY_PASSWORD: ${{ secrets.CALENDARIUM_KEY_PASSWORD }}
 
+      # --current is the tag HEAD is on, which is the tag being released however the job
+      # started; --latest would pick the newest tag even when a dispatch rebuilds an older one.
+      - name: Write release notes
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          config: cliff.toml
+          args: --current --strip all
+        env:
+          OUTPUT: git-cliff/NOTES.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A release of only docs, CI or refactoring has nothing a user would notice.
+          if [ ! -s git-cliff/NOTES.md ] || ! grep -q '[^[:space:]]' git-cliff/NOTES.md; then
+            echo "Maintenance release: no user-facing changes." > git-cliff/NOTES.md
+          fi
           gh release create "$TAG" \
-            --generate-notes \
+            --notes-file git-cliff/NOTES.md \
             --title "$TAG" \
             app/build/outputs/apk/release/*.apk
