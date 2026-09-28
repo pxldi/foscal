@@ -30,7 +30,7 @@ class UserPreferencesRepository @Inject constructor(
     override val onboardingCompleted: Flow<Boolean> =
         context.dataStore.data.map { it[ONBOARDING_DONE] ?: false }
 
-    override val hiddenCalendarIds: Flow<Set<String>> =
+    override val legacyHiddenCalendarIds: Flow<Set<String>> =
         context.dataStore.data.map { it[HIDDEN_CALENDARS] ?: emptySet() }
 
     override val monthHiddenCalendarIds: Flow<Set<String>> =
@@ -124,7 +124,7 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { it[ONBOARDING_DONE] = true }
     }
 
-    override suspend fun setHiddenCalendars(ids: Set<String>) {
+    override suspend fun setLegacyHiddenCalendars(ids: Set<String>) {
         context.dataStore.edit { prefs -> prefs[HIDDEN_CALENDARS] = ids }
     }
 

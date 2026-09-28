@@ -2,7 +2,6 @@ package app.foscal.ui.search
 
 import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
-import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
 import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
@@ -33,7 +32,7 @@ class SearchViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun repo(vararg hiddenCal: Long) = FakeCalendarRepository(
-        calendars = listOf(testCalendar(id = 1), testCalendar(id = 2)),
+        calendars = listOf(1L, 2L).map { testCalendar(id = it, visible = it !in hiddenCal) },
         events = listOf(
             timedEvent(1, at(today, 9), at(today, 10), calendarId = 1, title = "Dentist appointment"),
             timedEvent(2, at(today, 11), at(today, 12), calendarId = 1, title = "Lunch"),
@@ -43,7 +42,7 @@ class SearchViewModelTest {
 
     @Test
     fun `query filters results by title after debounce`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        val vm = SearchViewModel(repo(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
 
         vm.onQueryChange("dentist")
@@ -56,7 +55,7 @@ class SearchViewModelTest {
 
     @Test
     fun `results name the query they answer only once the search has run`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        val vm = SearchViewModel(repo(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
 
         vm.onQueryChange("dentist")
@@ -75,7 +74,7 @@ class SearchViewModelTest {
 
     @Test
     fun `nothing is answered before the first search completes`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        val vm = SearchViewModel(repo(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
 
         vm.onQueryChange("zzz")
@@ -88,7 +87,7 @@ class SearchViewModelTest {
 
     @Test
     fun `loading more of the same query keeps it answered`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences(), testPendingDeletes())
+        val vm = SearchViewModel(repo(), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
         vm.onQueryChange("dentist")
         advanceUntilIdle()
@@ -102,7 +101,7 @@ class SearchViewModelTest {
 
     @Test
     fun `results from a hidden calendar are excluded`() = runTest(dispatcher) {
-        val vm = SearchViewModel(repo(), FakePreferences(hidden = setOf("2")), testPendingDeletes())
+        val vm = SearchViewModel(repo(2), testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.results.collect {} }
 
         vm.onQueryChange("dentist")

@@ -37,7 +37,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   timed events), and **Agenda** (a grouped schedule with pinned month-and-year
   headers, a highlighted today, a "Today" jump button, and endless loading of
   older and newer events as you scroll). The same sheet shows or hides each
-  calendar. Multi-day and spanning all-day events render on every day they cover.
+  calendar, and the tick is the one every calendar app on the phone shares. Calendars
+  whose sync is off are left out; Settings → Calendars can turn sync back on. Multi-day and spanning all-day events render on every day they cover.
 - **Custom design system** — the app's own visual voice: the *Bricolage
   Grotesque* display face on dates and titles, *Hanken Grotesque* for UI, a
   Cobalt accent, soft color-stripe event cards, a unified app/onboarding icon,

@@ -215,12 +215,27 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   whichever actually measures better, and then the *fill* is nudged 1–4% away from that text until
   the pair clears 4.5:1. Three of the eight presets sat at 4.2–4.3:1 without it, and a colour from
   a CalDAV server can be anything at all. `EventColorsTest` covers the presets and the greys.
-- **Which calendars a view draws** — `visibleCalendarIds(repository, prefs)` in
-  `ui/util/VisibleCalendars.kt` is the one source, intersecting the provider's `Calendars.VISIBLE`
-  with the user's own toggle. Month uses `monthCalendarIds`, which layers a second, month-only
-  exclusion on top. Layered, never folded in: the month setting can only ever remove, so a
-  calendar switched off everywhere cannot be brought back by it. Add a new view's filtering here
-  rather than in the view model — the four copies this replaced had already begun to drift.
+- **Which calendars a view draws** — `visibleCalendarIds(repository)` in
+  `ui/util/VisibleCalendars.kt` is the one source, and it reads only the provider:
+  `Calendar.isShown`, which is `SYNC_EVENTS = 1` and `VISIBLE = 1`. Month uses `monthCalendarIds`,
+  which layers a second, month-only exclusion on top. Layered, never folded in: the month setting
+  can only ever remove, so a calendar switched off everywhere cannot be brought back by it. Add a
+  new view's filtering here rather than in the view model — the four copies this replaced had
+  already begun to drift.
+- **The calendar tick is `Calendars.VISIBLE`, and nothing else.** The drawer and Settings read it
+  and `setCalendarVisible` writes it with a plain update, as AOSP Calendar and Etar do. Up to 0.15
+  the tick lived in DataStore instead: a calendar another app had hidden drew ticked, and unticking
+  it changed nothing. `migrateLegacyHiddenCalendars` moves that old set into the provider on the
+  first reminder sync and empties it; nothing else may read `legacyHiddenCalendarIds`. The write
+  marks the row dirty, so an account that keeps the choice on its server (Google does) carries it
+  there.
+- **A calendar with `SYNC_EVENTS = 0` is left out of every list but one.** Its account keeps it off
+  the phone, and AOSP Calendar and Etar hide it too. The provider defaults `SYNC_EVENTS` to 0 and
+  `VISIBLE` to 1, so any app that inserts a calendar without the column produces exactly this.
+  Settings → Calendars lists them under "Not synced" with a Sync button (`setCalendarSynced`
+  writes `SYNC_EVENTS = 1` and `VISIBLE = 1`). There is deliberately no way to turn sync *off*:
+  Google's and Outlook's adapters delete the calendar's events from the phone when it goes off, and
+  that switch belongs to the account app.
 - **Editing and deleting a calendar** — only ones on the app's own local account, guarded both in
   the UI (`CalendarRowCard` shows both buttons only when `calendar.isLocal`) and again in
   `CalendarRepository.updateLocalCalendar` / `deleteLocalCalendar`. A rename writes `NAME` as well
@@ -379,9 +394,10 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   REPLACE from a NOW or periodic run cancelled an observer run that had just been triggered, and the
   calendar change it was about to read went unnoticed until the next one.
 - **Anything that changes what the sync would arm without touching the provider must call
-  `syncNow()`.** The content trigger only sees provider writes. Foscal's own hide toggle lives in
-  DataStore, so `CalendarsViewModel.toggleHidden` calls it; before it did, hidden calendars kept
-  notifying until the next unrelated sync.
+  `syncNow()`.** The content trigger only sees provider writes. The hide toggle was the case that
+  taught this, while it lived in DataStore; it now writes `VISIBLE`, and
+  `CalendarsViewModel.toggleHidden` still calls `syncNow()` so a reminder due inside the trigger's
+  debounce does not fire for a calendar just unticked.
 - **`syncNow()` is expedited only from API 31.** Below 31 WorkManager runs expedited work as a
   foreground service and calls `getForegroundInfo`, which `CoroutineWorker` does not implement: the
   work fails with "Not implemented" before `doWork` runs, so boot, app update, clock changes and

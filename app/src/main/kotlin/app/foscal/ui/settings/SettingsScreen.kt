@@ -384,6 +384,73 @@ private fun LazyListScope.calendarsSection(
             )
         }
     }
+    // The only place an unsynced calendar is listed. Without it, a calendar some app created
+    // without setting SYNC_EVENTS (the provider defaults it to 0) would be gone with no way back.
+    if (state.unsynced.isNotEmpty()) {
+        item { SectionHeader("Not synced") }
+        item {
+            Text(
+                "Sync is off for these on this phone, so Foscal leaves them out. Sync asks the " +
+                    "calendar's account to bring its events here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+            )
+        }
+        items(state.unsynced, key = { "unsynced-${it.id}" }) { calendar ->
+            UnsyncedCalendarRow(
+                calendar = calendar,
+                onSync = { viewModel.syncCalendar(calendar) },
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+        }
+    }
+}
+
+/**
+ * A calendar that is on the phone but not synced to it. Turning sync on is offered and turning it
+ * off is not: for a Google or Outlook calendar that makes the account app delete its events from
+ * the phone, and that switch belongs to the account app.
+ */
+@Composable
+private fun UnsyncedCalendarRow(
+    calendar: Calendar,
+    onSync: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            ColorDot(calendar.color)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    calendar.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    accountLabel(calendar),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onSync) { Text("Sync") }
+        }
+    }
 }
 
 private fun LazyListScope.remindersSection(

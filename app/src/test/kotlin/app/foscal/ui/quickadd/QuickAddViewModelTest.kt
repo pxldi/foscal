@@ -52,6 +52,21 @@ class QuickAddViewModelTest {
     }
 
     @Test
+    fun `unticked and unsynced calendars are not offered`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(
+            calendars = listOf(
+                testCalendar(id = 1, visible = false),
+                testCalendar(id = 2, syncEnabled = false),
+                testCalendar(id = 3),
+            ),
+        )
+        val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())
+        advanceUntilIdle()
+
+        assertEquals(listOf(3L), vm.state.value.calendars.map { it.id })
+    }
+
+    @Test
     fun `the 12-hour clock saves a bare 3 30 in the afternoon`() = runTest(dispatcher) {
         val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
         val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())

@@ -10,10 +10,10 @@ import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.data.ReminderSyncStatus
 import app.foscal.core.model.ReminderTrigger
+import app.foscal.ui.util.migrateLegacyHiddenCalendars
 import app.foscal.widget.WidgetRefresher
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
@@ -96,8 +96,10 @@ class ReminderSyncWorker @AssistedInject constructor(
             largestOffsetMinutes = largestOffset,
         )
 
-        val hidden = preferences.hiddenCalendarIds.first().mapNotNull(String::toLongOrNull).toSet()
-        val reminders = repository.getUpcomingReminders(now, horizonEnd, zone, hidden)
+        // Before the read, so a calendar the user unticked under the old DataStore tick never gets
+        // armed. This runs on the update broadcast, before the user has opened the new version.
+        migrateLegacyHiddenCalendars(repository, preferences)
+        val reminders = repository.getUpcomingReminders(now, horizonEnd, zone)
             ?: return readFailed()
 
         val armed = scheduler.reschedule(reminders)

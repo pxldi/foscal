@@ -3,7 +3,6 @@ package app.foscal.ui.agenda
 import app.foscal.allDayEvent
 import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
-import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
 import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
@@ -43,7 +42,7 @@ class AgendaViewModelTest {
                 timedEvent(4, at(today.plusDays(1), 9), at(today.plusDays(1), 10), title = "Tomorrow"),
             ),
         )
-        val vm = AgendaViewModel(repo, FakePreferences(), testPendingDeletes())
+        val vm = AgendaViewModel(repo, testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -59,7 +58,7 @@ class AgendaViewModelTest {
             calendars = listOf(testCalendar()),
             events = listOf(allDayEvent(1, startDay = today, days = 3, title = "Trip")),
         )
-        val vm = AgendaViewModel(repo, FakePreferences(), testPendingDeletes())
+        val vm = AgendaViewModel(repo, testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -73,8 +72,8 @@ class AgendaViewModelTest {
 
     @Test
     fun `hasVisibleCalendars is false when the only calendar is hidden`() = runTest(dispatcher) {
-        val repo = FakeCalendarRepository(calendars = listOf(testCalendar(id = 7)))
-        val vm = AgendaViewModel(repo, FakePreferences(hidden = setOf("7")), testPendingDeletes())
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar(id = 7, visible = false)))
+        val vm = AgendaViewModel(repo, testPendingDeletes())
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
         advanceUntilIdle()
 
@@ -85,7 +84,6 @@ class AgendaViewModelTest {
     fun `paging widens the window and eventually stops widening it`() = runTest(dispatcher) {
         val vm = AgendaViewModel(
             FakeCalendarRepository(calendars = listOf(testCalendar())),
-            FakePreferences(),
             testPendingDeletes(),
         )
         backgroundScope.launch(dispatcher) { vm.state.collect {} }
