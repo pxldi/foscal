@@ -19,11 +19,26 @@ import java.time.ZoneId
  * tests can assert which code path (create / instance / following / whole-series) was taken.
  */
 class FakeCalendarRepository(
-    private val calendars: List<Calendar> = emptyList(),
+    calendars: List<Calendar> = emptyList(),
     private val events: List<Event> = emptyList(),
     private val reminderMinutes: List<Int> = emptyList(),
     private val attendees: List<Attendee> = emptyList(),
 ) : CalendarRepository {
+
+    /**
+     * The provider's calendar rows. A flow so that a `VISIBLE` or `SYNC_EVENTS` write reaches
+     * [observeCalendars] the way the real provider's change notification does.
+     */
+    val calendarRows = MutableStateFlow(calendars)
+
+    /** Every `VISIBLE` write, as (calendarId, visible), refused or not. */
+    val visibilityWrites = mutableListOf<Pair<Long, Boolean>>()
+
+    /** Every calendar handed to [setCalendarSynced], refused or not. */
+    val syncedCalendars = mutableListOf<Long>()
+
+    /** Calendar ids whose `VISIBLE` or `SYNC_EVENTS` write the provider refuses. */
+    var refuseCalendarWritesFor: Set<Long> = emptySet()
 
     enum class Op { CREATE, UPDATE, UPDATE_INSTANCE, UPDATE_FOLLOWING, DELETE, DELETE_INSTANCE, DELETE_FOLLOWING }
 
@@ -77,7 +92,7 @@ class FakeCalendarRepository(
 
     override fun getCalendarUri(calendarId: Long): Uri = Uri.EMPTY
 
-    override suspend fun getCalendars(): List<Calendar> = calendars
+    override suspend fun getCalendars(): List<Calendar> = calendarRows.value
 
     // The window is honoured, not ignored: the Instances table only ever returns occurrences
     // overlapping it, and a fake that hands back everything hides exactly the bug where a caller
@@ -114,7 +129,7 @@ class FakeCalendarRepository(
             .distinct()
             .take(limit)
 
-    override fun observeCalendars(): Flow<List<Calendar>> = MutableStateFlow(calendars)
+    override fun observeCalendars(): Flow<List<Calendar>> = calendarRows
 
     /**
      * Every window [observeEvents] was asked for, in order.
@@ -159,7 +174,7 @@ class FakeCalendarRepository(
 
     override suspend fun updateLocalCalendar(calendarId: Long, name: String, color: Int): Boolean {
         updatedCalendars += Triple(calendarId, name, color)
-        return calendars.any { it.id == calendarId && it.isLocal }
+        return calendarRows.value.any { it.id == calendarId && it.isLocal }
     }
 
     /** Ids handed to [deleteLocalCalendar], in order. */
@@ -172,7 +187,7 @@ class FakeCalendarRepository(
 
     override suspend fun deleteLocalCalendar(calendarId: Long): Boolean {
         deletedCalendars += calendarId
-        return calendars.any { it.id == calendarId && it.isLocal }
+        return calendarRows.value.any { it.id == calendarId && it.isLocal }
     }
 
     override suspend fun createLocalCalendar(name: String, color: Int): Long? {
@@ -180,7 +195,22 @@ class FakeCalendarRepository(
         return 100L + createdCalendars.size
     }
 
-    override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) = Unit
+    override suspend fun setCalendarVisible(calendarId: Long, visible: Boolean): Boolean {
+        visibilityWrites += calendarId to visible
+        return writeCalendar(calendarId) { it.copy(visible = visible) }
+    }
+
+    override suspend fun setCalendarSynced(calendarId: Long): Boolean {
+        syncedCalendars += calendarId
+        return writeCalendar(calendarId) { it.copy(syncEnabled = true, visible = true) }
+    }
+
+    private fun writeCalendar(calendarId: Long, change: (Calendar) -> Calendar): Boolean {
+        if (calendarId in refuseCalendarWritesFor) return false
+        if (calendarRows.value.none { it.id == calendarId }) return false
+        calendarRows.value = calendarRows.value.map { if (it.id == calendarId) change(it) else it }
+        return true
+    }
 
     override suspend fun createEvent(input: EventInput): Long? {
         lastOp = Op.CREATE
@@ -276,7 +306,6 @@ class FakeCalendarRepository(
         from: Instant,
         to: Instant,
         zone: ZoneId,
-        excludedCalendarIds: Set<Long>,
     ): List<ScheduledReminder>? = emptyList()
 
     override suspend fun getLargestReminderOffsetMinutes(): Int = reminderMinutes.maxOrNull() ?: 0

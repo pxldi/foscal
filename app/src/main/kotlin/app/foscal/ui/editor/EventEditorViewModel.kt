@@ -205,13 +205,12 @@ class EventEditorViewModel @Inject constructor(
         copyFrom: Long = 0L,
     ) {
         viewModelScope.launch {
-            val hidden = prefs.hiddenCalendarIds.first()
             globalReminderDefault = prefs.defaultReminderMinutes.first()
             calendarReminderDefaults = prefs.calendarReminderDefaults.first()
             val calendars = repository.getCalendars()
             // Only calendars that take writes: a read-only one in the picker let the user save an
             // event the provider refused or the next sync removed.
-            val visible = calendars.filter { it.visible && it.id.toString() !in hidden && it.isWritable }
+            val visible = calendars.filter { it.isShown && it.isWritable }
             val recentLocations = repository.getRecentLocations()
             val mapsEnabled = prefs.osmMapsEnabled.first()
             if (eventId > 0L) {

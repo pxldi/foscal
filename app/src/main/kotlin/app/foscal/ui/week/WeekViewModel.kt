@@ -89,7 +89,7 @@ class WeekViewModel @Inject constructor(
 
     private val today = Dates.todayFlow(zone)
 
-    private val calendarIds = visibleCalendarIds(repository, prefs)
+    private val calendarIds = visibleCalendarIds(repository)
 
     /**
      * The loaded range, which deliberately does not follow the anchor swipe for swipe. Paging

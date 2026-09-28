@@ -18,6 +18,7 @@ import java.time.ZoneOffset
 fun testCalendar(
     id: Long = 1,
     visible: Boolean = true,
+    syncEnabled: Boolean = true,
 ): Calendar = Calendar(
     id = id,
     displayName = "Cal $id",
@@ -26,7 +27,7 @@ fun testCalendar(
     ownerName = null,
     color = 0xFF1976D2.toInt(),
     visible = visible,
-    syncEnabled = true,
+    syncEnabled = syncEnabled,
 )
 
 fun timedEvent(

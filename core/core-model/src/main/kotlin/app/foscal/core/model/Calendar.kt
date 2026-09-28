@@ -23,6 +23,14 @@ data class Calendar(
     val isWritable: Boolean
         get() = accessLevel >= ACCESS_CONTRIBUTOR
 
+    /**
+     * Whether the views draw this calendar's events. `SYNC_EVENTS = 0` means its account keeps it
+     * off this phone, and AOSP Calendar and Etar leave such a calendar out entirely; `VISIBLE` is
+     * the tick every calendar app on the phone shares.
+     */
+    val isShown: Boolean
+        get() = syncEnabled && visible
+
     companion object {
         const val LOCAL_ACCOUNT_TYPE = "LOCAL"
 

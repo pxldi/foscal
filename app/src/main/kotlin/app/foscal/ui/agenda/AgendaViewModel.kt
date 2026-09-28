@@ -3,7 +3,6 @@ package app.foscal.ui.agenda
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
-import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
 import app.foscal.ui.feedback.PendingDeletes
 import app.foscal.ui.feedback.withoutPendingDeletes
@@ -123,7 +122,6 @@ private const val AGENDA_PAGE_DAYS = 120L
 @HiltViewModel
 class AgendaViewModel @Inject constructor(
     private val repository: CalendarRepository,
-    private val prefs: Preferences,
     private val pendingDeletes: PendingDeletes,
 ) : ViewModel() {
 
@@ -132,7 +130,7 @@ class AgendaViewModel @Inject constructor(
     private val today = Dates.todayFlow(zone)
     private val window = MutableStateFlow(AgendaWindow())
 
-    private val calendarIds = visibleCalendarIds(repository, prefs)
+    private val calendarIds = visibleCalendarIds(repository)
 
     private val bounds = combine(window, today) { range, currentDate ->
         // Read a little before the visible past window so long multi-day events already in

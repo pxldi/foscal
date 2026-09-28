@@ -50,9 +50,8 @@ class QuickAddViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val hidden = prefs.hiddenCalendarIds.first()
             val visible = repository.getCalendars()
-                .filter { it.visible && it.id.toString() !in hidden && it.isWritable }
+                .filter { it.isShown && it.isWritable }
             _state.value = QuickAddUiState(
                 loading = false,
                 calendars = visible,

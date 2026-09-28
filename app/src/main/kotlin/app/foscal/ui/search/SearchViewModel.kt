@@ -3,7 +3,6 @@ package app.foscal.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.foscal.core.data.CalendarRepository
-import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
 import app.foscal.ui.feedback.PendingDeletes
 import app.foscal.ui.feedback.withoutPendingDeletes
@@ -33,7 +32,6 @@ private const val SEARCH_PAGE_YEARS = 2L
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val repository: CalendarRepository,
-    private val prefs: Preferences,
     pendingDeletes: PendingDeletes,
 ) : ViewModel() {
 
@@ -43,7 +41,7 @@ class SearchViewModel @Inject constructor(
     private val window = MutableStateFlow(SearchWindow())
     private val today = Dates.todayFlow(zone)
 
-    private val calendarIds = visibleCalendarIds(repository, prefs)
+    private val calendarIds = visibleCalendarIds(repository)
 
     val results: StateFlow<SearchResults> = combine(query, calendarIds, window, today) { q, ids, range, currentDate ->
         SearchRequest(q, ids, range, currentDate)

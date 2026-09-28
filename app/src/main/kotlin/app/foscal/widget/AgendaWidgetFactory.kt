@@ -46,10 +46,9 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
         val zone = ZoneId.systemDefault()
         val locale = Locale.getDefault()
         val today = LocalDate.now(zone)
-        val hidden = prefs.hiddenCalendarIds.first()
         val use24Hour = prefs.use24HourClock.first()
         val ids = repo.getCalendars()
-            .filter { it.visible && it.id.toString() !in hidden }
+            .filter { it.isShown }
             .map { it.id }
             .toSet()
         if (ids.isEmpty()) return emptyList()

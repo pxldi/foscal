@@ -13,15 +13,22 @@ import java.time.DayOfWeek
  */
 interface Preferences {
     val onboardingCompleted: Flow<Boolean>
-    val hiddenCalendarIds: Flow<Set<String>>
+
+    /**
+     * Calendars unticked in Foscal up to 0.15, when the tick lived here instead of in
+     * `Calendars.VISIBLE`. Read only by `migrateLegacyHiddenCalendars`, which writes each one to
+     * the provider and removes it. Nothing else may read it: a calendar listed here is not hidden.
+     */
+    val legacyHiddenCalendarIds: Flow<Set<String>>
 
     /**
      * Calendars kept out of the month grid while still showing everywhere else.
      *
-     * Separate from [hiddenCalendarIds] rather than folded into it because they answer different
-     * questions: that one is "do I want this calendar at all", this one is "does it belong in a
-     * view where a day is a few millimetres tall". A timeboxed week fills a month grid with
-     * blocks that say nothing at that size and crowd out the appointments that do.
+     * Kept apart from `Calendars.VISIBLE` because they answer different questions: that one is "do
+     * I want this calendar at all", this one is "does it belong in a view where a day is a few
+     * millimetres tall". A timeboxed week fills a month grid with blocks that say nothing at that
+     * size and crowd out the appointments that do. No other app has the second question, so it
+     * stays in Foscal's own preferences.
      */
     val monthHiddenCalendarIds: Flow<Set<String>>
 
@@ -128,7 +135,7 @@ interface Preferences {
     suspend fun setDefaultCalendarId(id: Long?)
 
     suspend fun setOnboardingCompleted()
-    suspend fun setHiddenCalendars(ids: Set<String>)
+    suspend fun setLegacyHiddenCalendars(ids: Set<String>)
 
     suspend fun setMonthHiddenCalendars(ids: Set<String>)
 

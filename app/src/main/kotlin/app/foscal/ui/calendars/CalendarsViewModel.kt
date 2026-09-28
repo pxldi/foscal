@@ -10,6 +10,7 @@ import app.foscal.core.model.Calendar
 import app.foscal.core.model.ThemeMode
 import app.foscal.ics.IcsTransfer
 import app.foscal.notifications.ReminderSyncScheduler
+import app.foscal.ui.feedback.UserMessages
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,13 @@ import java.io.IOException
 import javax.inject.Inject
 
 data class CalendarsUiState(
+    /** Every calendar synced to this phone, ticked or not. */
     val items: List<CalendarRow> = emptyList(),
+    /**
+     * Calendars whose account keeps them off this phone (`SYNC_EVENTS = 0`). Left out of every
+     * list except the one in Settings that can turn them back on.
+     */
+    val unsynced: List<Calendar> = emptyList(),
     val loading: Boolean = true,
     val defaultReminderMinutes: Int? = 15,
     val accentColor: AccentColor = AccentColor.Default,
@@ -88,6 +95,7 @@ data class TransferState(
 
 data class CalendarRow(
     val calendar: Calendar,
+    /** Unticked: `Calendars.VISIBLE` is 0, whichever app wrote it. */
     val isHidden: Boolean,
     /** Kept out of the month grid, while still showing in Day, Week and Agenda. */
     val isHiddenInMonth: Boolean = false,
@@ -101,8 +109,28 @@ data class CalendarRow(
     val usesGlobalReminder: Boolean = true,
 )
 
+/**
+ * The rows the drawer and Settings list: synced calendars only, ticked where the provider says so.
+ *
+ * The tick is `Calendars.VISIBLE` and nothing else. It used to come from Foscal's own preferences,
+ * so a calendar another app had hidden drew ticked here, and unticking it here changed nothing in
+ * any other app.
+ */
+internal fun calendarRows(
+    all: List<Calendar>,
+    monthHidden: Set<String>,
+    calendarReminders: Map<Long, Int?>,
+): List<CalendarRow> = all.filter { it.syncEnabled }.map { cal ->
+    CalendarRow(
+        calendar = cal,
+        isHidden = !cal.visible,
+        isHiddenInMonth = cal.id.toString() in monthHidden,
+        reminderOverride = calendarReminders[cal.id],
+        usesGlobalReminder = !calendarReminders.containsKey(cal.id),
+    )
+}
+
 private data class PrefsSnapshot(
-    val hidden: Set<String>,
     val defaultReminder: Int?,
     val accent: AccentColor,
     val themeMode: ThemeMode,
@@ -121,6 +149,7 @@ class CalendarsViewModel @Inject constructor(
     private val prefs: UserPreferencesRepository,
     private val icsTransfer: IcsTransfer,
     private val syncScheduler: ReminderSyncScheduler,
+    private val messages: UserMessages,
 ) : ViewModel() {
 
     private val transferState = MutableStateFlow(TransferState())
@@ -133,14 +162,12 @@ class CalendarsViewModel @Inject constructor(
     // combine() has no typed 6+-arg overload, so fold the extra preferences in with a nested combine.
     private val prefsFlow = combine(
         combine(
-            prefs.hiddenCalendarIds,
             prefs.defaultReminderMinutes,
             prefs.accentColor,
             prefs.themeMode,
             prefs.use24HourClock,
-        ) { hidden, defaultReminder, accent, themeMode, use24Hour ->
+        ) { defaultReminder, accent, themeMode, use24Hour ->
             PrefsSnapshot(
-                hidden = hidden,
                 defaultReminder = defaultReminder,
                 accent = accent,
                 themeMode = themeMode,
@@ -184,15 +211,8 @@ class CalendarsViewModel @Inject constructor(
             editing = edit,
             eventCounts = dialogs.eventCounts,
             createdForImport = dialogs.createdForImport,
-            items = all.map { cal ->
-                CalendarRow(
-                    calendar = cal,
-                    isHidden = cal.id.toString() in p.hidden,
-                    isHiddenInMonth = cal.id.toString() in p.monthHidden,
-                    reminderOverride = p.calendarReminders[cal.id],
-                    usesGlobalReminder = !p.calendarReminders.containsKey(cal.id),
-                )
-            },
+            items = calendarRows(all, p.monthHidden, p.calendarReminders),
+            unsynced = all.filterNot { it.syncEnabled },
             loading = false,
             defaultReminderMinutes = p.defaultReminder,
             accentColor = p.accent,
@@ -208,15 +228,30 @@ class CalendarsViewModel @Inject constructor(
         CalendarsUiState(),
     )
 
+    /**
+     * Ticks or unticks [row] in the provider. The row redraws when the provider's change comes
+     * back through [CalendarRepository.observeCalendars], so a refused write leaves it as it was.
+     */
     fun toggleHidden(row: CalendarRow) {
         viewModelScope.launch {
-            val current = prefs.hiddenCalendarIds.first()
-            val id = row.calendar.id.toString()
-            val next = if (row.isHidden) current - id else current + id
-            prefs.setHiddenCalendars(next)
-            // The reminder sync skips hidden calendars, but this toggle lives in DataStore and
-            // writes nothing to the provider, so no content trigger would ever re-run it.
-            syncScheduler.syncNow()
+            if (repository.setCalendarVisible(row.calendar.id, visible = row.isHidden)) {
+                // The content trigger would see the write too, but only after its debounce, and a
+                // reminder due in that gap would still fire for a calendar just unticked.
+                syncScheduler.syncNow()
+            } else {
+                messages.post("Couldn't change “${row.calendar.displayName}”")
+            }
+        }
+    }
+
+    /** Asks [calendar]'s account to sync it to this phone again, and ticks it. */
+    fun syncCalendar(calendar: Calendar) {
+        viewModelScope.launch {
+            if (repository.setCalendarSynced(calendar.id)) {
+                syncScheduler.syncNow()
+            } else {
+                messages.post("Couldn't sync “${calendar.displayName}”")
+            }
         }
     }
 

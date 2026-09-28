@@ -166,7 +166,23 @@ interface CalendarRepository {
      */
     suspend fun createLocalCalendar(name: String, color: Int): Long?
 
-    suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean)
+    /**
+     * Ticks or unticks a calendar by writing `Calendars.VISIBLE`, the flag every calendar app on
+     * the phone reads. A plain update, not a sync-adapter one: the provider marks the row dirty, so
+     * an account that keeps the choice on its server (Google does) carries it there. Returns false
+     * when the provider refused the write.
+     */
+    suspend fun setCalendarVisible(calendarId: Long, visible: Boolean): Boolean
+
+    /**
+     * Asks the calendar's account to sync it to this phone again, and ticks it.
+     *
+     * Writes `SYNC_EVENTS = 1`, on which the provider requests a sync for the account. Whether
+     * events then arrive is the sync adapter's business. `VISIBLE` goes with it because turning a
+     * calendar on in order to see it is the only reason to do this. Returns false when the provider
+     * refused the write.
+     */
+    suspend fun setCalendarSynced(calendarId: Long): Boolean
 
     suspend fun createEvent(input: EventInput): Long?
 
@@ -273,7 +289,6 @@ interface CalendarRepository {
         from: Instant,
         to: Instant,
         zone: ZoneId = ZoneId.systemDefault(),
-        excludedCalendarIds: Set<Long> = emptySet(),
     ): List<ScheduledReminder>?
 
     /**
@@ -675,14 +690,22 @@ class CalendarContractRepository @Inject constructor(
         }
     }
 
-    override suspend fun setCalendarHidden(calendarId: Long, hidden: Boolean) {
+    override suspend fun setCalendarVisible(calendarId: Long, visible: Boolean): Boolean =
         withContext(Dispatchers.IO) {
             val values = ContentValues().apply {
-                put(CalendarContract.Calendars.VISIBLE, if (hidden) 0 else 1)
+                put(CalendarContract.Calendars.VISIBLE, if (visible) 1 else 0)
             }
-            safeUpdate(getCalendarUri(calendarId), values, null, null)
+            safeUpdate(getCalendarUri(calendarId), values, null, null) > 0
         }
-    }
+
+    override suspend fun setCalendarSynced(calendarId: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val values = ContentValues().apply {
+                put(CalendarContract.Calendars.SYNC_EVENTS, 1)
+                put(CalendarContract.Calendars.VISIBLE, 1)
+            }
+            safeUpdate(getCalendarUri(calendarId), values, null, null) > 0
+        }
 
     override suspend fun createEvent(input: EventInput): Long? = withContext(Dispatchers.IO) {
         val values = eventToContentValues(input)
@@ -1411,18 +1434,15 @@ class CalendarContractRepository @Inject constructor(
         from: Instant,
         to: Instant,
         zone: ZoneId,
-        excludedCalendarIds: Set<Long>,
     ): List<ScheduledReminder>? = withContext(Dispatchers.IO) {
         // A failed read must not look like "no calendars"; see the interface KDoc. The same holds
         // for every read below: each one returns null rather than a shorter list.
         val calendars = queryCalendars() ?: return@withContext null
-        // Hidden calendars are hidden everywhere else in the app, so notifying for them is a
-        // reminder about an event the user cannot see. This is also the only lever a user has to
-        // silence a noisy shared calendar without unsubscribing from it. Both switches count: the
-        // provider's own VISIBLE flag (what other calendar apps and sync adapters set) and the
-        // per-calendar toggle in Foscal's settings, which never touched the provider.
+        // A calendar the views leave out would otherwise remind about an event the user cannot
+        // see. Unticking one is also the only way to silence a noisy shared calendar without
+        // unsubscribing from it.
         val calendarIds = calendars
-            .filter { it.visible && it.id !in excludedCalendarIds }
+            .filter { it.isShown }
             .map { it.id }
             .toSet()
         if (calendarIds.isEmpty()) return@withContext emptyList()

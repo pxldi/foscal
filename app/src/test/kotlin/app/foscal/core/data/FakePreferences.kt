@@ -11,7 +11,7 @@ import java.time.DayOfWeek
 /** In-memory [Preferences] for view-model tests. */
 class FakePreferences(
     onboardingDone: Boolean = true,
-    hidden: Set<String> = emptySet(),
+    legacyHidden: Set<String> = emptySet(),
     monthHidden: Set<String> = emptySet(),
     monthMinimum: Int = 0,
     private val defaultReminder: Int? = 15,
@@ -25,7 +25,7 @@ class FakePreferences(
 ) : Preferences {
 
     override val onboardingCompleted: Flow<Boolean> = MutableStateFlow(onboardingDone)
-    override val hiddenCalendarIds: Flow<Set<String>> = MutableStateFlow(hidden)
+    override val legacyHiddenCalendarIds: MutableStateFlow<Set<String>> = MutableStateFlow(legacyHidden)
     override val monthHiddenCalendarIds: Flow<Set<String>> = MutableStateFlow(monthHidden)
     override val monthMinimumMinutes: Flow<Int> = MutableStateFlow(monthMinimum)
     override val defaultReminderMinutes: Flow<Int?> = MutableStateFlow(defaultReminder)
@@ -74,7 +74,7 @@ class FakePreferences(
     override suspend fun setWrapEventTitles(wrap: Boolean) { wrapEventTitles.value = wrap }
 
     override suspend fun setOnboardingCompleted() = Unit
-    override suspend fun setHiddenCalendars(ids: Set<String>) = Unit
+    override suspend fun setLegacyHiddenCalendars(ids: Set<String>) { legacyHiddenCalendarIds.value = ids }
     override suspend fun setMonthHiddenCalendars(ids: Set<String>) = Unit
     override suspend fun setMonthMinimumMinutes(minutes: Int) = Unit
     override suspend fun setDefaultReminder(minutes: Int?) = Unit
