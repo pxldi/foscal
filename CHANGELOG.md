@@ -3,7 +3,7 @@
 What changed for users in each release. Generated from the commit history with
 [git-cliff](https://git-cliff.org); regenerate it with `git cliff -o CHANGELOG.md`.
 
-## Unreleased
+## 0.17.0 (2026-10-02)
 
 ### Features
 
