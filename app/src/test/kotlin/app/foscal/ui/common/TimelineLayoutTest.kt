@@ -185,6 +185,36 @@ class TimelineLayoutTest {
         }
     }
 
+    /** A clash in the morning used to halve every event that day, the afternoon included. */
+    @Test
+    fun anOverlapElsewhereInTheDay_leavesALoneEventAtFullWidth() {
+        val positioned = layoutTimed(
+            listOf(
+                eventAt(10 * 60, 11 * 60),
+                eventAt(10 * 60, 11 * 60),
+                eventAt(14 * 60, 15 * 60 + 30),
+            ),
+            60.dp,
+            zone,
+        )
+        val morning = positioned.filter { it.event.start.atZone(zone).hour == 10 }
+        val afternoon = positioned.single { it.event.start.atZone(zone).hour == 14 }
+        assertTrue("the clash still shares its column", morning.all { it.widthFraction == 0.5f })
+        assertEquals(0f, afternoon.leftFraction)
+        assertEquals(1f, afternoon.widthFraction)
+    }
+
+    /** An event that overlaps a pair through a third one shares their columns, not the full width. */
+    @Test
+    fun aChainOfOverlaps_isLaidOutAsOneRun() {
+        val positioned = layoutTimed(
+            listOf(eventAt(9 * 60, 10 * 60), eventAt(9 * 60 + 30, 11 * 60), eventAt(10 * 60 + 30, 12 * 60)),
+            60.dp,
+            zone,
+        )
+        assertTrue(positioned.all { it.widthFraction == 0.5f })
+    }
+
     /** Back-to-back events are not an overlap: the second gets the full width back. */
     @Test
     fun backToBackEvents_bothKeepTheFullColumn() {

@@ -1201,36 +1201,58 @@ private fun place(
     out: MutableList<PositionedEvent>,
 ) {
     if (group.isEmpty()) return
-    val columnEnds = mutableListOf<Long>()
-    val columnOf = mutableMapOf<Int, Int>()
+    // Columns are counted per run of overlapping events, not per day: counted per day, two
+    // meetings clashing at 10:00 halved an afternoon event that overlapped nothing.
+    val bandLeft = mutableMapOf<Int, Float>()
+    val bandRight = mutableMapOf<Int, Float>()
+    var cluster = mutableListOf<Int>()
+    var clusterEnd = Long.MIN_VALUE
+    fun closeCluster() {
+        if (cluster.isEmpty()) return
+        val columnEnds = mutableListOf<Long>()
+        val columnOf = mutableMapOf<Int, Int>()
+        for (i in cluster) {
+            val e = sorted[i]
+            val free = columnEnds.indices.firstOrNull { columnEnds[it] <= e.start.toEpochMilli() }
+            if (free != null) {
+                columnEnds[free] = e.end.toEpochMilli()
+                columnOf[i] = free
+            } else {
+                columnEnds.add(e.end.toEpochMilli())
+                columnOf[i] = columnEnds.size - 1
+            }
+        }
+        val slot = (right - left) / columnEnds.size
+        for (i in cluster) {
+            bandLeft[i] = left + slot * columnOf.getValue(i)
+            bandRight[i] = left + slot * (columnOf.getValue(i) + 1)
+        }
+        cluster = mutableListOf()
+    }
     for (i in group) {
         val e = sorted[i]
-        val free = columnEnds.indices.firstOrNull { columnEnds[it] <= e.start.toEpochMilli() }
-        if (free != null) {
-            columnEnds[free] = e.end.toEpochMilli()
-            columnOf[i] = free
-        } else {
-            columnEnds.add(e.end.toEpochMilli())
-            columnOf[i] = columnEnds.size - 1
-        }
+        if (e.start.toEpochMilli() >= clusterEnd) closeCluster()
+        cluster.add(i)
+        clusterEnd = if (cluster.size == 1) e.end.toEpochMilli() else maxOf(clusterEnd, e.end.toEpochMilli())
     }
-    val slot = (right - left) / columnEnds.size
+    closeCluster()
     val tops = group.associateWith { i ->
         val startZ = sorted[i].start.atZone(zone)
         hourHeight * (startZ.hour + startZ.minute / 60f + startZ.second / 3600f).coerceIn(0f, 24f)
     }
-    // Where the next block in the same column begins — the point past which this one is covered.
-    val ceilings = mutableMapOf<Int, Dp>()
+    // Where the next block below this one begins, in any band that shares some of its width: the
+    // point past which this one is covered. Bands from different runs can differ in width.
     val nextTop = mutableMapOf<Int, Dp>()
-    for (i in group.reversed()) {
-        val column = columnOf.getValue(i)
-        ceilings[column]?.let { nextTop[i] = it }
-        ceilings[column] = tops.getValue(i)
+    for ((pos, i) in group.withIndex()) {
+        val below = group.drop(pos + 1).firstOrNull { j ->
+            bandLeft.getValue(j) < bandRight.getValue(i) && bandLeft.getValue(i) < bandRight.getValue(j)
+        }
+        below?.let { nextTop[i] = tops.getValue(it) }
     }
     for (i in group) {
         val e = sorted[i]
-        val blockLeft = left + slot * columnOf.getValue(i)
-        val blockRight = blockLeft + slot
+        val blockLeft = bandLeft.getValue(i)
+        val blockRight = bandRight.getValue(i)
         val startZ = e.start.atZone(zone)
         val endZ = e.end.atZone(zone)
         val startFrac = (startZ.hour + startZ.minute / 60f + startZ.second / 3600f)
