@@ -288,27 +288,29 @@ internal fun CalendarScan(settled: Boolean, reducedMotion: Boolean, modifier: Mo
 
 /**
  * A small rendered week that shows what the theme and accent choices actually do, recoloured in
- * place as they change. The colours are animated here rather than across the whole screen: the
- * theme itself switches on the next frame, and this is the one place the eye is meant to be.
+ * place as they change.
  */
 @Composable
 internal fun ThemePreview(reducedMotion: Boolean, modifier: Modifier = Modifier) {
     val spec = if (reducedMotion) snap() else tween<Color>(Motion.DurationLong + 140)
     val scheme = MaterialTheme.colorScheme
-    val surface by animateColorAsState(scheme.surface, spec, label = "previewSurface")
-    val onSurface by animateColorAsState(scheme.onSurface, spec, label = "previewInk")
-    val muted by animateColorAsState(scheme.onSurfaceVariant, spec, label = "previewMuted")
-    val line by animateColorAsState(scheme.outlineVariant, spec, label = "previewLine")
+    // Only the accent is animated. The theme switches the whole page on the next frame, and a card
+    // still fading between light and dark on a page that has already flipped reads as lag.
+    val surface = scheme.surface
+    val onSurface = scheme.onSurface
+    val muted = scheme.onSurfaceVariant
+    val line = scheme.outlineVariant
     val primary by animateColorAsState(scheme.primary, spec, label = "previewPrimary")
     val onPrimary by animateColorAsState(scheme.onPrimary, spec, label = "previewOnPrimary")
     val soft by animateColorAsState(scheme.primaryContainer, spec, label = "previewSoft")
-    val weekend by animateColorAsState(weekendLabelColor(), spec, label = "previewWeekend")
+    val weekend = weekendLabelColor()
 
     val locale = currentLocale()
     val now = remember { LocalDate.now() }
     val monday = now.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val labels = remember(locale) { Dates.weekStartLabels(locale) }
-    val selected = if (now.dayOfWeek == DayOfWeek.FRIDAY) 3 else 4
+    // A selected day three columns from today, so the two highlights never sit side by side.
+    val selected = (now.dayOfWeek.value - 1 + 3) % 7
 
     Column(
         modifier = modifier
