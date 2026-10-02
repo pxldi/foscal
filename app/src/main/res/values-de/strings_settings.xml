@@ -49,7 +49,7 @@
     <string name="settings_opens_on">Startansicht</string>
     <string name="settings_last_used">Zuletzt verwendet</string>
     <string name="settings_week_starts_on">Woche beginnt am</string>
-    <string name="settings_tapping_day">Tippen auf einen Tag</string>
+    <string name="settings_tapping_day">Beim Tippen auf einen Tag</string>
     <string name="settings_day_tap_open">Diesen Tag öffnen</string>
     <string name="settings_day_tap_new">Neuen Termin anlegen</string>
     <string name="settings_day_tap_opens">Öffnet den Tag</string>

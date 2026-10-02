@@ -3,7 +3,7 @@
     <string name="onboarding_tagline">Ein Open-Source-Kalender in Material Design 3</string>
     <string name="onboarding_point_private">Kein Konto, kein Netzwerk, kein Tracking.</string>
     <string name="onboarding_point_sync">Synchronisiert über DAVx⁵ mit Nextcloud, ownCloud und jedem CalDAV-Server.</string>
-    <string name="onboarding_point_views">Tag, Woche, Monat und Terminübersicht.</string>
+    <string name="onboarding_point_views">Tag, Woche, Monat und Terminliste.</string>
     <string name="onboarding_get_started">Los geht\'s</string>
 
     <string name="onboarding_checking_phone">Schaue nach, was auf diesem Handy ist…</string>
