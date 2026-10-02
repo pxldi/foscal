@@ -5,6 +5,9 @@ import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,12 +15,12 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,7 +68,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -82,6 +84,7 @@ import app.foscal.ui.permission.openAppSettings
 import app.foscal.ui.permission.openNotificationSettings
 import app.foscal.ui.settings.AccentPicker
 import app.foscal.ui.util.asString
+import app.foscal.ui.util.rememberReducedMotion
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -115,6 +118,12 @@ fun OnboardingRoute(
     val context = LocalContext.current
     // Saveable so a rotation mid-setup does not send the user back to the welcome screen.
     var step by rememberSaveable { mutableStateOf(OnboardingStep.WELCOME) }
+    val reducedMotion = rememberReducedMotion()
+    // The intro plays once. A rotation rebuilds the welcome step, and replaying the mark assembling
+    // itself there would read as the app restarting.
+    var introPlayed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) { introPlayed = true }
+    val playIntro = remember { !introPlayed && !reducedMotion }
 
     // After two denials "Get started" relaunched a request Android no longer shows, so the button
     // did nothing at all. This switches the welcome step to a way out through settings.
@@ -206,6 +215,7 @@ fun OnboardingRoute(
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             StepProgress(
+                reducedMotion = reducedMotion,
                 active = when (step) {
                     OnboardingStep.WELCOME -> 0
                     // Already on the second segment: the wait is part of getting there, and a
@@ -233,6 +243,7 @@ fun OnboardingRoute(
             ) { current ->
                 when (current) {
                     OnboardingStep.WELCOME -> WelcomeStep(
+                        play = playIntro,
                         accessOff = calendarDeniedForGood,
                         onOpenSettings = { openAppSettings(context) },
                         onStart = {
@@ -247,6 +258,7 @@ fun OnboardingRoute(
                     )
                     OnboardingStep.CALENDARS -> CalendarSetupStep(
                         state = state,
+                        play = !reducedMotion,
                         onUseLocal = viewModel::useLocalOnly,
                         onUseExisting = viewModel::useExisting,
                         onUseDavx = {
@@ -255,6 +267,7 @@ fun OnboardingRoute(
                         },
                     )
                     OnboardingStep.NOTIFICATIONS -> PersonalizeStep(
+                        reducedMotion = reducedMotion,
                         completing = state.completing,
                         themeMode = state.themeMode,
                         onThemeSelect = viewModel::setThemeMode,
@@ -289,10 +302,16 @@ fun OnboardingRoute(
                         onMapsToggle = viewModel::setMapsEnabled,
                         onDone = viewModel::completeOnboarding,
                     )
-                    OnboardingStep.PREPARING ->
-                        PreparingStep(stringResource(R.string.onboarding_checking_phone))
-                    OnboardingStep.SETTLING ->
-                        PreparingStep(stringResource(R.string.onboarding_setting_up_calendar))
+                    OnboardingStep.PREPARING -> PreparingStep(
+                        message = stringResource(R.string.onboarding_checking_phone),
+                        settled = false,
+                        reducedMotion = reducedMotion,
+                    )
+                    OnboardingStep.SETTLING -> PreparingStep(
+                        message = stringResource(R.string.onboarding_setting_up_calendar),
+                        settled = true,
+                        reducedMotion = reducedMotion,
+                    )
                 }
             }
 
@@ -326,9 +345,12 @@ fun OnboardingRoute(
     }
 }
 
-/** The waiting beat, held for [PreparingMillis] or [SettlingMillis] depending on which one. */
+/**
+ * The waiting beat, held for [PreparingMillis] or [SettlingMillis] depending on which one. The grid
+ * is what used to be a spinner: the wait was already there, so its motion costs the user nothing.
+ */
 @Composable
-private fun PreparingStep(message: String) {
+private fun PreparingStep(message: String, settled: Boolean, reducedMotion: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -336,7 +358,7 @@ private fun PreparingStep(message: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        CircularProgressIndicator(strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
+        CalendarScan(settled = settled, reducedMotion = reducedMotion)
         Text(
             message,
             style = MaterialTheme.typography.bodyLarge,
@@ -346,44 +368,63 @@ private fun PreparingStep(message: String) {
     }
 }
 
+/** Three segments; the current one fills from the left rather than switching colour. */
 @Composable
-private fun StepProgress(active: Int) {
+private fun StepProgress(active: Int, reducedMotion: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         repeat(3) { index ->
+            val fill by animateFloatAsState(
+                targetValue = if (index <= active) 1f else 0f,
+                animationSpec = if (reducedMotion) snap() else tween(Motion.DurationLong + 240),
+                label = "stepFill",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .height(4.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(
-                        if (index <= active) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    ),
-            )
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(fill)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun WelcomeStep(accessOff: Boolean, onOpenSettings: () -> Unit, onStart: () -> Unit) {
+private fun WelcomeStep(
+    play: Boolean,
+    accessOff: Boolean,
+    onOpenSettings: () -> Unit,
+    onStart: () -> Unit,
+) {
+    val intro = rememberPlayOnce(play, OnboardingMotion.IntroMillis)
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(72.dp))
-        FoscalMark(Modifier.size(104.dp))
+        AnimatedFoscalMark(intro, Modifier.size(104.dp))
         Spacer(Modifier.height(30.dp))
-        FoscalWordmark()
+        RiseIn(play, delayMillis = 420) { FoscalWordmark(play) }
         Spacer(Modifier.height(14.dp))
-        Text(
-            stringResource(R.string.onboarding_tagline),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        RiseIn(play, delayMillis = 520) {
+            Text(
+                stringResource(R.string.onboarding_tagline),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
         Spacer(Modifier.height(40.dp))
         // Three facts, not a pitch. Each one is something the app either does or does not do, and
         // a first screen is the only place a calendar gets to say "nothing leaves this phone"
@@ -392,22 +433,29 @@ private fun WelcomeStep(accessOff: Boolean, onOpenSettings: () -> Unit, onStart:
             modifier = Modifier.padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            WelcomePoint(stringResource(R.string.onboarding_point_private))
-            WelcomePoint(stringResource(R.string.onboarding_point_sync))
-            WelcomePoint(stringResource(R.string.onboarding_point_views))
+            listOf(
+                R.string.onboarding_point_private,
+                R.string.onboarding_point_sync,
+                R.string.onboarding_point_views,
+            ).forEachIndexed { i, point ->
+                RiseIn(play, delayMillis = 640 + i * 70) { WelcomePoint(stringResource(point)) }
+            }
         }
         Spacer(Modifier.height(52.dp))
-        if (accessOff) {
-            CalendarAccessOff(onOpenSettings = onOpenSettings, modifier = Modifier.fillMaxWidth())
-        } else {
-            Button(
-                onClick = onStart,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Text(stringResource(R.string.onboarding_get_started), fontWeight = FontWeight.SemiBold)
+        // Faded in with the rest, but it takes a tap from the first frame: nobody waits on the intro.
+        RiseIn(play, delayMillis = 860) {
+            if (accessOff) {
+                CalendarAccessOff(onOpenSettings = onOpenSettings, modifier = Modifier.fillMaxWidth())
+            } else {
+                Button(
+                    onClick = onStart,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text(stringResource(R.string.onboarding_get_started), fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -439,6 +487,7 @@ private fun WelcomePoint(text: String) {
 @Composable
 private fun CalendarSetupStep(
     state: OnboardingUiState,
+    play: Boolean,
     onUseLocal: () -> Unit,
     onUseExisting: () -> Unit,
     onUseDavx: () -> Unit,
@@ -455,43 +504,50 @@ private fun CalendarSetupStep(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        ChoiceCard(
-            icon = Icons.Outlined.DevicesOther,
-            title = stringResource(R.string.onboarding_start_fresh_title),
-            subtitle = stringResource(R.string.onboarding_start_fresh_subtitle),
-            buttonText = stringResource(R.string.onboarding_start_fresh_button),
-            enabled = !state.completing,
-            onClick = onUseLocal,
-        )
-        ChoiceCard(
-            icon = Icons.Outlined.CalendarMonth,
-            title = stringResource(R.string.onboarding_use_existing_title),
-            subtitle = stringResource(R.string.onboarding_use_existing_subtitle),
-            buttonText = stringResource(R.string.onboarding_use_existing_button),
-            enabled = !state.completing,
-            onClick = onUseExisting,
-        )
-        ChoiceCard(
-            icon = Icons.Outlined.CloudSync,
-            title = stringResource(R.string.onboarding_caldav_title),
-            subtitle = if (state.davxStatus == DAVxStatus.INSTALLED) {
-                stringResource(R.string.onboarding_caldav_subtitle_installed)
-            } else {
-                stringResource(R.string.onboarding_caldav_subtitle_missing)
-            },
-            buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) {
-                stringResource(R.string.onboarding_caldav_open)
-            } else {
-                stringResource(R.string.onboarding_caldav_install)
-            },
-            enabled = !state.completing,
-            onClick = onUseDavx,
-        )
+        RiseIn(play, delayMillis = 60) {
+            ChoiceCard(
+                icon = Icons.Outlined.DevicesOther,
+                title = stringResource(R.string.onboarding_start_fresh_title),
+                subtitle = stringResource(R.string.onboarding_start_fresh_subtitle),
+                buttonText = stringResource(R.string.onboarding_start_fresh_button),
+                enabled = !state.completing,
+                onClick = onUseLocal,
+            )
+        }
+        RiseIn(play, delayMillis = 120) {
+            ChoiceCard(
+                icon = Icons.Outlined.CalendarMonth,
+                title = stringResource(R.string.onboarding_use_existing_title),
+                subtitle = stringResource(R.string.onboarding_use_existing_subtitle),
+                buttonText = stringResource(R.string.onboarding_use_existing_button),
+                enabled = !state.completing,
+                onClick = onUseExisting,
+            )
+        }
+        RiseIn(play, delayMillis = 180) {
+            ChoiceCard(
+                icon = Icons.Outlined.CloudSync,
+                title = stringResource(R.string.onboarding_caldav_title),
+                subtitle = if (state.davxStatus == DAVxStatus.INSTALLED) {
+                    stringResource(R.string.onboarding_caldav_subtitle_installed)
+                } else {
+                    stringResource(R.string.onboarding_caldav_subtitle_missing)
+                },
+                buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) {
+                    stringResource(R.string.onboarding_caldav_open)
+                } else {
+                    stringResource(R.string.onboarding_caldav_install)
+                },
+                enabled = !state.completing,
+                onClick = onUseDavx,
+            )
+        }
     }
 }
 
 @Composable
 private fun PersonalizeStep(
+    reducedMotion: Boolean,
     completing: Boolean,
     themeMode: ThemeMode,
     onThemeSelect: (ThemeMode) -> Unit,
@@ -521,6 +577,7 @@ private fun PersonalizeStep(
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        ThemePreview(reducedMotion = reducedMotion)
         ThemeCard(selected = themeMode, onSelect = onThemeSelect)
         AccentCard(
             selected = accentColor,
@@ -783,7 +840,13 @@ private fun hasNotificationPermission(context: android.content.Context): Boolean
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
 @Composable
-private fun FoscalWordmark() {
+private fun FoscalWordmark(play: Boolean) {
+    val underline = remember { Animatable(if (play) 0f else 1f) }
+    LaunchedEffect(underline) {
+        if (underline.value < 1f) {
+            underline.animateTo(1f, tween(Motion.DurationLong + 200, delayMillis = 640))
+        }
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             "Foscal",
@@ -795,26 +858,12 @@ private fun FoscalWordmark() {
         Spacer(Modifier.height(8.dp))
         Box(
             modifier = Modifier
-                .width(72.dp)
+                .width(72.dp * OnboardingMotion.easeOut(underline.value))
                 .height(4.dp)
                 .clip(RoundedCornerShape(50))
                 .background(MaterialTheme.colorScheme.primary),
         )
     }
-}
-
-/**
- * The Foscal glyph: the month-grid mark on the deep-ink squircle. Renders the
- * self-contained badge drawable so the in-app mark and the home-screen launcher icon
- * stay pixel-identical.
- */
-@Composable
-private fun FoscalMark(modifier: Modifier = Modifier) {
-    Image(
-        painter = painterResource(R.drawable.ic_foscal_badge),
-        contentDescription = null,
-        modifier = modifier,
-    )
 }
 
 @Composable
