@@ -51,4 +51,10 @@ class OnboardingMotionTest {
         repeat(35) { assertEquals(1f, OnboardingMotion.settleFill(1f, it, 35), 1e-6f) }
         assertEquals(0f, OnboardingMotion.settleFill(0f, 34, 35), 0f)
     }
+
+    @Test
+    fun `each wait outlasts its own animation once the step has arrived`() {
+        assertTrue(OnboardingMotion.StepArrivedMillis + OnboardingMotion.ScanPeriodMillis <= OnboardingMotion.PreparingMillis)
+        assertTrue(OnboardingMotion.StepArrivedMillis + OnboardingMotion.SettleMillis < OnboardingMotion.SettlingMillis)
+    }
 }

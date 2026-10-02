@@ -74,8 +74,29 @@ internal object OnboardingMotion {
     /** One sweep of the wave across the grid on the first wait. */
     const val ScanPeriodMillis = 900
 
-    /** The grid filling on the second wait; shorter than its 1.1 s so the result is held. */
+    /** The grid filling on the second wait. */
     const val SettleMillis = 850
+
+    /** How long the filled grid stays on screen before the last step slides in. */
+    const val SettleHoldMillis = 300
+
+    /**
+     * Steps change one after the other: the old one fades out, then the new one fades in. Fading
+     * both at once laid the wait's grid over the welcome text for a few frames.
+     */
+    const val StepOutMillis = Motion.DurationShort
+    const val StepInMillis = Motion.DurationMedium
+
+    /** When a new step is fully on screen, counted from the step change. */
+    const val StepArrivedMillis = StepOutMillis + StepInMillis
+
+    /**
+     * Both waits are counted from the step change, so each includes the transition into it. The
+     * first shows one whole sweep once the grid is fully visible; the second the whole fill plus a
+     * short hold on the result.
+     */
+    const val PreparingMillis = StepArrivedMillis + ScanPeriodMillis
+    const val SettlingMillis = StepArrivedMillis + SettleMillis + SettleHoldMillis
 
     /** Where the mark's ground has finished arriving, as a fraction of the intro. */
     const val GroundEnd = 0.35f
@@ -121,12 +142,17 @@ internal object OnboardingMotion {
         easeOut(phase(t, index.toFloat() / count * 0.65f, 0.15f))
 }
 
-/** A 0→1 clock that runs once over [durationMillis], or starts at 1 when [play] is false. */
+/**
+ * A 0→1 clock that runs once over [durationMillis] after [delayMillis], or starts at 1 when [play]
+ * is false.
+ */
 @Composable
-internal fun rememberPlayOnce(play: Boolean, durationMillis: Int): State<Float> {
+internal fun rememberPlayOnce(play: Boolean, durationMillis: Int, delayMillis: Int = 0): State<Float> {
     val progress = remember { Animatable(if (play) 0f else 1f) }
     LaunchedEffect(progress) {
-        if (progress.value < 1f) progress.animateTo(1f, tween(durationMillis, easing = LinearEasing))
+        if (progress.value < 1f) {
+            progress.animateTo(1f, tween(durationMillis, delayMillis, LinearEasing))
+        }
     }
     return progress.asState()
 }
@@ -247,7 +273,16 @@ internal fun CalendarScan(settled: Boolean, reducedMotion: Boolean, modifier: Mo
     } else {
         null
     }
-    val settle = if (settled) rememberPlayOnce(!reducedMotion, OnboardingMotion.SettleMillis) else null
+    // Started once the step has finished arriving, so the fill is not spent behind the fade.
+    val settle = if (settled) {
+        rememberPlayOnce(
+            play = !reducedMotion,
+            durationMillis = OnboardingMotion.SettleMillis,
+            delayMillis = OnboardingMotion.StepArrivedMillis,
+        )
+    } else {
+        null
+    }
 
     Canvas(modifier = modifier.size(width = 134.dp, height = 94.dp)) {
         val gap = 6.dp.toPx()

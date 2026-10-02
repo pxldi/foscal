@@ -71,6 +71,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.foscal.R
 import app.foscal.core.data.CalendarPermissionState
@@ -104,10 +105,10 @@ private enum class OnboardingStep { WELCOME, PREPARING, CALENDARS, SETTLING, NOT
  * floor on how long that is shown, not an invented wait: enough for the answer to look like it was
  * looked up, and short enough that nobody is kept waiting for it.
  */
-private const val PreparingMillis = 800L
+private const val PreparingMillis = OnboardingMotion.PreparingMillis.toLong()
 
 /** The same beat after the calendar choice, before the last step. */
-private const val SettlingMillis = 1100L
+private const val SettlingMillis = OnboardingMotion.SettlingMillis.toLong()
 
 @Composable
 fun OnboardingRoute(
@@ -230,13 +231,22 @@ fun OnboardingRoute(
                 targetState = step,
                 // Each step arrives from the right and the one before it leaves to the left,
                 // so the sequence reads as forward motion rather than as screens being swapped.
+                // The new step waits for the old one to be gone, so the two never overlap.
                 transitionSpec = {
+                    val arrive = tween<Float>(
+                        OnboardingMotion.StepInMillis,
+                        delayMillis = OnboardingMotion.StepOutMillis,
+                    )
+                    val slide = tween<IntOffset>(
+                        OnboardingMotion.StepInMillis,
+                        delayMillis = OnboardingMotion.StepOutMillis,
+                    )
                     (
-                        fadeIn(tween(Motion.DurationMedium)) +
-                            slideInHorizontally { width -> width / 6 }
+                        fadeIn(arrive) +
+                            slideInHorizontally(slide) { width -> width / 6 }
                         ) togetherWith (
-                        fadeOut(tween(Motion.DurationShort)) +
-                            slideOutHorizontally { width -> -width / 6 }
+                        fadeOut(tween(OnboardingMotion.StepOutMillis)) +
+                            slideOutHorizontally(tween(OnboardingMotion.StepOutMillis)) { width -> -width / 6 }
                         ) using SizeTransform(clip = false)
                 },
                 label = "onboardingStep",
