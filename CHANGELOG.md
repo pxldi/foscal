@@ -8,6 +8,8 @@ What changed for users in each release. Generated from the commit history with
 ### Features
 
 - **onboarding:** Animate the mark, the waits and the theme choice (08026fc)
+- **quickadd:** Understand German phrases (#3) (eca26cf)
+- **a11y:** Move events without dragging, and make TalkBack read the calendar (#1) (febd3d7)
 
 ### Fixes
 
