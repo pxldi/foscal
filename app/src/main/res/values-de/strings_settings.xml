@@ -18,7 +18,7 @@
     <string name="settings_expand">Ausklappen</string>
     <string name="settings_collapse">Einklappen</string>
 
-    <string name="settings_wallpaper_colours">Farben vom Hintergrund</string>
+    <string name="settings_wallpaper_colours">Farben vom Hintergrundbild</string>
     <string name="settings_theme">Design</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Hell</string>
@@ -126,8 +126,8 @@
         <item quantity="other">%d Probleme verhindern Erinnerungen</item>
     </plurals>
     <plurals name="settings_diag_warnings">
-        <item quantity="one">%d Punkt könnte sie verzögern</item>
-        <item quantity="other">%d Punkte könnten sie verzögern</item>
+        <item quantity="one">%d Faktor könnte sie verzögern</item>
+        <item quantity="other">%d Faktoren könnten sie verzögern</item>
     </plurals>
     <string name="settings_diag_all_good">Alles in Ordnung</string>
     <string name="settings_diag_checked_never">Noch nie geprüft</string>
