@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +44,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
@@ -168,11 +172,17 @@ fun ColorPickerDialog(
 @Composable
 private fun Palette(selected: Int, onPick: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        PaletteColors.chunked(6).forEach { row ->
+        PaletteColors.chunked(6).forEachIndexed { rowIndex, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { swatch ->
+                row.forEachIndexed { index, swatch ->
                     Swatch(
                         argb = swatch,
+                        // The palette's colours have no names, so TalkBack gets their place in it.
+                        description = stringResource(
+                            R.string.color_position,
+                            rowIndex * 6 + index + 1,
+                            PaletteColors.size,
+                        ),
                         selected = swatch matches selected,
                         onClick = { onPick(swatch) },
                     )
@@ -196,14 +206,15 @@ private infix fun Int.matches(other: Int): Boolean =
     }
 
 @Composable
-private fun Swatch(argb: Int, selected: Boolean, onClick: () -> Unit) {
+private fun Swatch(argb: Int, description: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(34.dp)
             .clip(CircleShape)
             .background(Color(argb))
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-            .clickable(onClick = onClick),
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {

@@ -43,7 +43,7 @@ from the newest release and open it on the phone.
   tap the month/year title to jump to a specific month, with an inline day
   preview under the grid), **Week**, **3 Days** and **Day** (an hourly schedule
   with a weekday strip, long-press drag-to-create, and long-press drag-to-move
-  timed events), and **Agenda** (a grouped schedule with pinned month-and-year
+  timed events, which TalkBack offers as actions instead), and **Agenda** (a grouped schedule with pinned month-and-year
   headers, a highlighted today, a "Today" jump button, and endless loading of
   older and newer events as you scroll). The same sheet shows or hides each
   calendar, and the tick is the one every calendar app on the phone shares. Calendars
@@ -124,7 +124,7 @@ from the newest release and open it on the phone.
 
 **Next up**
 
-- TalkBack and large-text support, with a non-drag way to move events.
+- Large-text support: checking every screen at the largest font sizes.
 - Landscape, tablet and foldable layouts.
 
 **Later / future goals**

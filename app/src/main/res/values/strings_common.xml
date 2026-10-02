@@ -94,4 +94,17 @@
     <string name="message_delete_failed">Couldn\'t delete “%s”</string>
     <string name="message_calendar_change_failed">Couldn\'t change “%s”</string>
     <string name="message_calendar_sync_failed">Couldn\'t sync “%s”</string>
+    <string name="message_moved">Event moved</string>
+
+    <!-- Names of the preset colours, read by TalkBack -->
+    <string name="color_blue">Blue</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_green">Green</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_purple">Purple</string>
+    <string name="color_teal">Teal</string>
+    <string name="color_red">Red</string>
+    <string name="color_brown">Brown</string>
+    <!-- A palette colour that has no name. %1$d is its position, %2$d how many there are. -->
+    <string name="color_position">Colour %1$d of %2$d</string>
 </resources>

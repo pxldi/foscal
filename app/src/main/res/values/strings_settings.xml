@@ -177,4 +177,8 @@
     <!-- About. %1$s is the version number. -->
     <string name="settings_about_version" translatable="false">Foscal %1$s</string>
     <string name="settings_about_sync">Foscal doesn\'t sync by itself. DAVx⁵ or your account app keeps calendars current.</string>
+
+    <!-- What TalkBack reads for the icon in front of a reminder problem. -->
+    <string name="health_severity_blocking">Error</string>
+    <string name="health_severity_warning">Warning</string>
 </resources>

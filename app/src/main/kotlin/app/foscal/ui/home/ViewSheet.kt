@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -410,7 +411,9 @@ private fun CalendarToggle(row: CalendarRow, onToggle: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Checkbox) {
+            // Toggleable rather than clickable, so TalkBack says whether the calendar is ticked
+            // and not only that the row is a checkbox.
+            .toggleable(value = visible, role = Role.Checkbox) {
                 // The tick this draws is 22dp across and under a fingertip while it is being
                 // tapped; the sheet is also the one place a mis-tap silently hides a calendar.
                 haptics.performHapticFeedback(

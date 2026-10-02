@@ -1,7 +1,9 @@
 package app.foscal.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import app.foscal.R
 
 object CalendarColors {
     /** The palette offered when the user picks a colour for a calendar they are creating. */
@@ -14,6 +16,19 @@ object CalendarColors {
         0xFF00897B.toInt(),
         0xFFE53935.toInt(),
         0xFF6D4C41.toInt(),
+    )
+
+    /** What TalkBack calls each of [presets], in the same order; a swatch is otherwise just a circle. */
+    @StringRes
+    val presetNames = listOf(
+        R.string.color_blue,
+        R.string.color_pink,
+        R.string.color_green,
+        R.string.color_orange,
+        R.string.color_purple,
+        R.string.color_teal,
+        R.string.color_red,
+        R.string.color_brown,
     )
 
     fun pick(index: Int): Int = presets[index % presets.size]

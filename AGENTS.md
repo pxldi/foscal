@@ -156,7 +156,10 @@ permission-first onboarding. Week view is the shared
 hourly `TimelineLayout` with long-press drag-to-create (snapped to ten minutes, with a
 pill above the block naming the range), tap-to-park-then-tap-to-open for a
 default-length event, and long-press drag-to-move for timed events; a drop on a
-recurring event asks this / this and following / all, like an edit. How events are *drawn* — colour
+recurring event asks this / this and following / all, like an edit. Moving without a drag goes
+through the detail screen's overflow (Move…, a day and start time that keep the length) and, on
+the grid, TalkBack's actions on each block (15 minutes or a day either way); both share
+`moveEvent` in `ui/common/MoveEvent.kt` with the drag, scope dialog included. How events are *drawn* — colour
 strength, title size, whether titles wrap — is the "Calendar style" settings page.
 Export asks which calendars to write (checkboxes, with each one's event count) and
 import can make the calendar it is about to import into without leaving the dialog.

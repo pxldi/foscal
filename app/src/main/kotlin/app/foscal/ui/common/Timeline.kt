@@ -53,6 +53,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
@@ -70,6 +75,7 @@ import app.foscal.ui.util.LocalEventTextScale
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.LocalWrapEventTitles
 import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.rememberSkeletonFormatter
 import app.foscal.ui.util.scaledBy
 import app.foscal.ui.util.timeFormatter
 import java.time.Instant
@@ -956,6 +962,8 @@ private fun EventBlock(
         compact -> Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 2.dp)
         else -> Modifier.fillMaxSize().padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 5.dp)
     }
+        // The block speaks for itself below; the title alone would be read a second time.
+        .clearAndSetSemantics {}
     val textScale = LocalEventTextScale.current
     val titleScale = (if (compact) 10.sp else 13.sp).scaledBy(textScale)
     val detailScale = (if (compact) 10.sp else 11.sp).scaledBy(textScale)
@@ -964,6 +972,37 @@ private fun EventBlock(
     // the start of the title than all of it in pieces.
     val maxTitleLines = if (!LocalWrapEventTitles.current) 1 else if (compact) 3 else 2
     val haptics = LocalHapticFeedback.current
+    // What TalkBack reads. A sighted user gets the day and the time from where the block sits and
+    // how long it is; read aloud, the block is only its title unless it says them.
+    val dayFmt = rememberSkeletonFormatter("EEEEMMMMd")
+    val description = stringResource(
+        R.string.timeline_event_description,
+        event.title,
+        start.format(dayFmt),
+        start.format(timeFmt),
+        end.format(timeFmt),
+    )
+    // The drag is a long press followed by a move, which neither TalkBack nor Switch Access can
+    // perform, so the same moves are offered as actions. They go through the drag's own path, scope
+    // dialog included, and bigger jumps are the detail screen's Move.
+    val moveActions = if (onMove == null) {
+        emptyList()
+    } else {
+        listOf(
+            stringResource(R.string.timeline_move_earlier) to (0 to -15),
+            stringResource(R.string.timeline_move_later) to (0 to 15),
+            stringResource(R.string.timeline_move_day_earlier) to (-1 to 0),
+            stringResource(R.string.timeline_move_day_later) to (1 to 0),
+        ).map { (label, delta) ->
+            CustomAccessibilityAction(label) {
+                val (deltaDays, deltaMinutes) = delta
+                onMovePreview?.invoke(deltaDays, deltaMinutes)
+                onMove(deltaDays, deltaMinutes)
+                onMovePreviewEnd(true)
+                true
+            }
+        }
+    }
 
     Row(
         modifier = modifier
@@ -1046,7 +1085,11 @@ private fun EventBlock(
                     Modifier
                 },
             )
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .semantics {
+                contentDescription = description
+                if (moveActions.isNotEmpty()) customActions = moveActions
+            },
     ) {
         // No stripe: the fill is the colour now, and a stripe of the same colour on top of it is
         // just a seam. It existed to give a 10%-tinted block something to be identified by.
