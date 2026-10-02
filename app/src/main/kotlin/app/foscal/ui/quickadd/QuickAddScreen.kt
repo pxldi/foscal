@@ -1,5 +1,7 @@
 package app.foscal.ui.quickadd
 
+import android.content.Context
+import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -50,12 +53,15 @@ import app.foscal.R
 import app.foscal.core.model.QuickAddParser
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.rememberSkeletonFormatter
 import app.foscal.ui.util.rememberTimeFormatter
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Formatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,7 +108,7 @@ fun QuickAddRoute(
                     state = state,
                     onQueryChange = viewModel::updateQuery,
                     onSelectCalendar = viewModel::selectCalendar,
-                    onSave = { use24Hour -> viewModel.save(use24Hour) },
+                    onSave = { use24Hour, locale -> viewModel.save(use24Hour, locale) },
                 )
             }
         }
@@ -115,10 +121,13 @@ private fun QuickAddForm(
     state: QuickAddUiState,
     onQueryChange: (String) -> Unit,
     onSelectCalendar: (Long) -> Unit,
-    onSave: (use24Hour: Boolean) -> Unit,
+    onSave: (use24Hour: Boolean, locale: Locale) -> Unit,
 ) {
     val use24Hour = LocalUse24HourClock.current
-    val parsed = remember(state.query, use24Hour) { QuickAddParser.parse(state.query, use24Hour = use24Hour) }
+    val locale = currentLocale()
+    val parsed = remember(state.query, use24Hour, locale) {
+        QuickAddParser.parse(state.query, use24Hour = use24Hour, locale = locale)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -134,7 +143,7 @@ private fun QuickAddForm(
             singleLine = true,
             textStyle = MaterialTheme.typography.titleMedium,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (state.canSave) onSave(use24Hour) }),
+            keyboardActions = KeyboardActions(onDone = { if (state.canSave) onSave(use24Hour, locale) }),
         )
 
         PreviewRow(parsed)
@@ -151,7 +160,7 @@ private fun QuickAddForm(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
         ) {
-            TextButton(onClick = { onSave(use24Hour) }, enabled = state.canSave) {
+            TextButton(onClick = { onSave(use24Hour, locale) }, enabled = state.canSave) {
                 Text(stringResource(R.string.quick_add_save), fontWeight = FontWeight.SemiBold)
             }
         }
@@ -162,12 +171,21 @@ private fun QuickAddForm(
 private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
     val zone = ZoneId.systemDefault()
     val date = parsed.date ?: LocalDate.now()
-    val dateText = date.format(rememberSkeletonFormatter("EEEMMMd"))
+    val dayFormatter = rememberSkeletonFormatter("EEEMMMd")
+    val context = LocalContext.current
+    val locale = currentLocale()
+    val dateText = parsed.endDate?.let { dateRangeText(context, date, it, locale) } ?: date.format(dayFormatter)
+    val timeFormatter = rememberTimeFormatter()
     val timeText = if (parsed.allDay) {
         stringResource(R.string.view_all_day)
     } else {
         val t = parsed.time ?: defaultNextHour()
-        t.format(rememberTimeFormatter())
+        val end = parsed.endTime
+        if (end == null) {
+            t.format(timeFormatter)
+        } else {
+            stringResource(R.string.quick_add_time_range, t.format(timeFormatter), end.format(timeFormatter))
+        }
     }
     val untitled = stringResource(R.string.quick_add_untitled)
     val title = parsed.title.ifBlank { untitled }
@@ -190,6 +208,21 @@ private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
             )
         }
     }
+}
+
+/** "19.–23. Okt." in German, "Oct 19 – 23" in English: how a range shares its month is the language's. */
+private fun dateRangeText(context: Context, start: LocalDate, end: LocalDate, locale: Locale): String {
+    var flags = DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH
+    flags = flags or if (start.year == end.year && start.year == LocalDate.now().year) {
+        DateUtils.FORMAT_NO_YEAR
+    } else {
+        DateUtils.FORMAT_SHOW_YEAR
+    }
+    // Whole days in UTC with an exclusive end, which the platform reads as "up to the day before".
+    val startMillis = start.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val endMillis = end.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    return DateUtils.formatDateRange(context, Formatter(StringBuilder(), locale), startMillis, endMillis, flags, "UTC")
+        .toString()
 }
 
 private fun defaultNextHour(): LocalTime =

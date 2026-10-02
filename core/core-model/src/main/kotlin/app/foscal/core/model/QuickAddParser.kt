@@ -3,16 +3,21 @@ package app.foscal.core.model
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.Locale
 
 /**
  * Result of parsing a free-text quick-add string. `null` [date] or [time] means the user did not
- * specify one; the caller chooses a sensible default (e.g. today / next hour).
+ * specify one; the caller chooses a sensible default (e.g. today / next hour). [endDate] and
+ * [endTime] are set only by a range ("vom 19. bis 23. Okt", "von 14 bis 16 Uhr"); without them
+ * the event is one day long, or an hour.
  */
 data class QuickAddResult(
     val title: String,
     val date: LocalDate?,
     val time: LocalTime?,
     val allDay: Boolean = false,
+    val endDate: LocalDate? = null,
+    val endTime: LocalTime? = null,
 )
 
 /**
@@ -22,6 +27,10 @@ data class QuickAddResult(
  *
  * It deliberately errs on the side of *not* matching: bare numbers without am/pm or a colon are
  * left in the title so phrases like "2 tickets" aren't misread as a time.
+ *
+ * In a German [locale] it reads German first ([GermanQuickAdd]) and English after it, so English
+ * phrases keep working there. Other locales get English only: German's two-letter weekdays ("So",
+ * "Do") are English words, and "3 am Freitag" means three tickets on Friday, not 3 a.m.
  */
 object QuickAddParser {
 
@@ -37,23 +46,48 @@ object QuickAddParser {
         input: String,
         today: LocalDate = LocalDate.now(),
         use24Hour: Boolean = true,
+        locale: Locale = Locale.ENGLISH,
     ): QuickAddResult {
+        val german = locale.language == "de"
         var text = input.trim()
-        val allDay = allDayPhrase.containsMatchIn(text)
-        if (allDay) text = allDayPhrase.replace(text, " ")
+        var allDay = false
+        for (phrase in if (german) listOf(GermanQuickAdd.allDayPhrase, allDayPhrase) else listOf(allDayPhrase)) {
+            if (phrase.containsMatchIn(text)) {
+                allDay = true
+                text = phrase.replace(text, " ")
+            }
+        }
 
-        val time = findTime(text, use24Hour)?.also { text = text.replaceRange(it.first, " ") }?.second
-        val dateMatch = findDate(text, today)?.also { text = text.replaceRange(it.first, " ") }?.second
+        val timeMatch = (if (german) GermanQuickAdd.findTime(text, use24Hour) else null)
+            ?: findTime(text, use24Hour, german)?.let { GermanQuickAdd.TimeMatch(it.first, it.second) }
+        timeMatch?.let { text = text.replaceRange(it.range, " ") }
+        val dateMatch = (if (german) GermanQuickAdd.findDate(text, today) else null)
+            ?: findDate(text, today)?.let { GermanQuickAdd.DateMatch(it.first, it.second) }
+        dateMatch?.let { text = text.replaceRange(it.range, " ") }
 
+        // A span of whole days with no time is an all-day event, as in any calendar's own editor.
+        if (dateMatch?.endDate != null && timeMatch == null) allDay = true
         val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "(Untitled)" }
-        return QuickAddResult(title = title, date = dateMatch, time = time, allDay = allDay)
+        return QuickAddResult(
+            title = title,
+            date = dateMatch?.date,
+            time = timeMatch?.time.takeUnless { allDay },
+            allDay = allDay,
+            endDate = dateMatch?.endDate,
+            endTime = timeMatch?.endTime.takeUnless { allDay },
+        )
     }
 
     // Each finder skips a match whose numbers are out of range and keeps looking. The parser runs
     // on every keystroke inside composition, so an impossible time such as "3:75pm" must leave the
     // text alone rather than reach LocalTime.of and throw.
-    private fun findTime(text: String, use24Hour: Boolean): Pair<IntRange, LocalTime>? {
+    private fun findTime(text: String, use24Hour: Boolean, german: Boolean = false): Pair<IntRange, LocalTime>? {
         time12.findAll(text).forEach { m ->
+            // German "am" is "on": "3 am Freitag" is three of something on Friday. Only a closing
+            // "am", or one written against the number, is the morning there.
+            if (german && m.value.lowercase().endsWith(" am") && text.substring(m.range.last + 1).isNotBlank()) {
+                return@forEach
+            }
             val hour = m.groupValues[1].toInt()
             val minute = m.groupValues[2].ifBlank { "0" }.toInt()
             if (hour !in 1..12 || minute !in 0..59) return@forEach
@@ -80,7 +114,7 @@ object QuickAddParser {
      * adds a 3:30 call at night; 7 to 11 is the morning and 12 is noon. An hour of 13 or more, or
      * one written with a leading zero, is already 24-hour and is read as written.
      */
-    private fun twelveHourGuess(written: String): Int {
+    internal fun twelveHourGuess(written: String): Int {
         val hour = written.toInt()
         return if (written.startsWith("0") || hour !in 1..6) hour else hour + 12
     }
@@ -139,7 +173,7 @@ object QuickAddParser {
         else -> null
     }
 
-    private fun nextAfter(today: LocalDate, target: DayOfWeek, strict: Boolean): LocalDate {
+    internal fun nextAfter(today: LocalDate, target: DayOfWeek, strict: Boolean): LocalDate {
         var d = today
         if (strict) d = d.plusDays(1)
         while (d.dayOfWeek != target) d = d.plusDays(1)

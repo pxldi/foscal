@@ -85,7 +85,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Home-screen widget** showing your upcoming events with real calendar
   colors, tap-to-open, and a "+" quick-add button.
 - **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
-  tomorrow noon", "PTO all-day") and it parses the title, date, and time.
+  tomorrow noon", "PTO all-day") and it parses the title, date, and time. With German as the
+  language it reads German too: "Zahnarzt Freitag 9:30", "übermorgen um halb drei",
+  "Urlaub vom 19. bis 23. Okt", "Workshop morgen von 14 bis 16 Uhr".
 - **English and German** — follows the phone's language, or the one picked for Foscal under
   Settings → System → Languages → App languages on Android 13 and later.
 - **Import & export `.ics`** — export every event on your visible calendars to a

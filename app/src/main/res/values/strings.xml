@@ -34,4 +34,5 @@
     <string name="quick_add_untitled">(Untitled)</string>
     <string name="quick_add_all_day_event">All-day event</string>
     <string name="quick_add_calendar">Calendar</string>
+    <string name="quick_add_time_range">%1$s – %2$s</string>
 </resources>

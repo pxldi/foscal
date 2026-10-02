@@ -7,11 +7,12 @@
     <string name="widget_all_day">Ganztägig</string>
     <string name="widget_all_day_until">Ganztägig bis %1$s</string>
     <string name="widget_time_until">%1$s bis %2$s</string>
-    <string name="quick_add_hint">z. B. „Dentist friday 9:30am“</string>
+    <string name="quick_add_hint">z. B. „Zahnarzt Freitag 9:30“</string>
     <string name="quick_add_label">Was steht an?</string>
     <string name="quick_add_save">Termin hinzufügen</string>
     <string name="quick_add_title">Schnell hinzufügen</string>
     <string name="quick_add_untitled">(Ohne Titel)</string>
     <string name="quick_add_all_day_event">Ganztägiger Termin</string>
     <string name="quick_add_calendar">Kalender</string>
+    <string name="quick_add_time_range">%1$s–%2$s</string>
 </resources>
