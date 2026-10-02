@@ -1,0 +1,9 @@
+Foscal now speaks German. It follows the phone's language, or the per-app
+language setting on Android 13 and later, and writes dates in the order the
+language does.
+
+In the week, 3-day and day views, two events clashing no longer squeeze
+every other event that day to half width.
+
+Calendar ticks now follow the phone's own show and sync settings, so a
+calendar hidden in another app stays hidden here too.
