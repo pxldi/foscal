@@ -60,7 +60,7 @@ jobs:
       - name: Decode release keystore
         if: env.FULL_BUILD == 'true'
         env:
-          KEYSTORE_BASE64: ${{ secrets.CALENDARIUM_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.FOSCAL_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
@@ -78,9 +78,9 @@ jobs:
           fi
           ./gradlew $TASKS --no-daemon --max-workers=2
         env:
-          FOSCAL_STORE_PASSWORD: ${{ secrets.CALENDARIUM_STORE_PASSWORD }}
-          FOSCAL_KEY_ALIAS: ${{ secrets.CALENDARIUM_KEY_ALIAS }}
-          FOSCAL_KEY_PASSWORD: ${{ secrets.CALENDARIUM_KEY_PASSWORD }}
+          FOSCAL_STORE_PASSWORD: ${{ secrets.FOSCAL_STORE_PASSWORD }}
+          FOSCAL_KEY_ALIAS: ${{ secrets.FOSCAL_KEY_ALIAS }}
+          FOSCAL_KEY_PASSWORD: ${{ secrets.FOSCAL_KEY_PASSWORD }}
 
       # Uploaded only where someone might install it. A debug APK per pull-request push is a build
       # artifact nobody downloads and storage that has to be paid for either way.
