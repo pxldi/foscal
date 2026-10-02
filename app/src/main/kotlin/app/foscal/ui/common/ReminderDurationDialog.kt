@@ -24,6 +24,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.model.ReminderUnit
+import app.foscal.ui.util.asString
+import app.foscal.ui.util.reminderLabel
+import app.foscal.ui.util.reminderUnitName
 
 /**
  * Picks an arbitrary reminder offset.
@@ -57,7 +60,7 @@ fun ReminderDurationDialog(
     // A blank field is "still typing", not an error; only a value that cannot become a reminder is
     // called out.
     val error = if (amount.isNotBlank() && minutes == null) {
-        "Choose at most ${ReminderDuration.label(ReminderDuration.MAX_MINUTES)}"
+        "Choose at most ${reminderLabel(ReminderDuration.MAX_MINUTES).asString()}"
     } else {
         null
     }
@@ -90,14 +93,14 @@ fun ReminderDurationDialog(
                                 ReminderUnit.entries.size,
                             ),
                         ) {
-                            Text(option.label(parsed ?: 2).replaceFirstChar(Char::uppercase))
+                            Text(reminderUnitName(option, parsed ?: 2).asString().replaceFirstChar(Char::uppercase))
                         }
                     }
                 }
                 Text(
                     // Always occupies a line so switching between valid and invalid input does not
                     // make the dialog jump.
-                    text = error ?: minutes?.let { "Reminds ${ReminderDuration.label(it)} before" }
+                    text = error ?: minutes?.let { "Reminds ${reminderLabel(it).asString()} before" }
                         ?: " ",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (error != null) {

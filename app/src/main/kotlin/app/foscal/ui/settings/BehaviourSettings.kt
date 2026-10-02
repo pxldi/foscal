@@ -22,12 +22,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.foscal.core.model.DayTapAction
-import app.foscal.core.model.ReminderDuration
 import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.home.BehaviourState
 import app.foscal.ui.home.BehaviourViewModel
 import app.foscal.ui.home.CalendarView
+import app.foscal.ui.util.asString
 import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.reminderLabel
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 
@@ -153,7 +154,7 @@ fun NewEventSettings(
         )
         EventPicker.Length -> ChoiceDialog(
             title = "Length",
-            options = EventLengths.map { it.toString() to ReminderDuration.label(it) },
+            options = EventLengths.map { it.toString() to reminderLabel(it).asString() },
             selected = state.defaultEventMinutes.toString(),
             onSelect = { viewModel.setDefaultEventMinutes(it.toInt()); picker = null },
             onDismiss = { picker = null },
@@ -170,7 +171,7 @@ fun NewEventSettings(
         )
         ValueRow(
             title = "Length",
-            value = ReminderDuration.label(state.defaultEventMinutes),
+            value = reminderLabel(state.defaultEventMinutes).asString(),
             onClick = { picker = EventPicker.Length },
         )
         ToggleRow(

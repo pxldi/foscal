@@ -94,7 +94,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.foscal.core.model.Attendee
 import app.foscal.core.model.Frequency
-import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.CalendarColors
 import app.foscal.ui.common.DeleteEventDialog
@@ -103,9 +102,11 @@ import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.asString
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.rememberDateFormatter
 import app.foscal.ui.util.rememberTimeFormatter
+import app.foscal.ui.util.reminderLabel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -798,7 +799,7 @@ private fun ReminderRow(
                 FilterChip(
                     selected = minutes in selected,
                     onClick = { onToggle(minutes) },
-                    label = { Text(ReminderDuration.label(minutes)) },
+                    label = { Text(reminderLabel(minutes).asString()) },
                 )
             }
             // Never "selected": anything it produces immediately shows up as its own chip above,

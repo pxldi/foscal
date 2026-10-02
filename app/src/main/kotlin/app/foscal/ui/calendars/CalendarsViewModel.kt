@@ -3,6 +3,7 @@ package app.foscal.ui.calendars
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.UserPreferencesRepository
 import app.foscal.core.model.AccentColor
@@ -11,6 +12,7 @@ import app.foscal.core.model.ThemeMode
 import app.foscal.ics.IcsTransfer
 import app.foscal.notifications.ReminderSyncScheduler
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -239,7 +241,7 @@ class CalendarsViewModel @Inject constructor(
                 // reminder due in that gap would still fire for a calendar just unticked.
                 syncScheduler.syncNow()
             } else {
-                messages.post("Couldn't change “${row.calendar.displayName}”")
+                messages.post(uiText(R.string.message_calendar_change_failed, row.calendar.displayName))
             }
         }
     }
@@ -250,7 +252,7 @@ class CalendarsViewModel @Inject constructor(
             if (repository.setCalendarSynced(calendar.id)) {
                 syncScheduler.syncNow()
             } else {
-                messages.post("Couldn't sync “${calendar.displayName}”")
+                messages.post(uiText(R.string.message_calendar_sync_failed, calendar.displayName))
             }
         }
     }

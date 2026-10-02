@@ -1,6 +1,7 @@
 package app.foscal.ui.editor
 
 import androidx.lifecycle.SavedStateHandle
+import app.foscal.R
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.core.model.Attendee
@@ -9,6 +10,7 @@ import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
 import app.foscal.ui.feedback.PendingDeletes
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -209,7 +211,7 @@ class EventEditorViewModelTest {
         assertFalse(state.finished)
         assertFalse(state.saving)
         assertEquals("Lunch", state.title)
-        assertEquals("Couldn't save the event", messages.messages.first())
+        assertEquals(uiText(R.string.message_save_failed), messages.messages.first())
     }
 
     @Test
@@ -224,7 +226,7 @@ class EventEditorViewModelTest {
             advanceUntilIdle()
 
             assertFalse(vm.state.value.finished)
-            assertEquals("Couldn't save the event", messages.messages.first())
+            assertEquals(uiText(R.string.message_save_failed), messages.messages.first())
         }
 
     @Test

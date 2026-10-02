@@ -84,6 +84,13 @@ android {
         buildConfig = true
     }
 
+    // Lists the app's languages in a generated locale config, which is what puts Foscal under
+    // Settings → System → Languages → App languages on Android 13 and later. The languages are
+    // whatever `values-*` folders exist; res/resources.properties names the default one.
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

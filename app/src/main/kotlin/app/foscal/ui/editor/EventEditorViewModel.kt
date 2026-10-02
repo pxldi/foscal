@@ -3,6 +3,7 @@ package app.foscal.ui.editor
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Attendee
@@ -15,6 +16,7 @@ import app.foscal.core.model.RecurrenceSpec
 import app.foscal.core.model.resolveEventTimezone
 import app.foscal.ui.feedback.PendingDeletes
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -585,7 +587,7 @@ class EventEditorViewModel @Inject constructor(
             // A refused write keeps the editor open with everything the user typed. Closing it
             // looked exactly like a save that worked.
             mutate { it.copy(saving = false, finished = saved) }
-            if (!saved) messages.post("Couldn't save the event")
+            if (!saved) messages.post(uiText(R.string.message_save_failed))
         }
     }
 

@@ -92,7 +92,6 @@ import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Event
 import app.foscal.core.model.MeetingLinks
 import app.foscal.core.model.RecurrenceSummary
-import app.foscal.core.model.ReminderDuration
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.LocalIsDarkTheme
 import app.foscal.core.ui.theme.Motion
@@ -101,7 +100,10 @@ import app.foscal.ui.common.DeleteEventDialog
 import app.foscal.ui.editor.RecurrenceScope
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
+import app.foscal.ui.util.asString
 import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.recurrenceText
+import app.foscal.ui.util.reminderLabel
 import app.foscal.ui.util.timeFormatter
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -334,7 +336,11 @@ private fun DetailContent(
             }
             event.rrule?.takeIf { it.isNotBlank() }?.let { rrule ->
                 // The device zone, as the editor reads UNTIL, so both show the same end date.
-                val summary = RecurrenceSummary.describe(rrule, ZoneId.systemDefault(), currentLocale())
+                val locale = currentLocale()
+                val summary = recurrenceText(
+                    RecurrenceSummary.of(rrule, ZoneId.systemDefault(), locale),
+                    locale,
+                ).asString()
                 DetailRow(Icons.Outlined.Repeat, summary)
             }
             // A location that is nothing but the call link is already the Join row above, and
@@ -362,7 +368,7 @@ private fun DetailContent(
             if (reminderMinutes.isNotEmpty()) {
                 DetailRow(
                     icon = Icons.Outlined.Notifications,
-                    text = reminderMinutes.joinToString(" · ") { ReminderDuration.label(it) },
+                    text = reminderMinutes.map { reminderLabel(it).asString() }.joinToString(" · "),
                 )
             }
             event.description?.takeIf { it.isNotBlank() }?.let {

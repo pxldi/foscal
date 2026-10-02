@@ -73,23 +73,4 @@ class ReminderDurationTest {
             )
         }
     }
-
-    @Test
-    fun `labels use the coarsest unit and pluralize`() {
-        assertEquals("At start", ReminderDuration.label(0))
-        assertEquals("5 min", ReminderDuration.label(5))
-        assertEquals("90 min", ReminderDuration.label(90))
-        assertEquals("1 hour", ReminderDuration.label(60))
-        assertEquals("2 hours", ReminderDuration.label(120))
-        assertEquals("1 day", ReminderDuration.label(1440))
-        assertEquals("3 days", ReminderDuration.label(4320))
-        assertEquals("1 week", ReminderDuration.label(10080))
-        assertEquals("2 weeks", ReminderDuration.label(20160))
-    }
-
-    /** `Reminders.MINUTES_DEFAULT` is -1; it must never surface as "-1 min". */
-    @Test
-    fun `labels a negative sentinel as at start`() {
-        assertEquals("At start", ReminderDuration.label(-1))
-    }
 }

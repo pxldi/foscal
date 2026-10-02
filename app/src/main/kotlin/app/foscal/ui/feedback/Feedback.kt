@@ -6,9 +6,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.lifecycle.ViewModel
+import app.foscal.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
 import javax.inject.Inject
@@ -35,8 +39,10 @@ class FeedbackViewModel @Inject constructor(
 /** Shows every posted message and one Undo for every delete still waiting. */
 @Composable
 fun FeedbackEffects(host: SnackbarHostState, viewModel: FeedbackViewModel) {
+    // Resolved when shown rather than when posted, so a message follows a language change.
+    val resources by rememberUpdatedState(LocalResources.current)
     LaunchedEffect(host, viewModel) {
-        viewModel.messages.messages.collect { host.showSnackbar(it) }
+        viewModel.messages.messages.collect { host.showSnackbar(it.resolve(resources)) }
     }
     LaunchedEffect(host, viewModel) {
         viewModel.pendingDeletes.undoable.collectLatest { waiting ->
@@ -45,8 +51,8 @@ fun FeedbackEffects(host: SnackbarHostState, viewModel: FeedbackViewModel) {
             // or the write starting changes the list, collectLatest cancels this call, and
             // cancelling it dismisses the snackbar.
             val result = host.showSnackbar(
-                message = undoMessage(waiting),
-                actionLabel = "Undo",
+                message = undoMessage(waiting).resolve(resources),
+                actionLabel = resources.getString(R.string.action_undo),
                 duration = SnackbarDuration.Indefinite,
             )
             if (result == SnackbarResult.ActionPerformed) {

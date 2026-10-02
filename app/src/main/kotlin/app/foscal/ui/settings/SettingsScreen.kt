@@ -98,6 +98,8 @@ import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.home.BehaviourViewModel
+import app.foscal.ui.util.asString
+import app.foscal.ui.util.reminderLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -625,7 +627,7 @@ private fun CalendarRowCard(
                             else -> ReminderSelection.Minutes(row.reminderOverride)
                         },
                         globalLabel = globalReminderMinutes
-                            ?.let { "Default · ${ReminderDuration.label(it)}" }
+                            ?.let { "Default · ${reminderLabel(it).asString()}" }
                             ?: "Default · none",
                         onSelect = onSelectReminder,
                     )
@@ -1171,7 +1173,7 @@ private fun ReminderChips(
         )
         options.forEach { minutes ->
             ReminderChip(
-                label = ReminderDuration.label(minutes),
+                label = reminderLabel(minutes).asString(),
                 selected = current == minutes,
                 onClick = { onSelect(ReminderSelection.Minutes(minutes)) },
             )
