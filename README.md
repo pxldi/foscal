@@ -13,6 +13,15 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 > day and agenda views, event create/edit/delete, recurring events, reminders, and
 > offline local calendars all work. Rough edges remain (see [Roadmap](#roadmap)).
 
+## Install
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/pxldi/foscal"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54" /></a>
+
+Signed APKs are attached to each [GitHub release](https://github.com/pxldi/foscal/releases).
+The badge opens [Obtainium](https://obtainium.imranr.dev) with this repository already filled in,
+so it installs the latest release and keeps it updated. Without Obtainium, download the `.apk`
+from the newest release and open it on the phone.
+
 ## Design goals
 
 - **Beautiful and modern.** Jetpack Compose + Material 3 with a custom, user-selectable
