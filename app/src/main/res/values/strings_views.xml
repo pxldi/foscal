@@ -94,4 +94,19 @@
     <string name="import_title">Import</string>
     <string name="import_working">Working…</string>
     <string name="import_no_target">There is no calendar to import into yet.</string>
+
+    <!-- What TalkBack reads for an event on the timeline: title, day, start time, end time. -->
+    <string name="timeline_event_description">%1$s, %2$s, %3$s to %4$s</string>
+    <!-- TalkBack actions on an event in the timeline, standing in for the long-press drag. -->
+    <string name="timeline_move_earlier">Move 15 minutes earlier</string>
+    <string name="timeline_move_later">Move 15 minutes later</string>
+    <string name="timeline_move_day_earlier">Move to the day before</string>
+    <string name="timeline_move_day_later">Move to the day after</string>
+    <!-- What TalkBack reads for a month cell. %1$s is the date. -->
+    <string name="month_day_today">Today, %1$s</string>
+    <!-- %1$d is the number of events, %2$s the date. -->
+    <plurals name="month_day_events">
+        <item quantity="one">%2$s, %1$d event</item>
+        <item quantity="other">%2$s, %1$d events</item>
+    </plurals>
 </resources>

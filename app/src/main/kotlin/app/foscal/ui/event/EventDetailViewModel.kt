@@ -2,15 +2,20 @@ package app.foscal.ui.event
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Attendee
 import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Event
+import app.foscal.ui.common.moveEvent
 import app.foscal.ui.editor.RecurrenceScope
 import app.foscal.ui.feedback.PendingDeletes
+import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +43,12 @@ data class EventDetailUiState(
     val deletePrompt: Boolean = false,
     /** Set once the event is gone, so the screen showing it can leave. */
     val deleted: Boolean = false,
+    /**
+     * Set once a move has been written. The screen leaves rather than re-reading: a moved
+     * occurrence of a series becomes a row with an id this screen was never given, so a re-read
+     * would quietly show the series' first occurrence instead of the one just moved.
+     */
+    val moved: Boolean = false,
 ) {
     /**
      * The user's own row, when they were invited to this rather than having made it.
@@ -60,6 +71,7 @@ data class EventDetailUiState(
 class EventDetailViewModel @Inject constructor(
     private val repository: CalendarRepository,
     private val pendingDeletes: PendingDeletes,
+    private val messages: UserMessages,
     prefs: Preferences,
 ) : ViewModel() {
 
@@ -94,6 +106,25 @@ class EventDetailViewModel @Inject constructor(
             title = event.title,
         )
         _state.update { it.copy(deletePrompt = false, deleted = true) }
+    }
+
+    /**
+     * Puts the event at [startMillis]..[endMillis], at the breadth [scope] asks for.
+     *
+     * The other way to move an event besides dragging it on the grid, which a long-press drag
+     * makes unreachable for anyone using TalkBack or a switch, and awkward for anyone moving
+     * something weeks away.
+     */
+    fun move(startMillis: Long, endMillis: Long, scope: RecurrenceScope) {
+        val event = _state.value.event ?: return
+        viewModelScope.launch {
+            if (repository.moveEvent(event, startMillis, endMillis, scope, ZoneId.systemDefault())) {
+                messages.post(uiText(R.string.message_moved))
+                _state.update { it.copy(moved = true) }
+            } else {
+                messages.post(uiText(R.string.message_move_failed))
+            }
+        }
     }
 
     fun reply(status: AttendeeStatus) {

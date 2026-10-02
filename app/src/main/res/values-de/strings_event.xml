@@ -129,4 +129,12 @@
     <string name="detail_status_not_going">Abgesagt</string>
     <string name="detail_status_maybe">Vielleicht</string>
     <string name="detail_status_no_reply">Keine Antwort</string>
+
+    <!-- Moving an event without dragging it -->
+    <string name="detail_move">Verschieben…</string>
+    <string name="move_title">Termin verschieben</string>
+    <string name="move_date">Datum</string>
+    <string name="move_confirm">Verschieben</string>
+    <string name="move_ends_at">Endet um %1$s</string>
+    <string name="move_ends_on">Endet am %1$s um %2$s</string>
 </resources>
