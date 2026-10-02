@@ -216,6 +216,11 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   give it one format string with positional arguments, and counts a `<plurals>`. The app's
   languages are whatever `values-*` folders exist: `generateLocaleConfig` lists them for Android
   13's per-app language setting. German is informal ("du") and calls an event a *Termin*.
+- **Motion that is only decoration checks `rememberReducedMotion()`** (`ui/util/ReducedMotion.kt`)
+  and shows its finished state when the user has turned animations off. Compose tweens collapse at
+  an animator scale of 0 on their own, but `delay`-paced and infinite transitions do not. Decoration
+  only ever fills a moment that exists anyway (the onboarding waits, the first screen being read)
+  and never gates a control: the welcome button takes a tap while it is still fading in.
 - **Light/dark branching** — read `LocalIsDarkTheme.current` (provided by `FoscalTheme`),
   never `isSystemInDarkTheme()`. The latter reports only the OS setting, so it disagrees
   with the rest of the UI whenever the user has forced Light or Dark in Settings. The only
@@ -268,8 +273,10 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   `intent.extras` at a call site, and add the matching `<intent-filter>` — a filter with nothing
   behind it puts Foscal in "Open with" for something it then ignores.
 - **Icon** — one unified mark for launcher (`res/drawable/ic_launcher_foreground.xml`)
-  and the in-app onboarding hero (`OnboardingScreen.FoscalMark`, which draws
-  `ic_foscal_badge.xml`). Keep them in sync if you change one, and redraw
+  and the in-app onboarding hero (`AnimatedFoscalMark`, which renders
+  `ic_foscal_badge.xml` and animates it through its named groups — `ground`, `mark`, `card`,
+  `band`, `tab`, `cell0`…`cell7`, `today`; keep those names if you redraw the badge, or the
+  intro silently stops moving that part). Keep them in sync if you change one, and redraw
   `ic_launcher_monochrome.xml` alongside — the themed-icon layer is a silhouette, so
   the grid has to be punched out with `fillType="evenOdd"` rather than drawn in a
   second colour. `ic_notification_calendar.xml` is the same grid again at 24dp,
