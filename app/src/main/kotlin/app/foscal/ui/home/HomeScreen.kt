@@ -42,11 +42,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.DayTapAction
 import app.foscal.ui.agenda.AgendaItem
 import app.foscal.ui.agenda.AgendaRoute
@@ -222,7 +224,7 @@ fun HomeRoute(
                         },
                     )
                     IconButton(onClick = onOpenSearch) {
-                        Icon(Icons.Outlined.Search, "Search")
+                        Icon(Icons.Outlined.Search, stringResource(R.string.home_search))
                     }
                 },
                 floatingActionButton = {
@@ -256,7 +258,10 @@ fun HomeRoute(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = "New event")
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.view_new_event),
+                        )
                     }
                 },
             )
@@ -342,7 +347,7 @@ private fun ViewSwitcher(view: CalendarView, onClick: () -> Unit) {
             modifier = Modifier.size(18.dp),
         )
         Text(
-            view.label,
+            stringResource(view.labelRes),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSecondaryContainer,

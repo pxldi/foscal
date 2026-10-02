@@ -598,7 +598,7 @@ class EventEditorViewModel @Inject constructor(
             eventId = current.eventId,
             instanceStartMillis = current.originalInstanceTime,
             scope = if (current.isRecurring) scope else RecurrenceScope.ALL_EVENTS,
-            title = current.title.ifBlank { "(Untitled)" },
+            title = current.title,
         )
         mutate { it.copy(finished = true, deleted = true) }
     }

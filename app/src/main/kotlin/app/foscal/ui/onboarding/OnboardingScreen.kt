@@ -66,6 +66,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -80,6 +81,7 @@ import app.foscal.ui.permission.isDeniedForGood
 import app.foscal.ui.permission.openAppSettings
 import app.foscal.ui.permission.openNotificationSettings
 import app.foscal.ui.settings.AccentPicker
+import app.foscal.ui.util.asString
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -192,6 +194,7 @@ fun OnboardingRoute(
         }
     }
 
+    val noBatterySettings = stringResource(R.string.onboarding_no_battery_settings)
     Scaffold(
     ) { padding ->
         Column(
@@ -277,7 +280,7 @@ fun OnboardingRoute(
                             if (!viewModel.openBatterySettings()) {
                                 Toast.makeText(
                                     context,
-                                    "This phone has no battery settings screen",
+                                    noBatterySettings,
                                     Toast.LENGTH_SHORT,
                                 ).show()
                             }
@@ -286,8 +289,10 @@ fun OnboardingRoute(
                         onMapsToggle = viewModel::setMapsEnabled,
                         onDone = viewModel::completeOnboarding,
                     )
-                    OnboardingStep.PREPARING -> PreparingStep("Checking what's on this phone\u2026")
-                    OnboardingStep.SETTLING -> PreparingStep("Setting your calendar up\u2026")
+                    OnboardingStep.PREPARING ->
+                        PreparingStep(stringResource(R.string.onboarding_checking_phone))
+                    OnboardingStep.SETTLING ->
+                        PreparingStep(stringResource(R.string.onboarding_setting_up_calendar))
                 }
             }
 
@@ -303,13 +308,16 @@ fun OnboardingRoute(
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
                     )
-                    Text("Setting up…", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.onboarding_setting_up),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
             }
 
             state.error?.let {
                 Text(
-                    it,
+                    it.asString(),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -371,7 +379,7 @@ private fun WelcomeStep(accessOff: Boolean, onOpenSettings: () -> Unit, onStart:
         FoscalWordmark()
         Spacer(Modifier.height(14.dp))
         Text(
-            "A Material Design 3 open source calendar",
+            stringResource(R.string.onboarding_tagline),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -384,9 +392,9 @@ private fun WelcomeStep(accessOff: Boolean, onOpenSettings: () -> Unit, onStart:
             modifier = Modifier.padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            WelcomePoint("No account, no network, no tracking.")
-            WelcomePoint("Syncs with Nextcloud, ownCloud and any CalDAV server through DAVx⁵.")
-            WelcomePoint("Day, week, month and agenda views.")
+            WelcomePoint(stringResource(R.string.onboarding_point_private))
+            WelcomePoint(stringResource(R.string.onboarding_point_sync))
+            WelcomePoint(stringResource(R.string.onboarding_point_views))
         }
         Spacer(Modifier.height(52.dp))
         if (accessOff) {
@@ -399,7 +407,7 @@ private fun WelcomeStep(accessOff: Boolean, onOpenSettings: () -> Unit, onStart:
                     .height(58.dp),
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Text("Get started", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.onboarding_get_started), fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -437,41 +445,45 @@ private fun CalendarSetupStep(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
-            "Your calendars",
+            stringResource(R.string.onboarding_calendars_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 18.dp),
         )
         Text(
-            "Pick a starting point. You can change this later.",
+            stringResource(R.string.onboarding_calendars_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         ChoiceCard(
             icon = Icons.Outlined.DevicesOther,
-            title = "Start fresh",
-            subtitle = "A new calendar on this phone.",
-            buttonText = "Create calendar",
+            title = stringResource(R.string.onboarding_start_fresh_title),
+            subtitle = stringResource(R.string.onboarding_start_fresh_subtitle),
+            buttonText = stringResource(R.string.onboarding_start_fresh_button),
             enabled = !state.completing,
             onClick = onUseLocal,
         )
         ChoiceCard(
             icon = Icons.Outlined.CalendarMonth,
-            title = "Use what's already here",
-            subtitle = "The ones your phone already has.",
-            buttonText = "Continue",
+            title = stringResource(R.string.onboarding_use_existing_title),
+            subtitle = stringResource(R.string.onboarding_use_existing_subtitle),
+            buttonText = stringResource(R.string.onboarding_use_existing_button),
             enabled = !state.completing,
             onClick = onUseExisting,
         )
         ChoiceCard(
             icon = Icons.Outlined.CloudSync,
-            title = "Sync with CalDAV",
+            title = stringResource(R.string.onboarding_caldav_title),
             subtitle = if (state.davxStatus == DAVxStatus.INSTALLED) {
-                "Nextcloud, ownCloud and the rest, through DAVx⁵."
+                stringResource(R.string.onboarding_caldav_subtitle_installed)
             } else {
-                "Needs DAVx⁵, free on F-Droid."
+                stringResource(R.string.onboarding_caldav_subtitle_missing)
             },
-            buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) "Open DAVx⁵" else "Install DAVx⁵",
+            buttonText = if (state.davxStatus == DAVxStatus.INSTALLED) {
+                stringResource(R.string.onboarding_caldav_open)
+            } else {
+                stringResource(R.string.onboarding_caldav_install)
+            },
             enabled = !state.completing,
             onClick = onUseDavx,
         )
@@ -499,13 +511,13 @@ private fun PersonalizeStep(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            "Make it yours",
+            stringResource(R.string.onboarding_personalize_title),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 18.dp),
         )
         Text(
-            "You can change these settings later.",
+            stringResource(R.string.onboarding_personalize_subtitle),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -518,18 +530,17 @@ private fun PersonalizeStep(
         )
         ToggleCard(
             icon = Icons.Outlined.Notifications,
-            title = "Reminders",
-            subtitle = "A heads-up before your events.",
+            title = stringResource(R.string.onboarding_reminders_title),
+            subtitle = stringResource(R.string.onboarding_reminders_subtitle),
             checked = notificationsEnabled,
             onToggle = onNotificationsToggle,
         )
         if (notificationsDeniedForGood && !notificationsEnabled) {
             ActionCard(
                 icon = Icons.Outlined.Notifications,
-                title = "Notifications are off",
-                subtitle = "Android will not ask again. Allow notifications for Foscal in " +
-                    "settings to get reminders.",
-                buttonText = "Open notification settings",
+                title = stringResource(R.string.onboarding_notifications_off_title),
+                subtitle = stringResource(R.string.onboarding_notifications_off_subtitle),
+                buttonText = stringResource(R.string.onboarding_notifications_off_button),
                 onClick = onOpenNotificationSettings,
             )
         }
@@ -538,17 +549,16 @@ private fun PersonalizeStep(
         if (notificationsEnabled && batteryOptimized) {
             ActionCard(
                 icon = Icons.Outlined.BatteryAlert,
-                title = "Reminders may arrive late",
-                subtitle = "Battery saver holds them back until the phone wakes. Set Foscal to " +
-                    "unrestricted to fix it.",
-                buttonText = "Open battery settings",
+                title = stringResource(R.string.onboarding_battery_title),
+                subtitle = stringResource(R.string.onboarding_battery_subtitle),
+                buttonText = stringResource(R.string.onboarding_battery_button),
                 onClick = onOpenBatterySettings,
             )
         }
         ToggleCard(
             icon = Icons.Outlined.Map,
-            title = "Pick locations on a map",
-            subtitle = "Tap a place instead of typing it. Your search goes to OpenStreetMap.",
+            title = stringResource(R.string.onboarding_maps_title),
+            subtitle = stringResource(R.string.onboarding_maps_subtitle),
             checked = mapsEnabled,
             onToggle = onMapsToggle,
         )
@@ -561,7 +571,7 @@ private fun PersonalizeStep(
                 .height(58.dp),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Text("Start using Foscal", fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.onboarding_done), fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -593,7 +603,7 @@ private fun AccentCard(
                     modifier = Modifier.size(28.dp),
                 )
                 Text(
-                    "Accent colour",
+                    stringResource(R.string.onboarding_accent_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -615,9 +625,9 @@ private fun ThemeCard(
     onSelect: (ThemeMode) -> Unit,
 ) {
     val options = listOf(
-        ThemeMode.SYSTEM to "System",
-        ThemeMode.LIGHT to "Light",
-        ThemeMode.DARK to "Dark",
+        ThemeMode.SYSTEM to stringResource(R.string.onboarding_theme_system),
+        ThemeMode.LIGHT to stringResource(R.string.onboarding_theme_light),
+        ThemeMode.DARK to stringResource(R.string.onboarding_theme_dark),
     )
     androidx.compose.material3.Card(
         modifier = Modifier.fillMaxWidth(),
@@ -639,7 +649,7 @@ private fun ThemeCard(
                     modifier = Modifier.size(28.dp),
                 )
                 Text(
-                    "Theme",
+                    stringResource(R.string.onboarding_theme_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )

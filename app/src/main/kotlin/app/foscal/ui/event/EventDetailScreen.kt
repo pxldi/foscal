@@ -75,6 +75,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -87,6 +89,7 @@ import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.Attendee
 import app.foscal.core.model.AttendeeStatus
 import app.foscal.core.model.Event
@@ -159,7 +162,10 @@ fun EventDetailScreen(
                     "loading" -> Centered { CircularProgressIndicator() }
 
                     "missing" -> Centered {
-                        Text("Event not found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            stringResource(R.string.detail_not_found),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
                     else -> {
@@ -167,6 +173,8 @@ fun EventDetailScreen(
                         // `phase` may be stale while `state.event` has already cleared. Re-check
                         // rather than `!!` to avoid an NPE mid-animation.
                         val current = state.event
+                        val calendarName = state.calendar?.displayName
+                            ?: stringResource(R.string.detail_calendar_fallback)
                         if (current == null) {
                             Centered { CircularProgressIndicator() }
                         } else {
@@ -174,8 +182,11 @@ fun EventDetailScreen(
                                 event = current,
                                 // Said here because the missing Edit and Delete would otherwise
                                 // look like a bug rather than like the calendar's rules.
-                                calendarName = (state.calendar?.displayName ?: "Calendar") +
-                                    if (readOnly) " · read-only" else "",
+                                calendarName = if (readOnly) {
+                                    stringResource(R.string.detail_calendar_read_only, calendarName)
+                                } else {
+                                    calendarName
+                                },
                                 reminderMinutes = state.reminderMinutes,
                                 attendees = state.attendees,
                                 selfEmail = state.selfAttendee?.email,
@@ -198,7 +209,7 @@ fun EventDetailScreen(
                     .statusBarsPadding()
                     .padding(4.dp),
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
             }
             if (event != null) {
                 DetailActions(
@@ -243,16 +254,16 @@ private fun DetailActions(
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         if (onEdit != null) {
             IconButton(onClick = onEdit) {
-                Icon(Icons.Outlined.Edit, contentDescription = "Edit event")
+                Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.detail_edit))
             }
         }
         Box {
             IconButton(onClick = { open = true }) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "More")
+                Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.action_more_options))
             }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 DropdownMenuItem(
-                    text = { Text("Duplicate") },
+                    text = { Text(stringResource(R.string.detail_duplicate)) },
                     leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
                     onClick = {
                         open = false
@@ -261,7 +272,12 @@ private fun DetailActions(
                 )
                 if (onDelete != null) {
                     DropdownMenuItem(
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        text = {
+                            Text(
+                                stringResource(R.string.action_delete),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        },
                         leadingIcon = {
                             Icon(
                                 Icons.Outlined.DeleteOutline,
@@ -330,7 +346,9 @@ private fun DetailContent(
             meetingUrl?.let { url ->
                 DetailRow(
                     icon = Icons.Outlined.Videocam,
-                    text = MeetingLinks.providerName(url)?.let { "Join $it" } ?: "Join video call",
+                    text = MeetingLinks.providerName(url)
+                        ?.let { stringResource(R.string.detail_join_provider, it) }
+                        ?: stringResource(R.string.detail_join_call),
                     onClick = { openLink(context, url) },
                 )
             }
@@ -407,15 +425,15 @@ private fun ReplyRow(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            "RSVP",
+            stringResource(R.string.detail_rsvp),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                AttendeeStatus.ACCEPTED to "Yes",
-                AttendeeStatus.TENTATIVE to "Maybe",
-                AttendeeStatus.DECLINED to "No",
+                AttendeeStatus.ACCEPTED to stringResource(R.string.detail_rsvp_yes),
+                AttendeeStatus.TENTATIVE to stringResource(R.string.detail_rsvp_maybe),
+                AttendeeStatus.DECLINED to stringResource(R.string.detail_rsvp_no),
             ).forEach { (status, label) ->
                 FilterChip(
                     selected = current == status,
@@ -430,7 +448,7 @@ private fun ReplyRow(
         // tapped, and a read-only calendar is not something the user can be expected to infer.
         AnimatedVisibility(visible = failed) {
             Text(
-                "Your answer could not be saved. This calendar may be read-only.",
+                stringResource(R.string.detail_rsvp_failed),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -482,7 +500,7 @@ private fun AttendeesCard(
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        if (attendees.size == 1) "1 attendee" else "${attendees.size} attendees",
+                        pluralStringResource(R.plurals.detail_attendees_count, attendees.size, attendees.size),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                     )
@@ -494,7 +512,9 @@ private fun AttendeesCard(
                 }
                 Icon(
                     Icons.Outlined.ExpandMore,
-                    contentDescription = if (expanded) "Hide attendees" else "Show attendees",
+                    contentDescription = stringResource(
+                        if (expanded) R.string.detail_attendees_hide else R.string.detail_attendees_show,
+                    ),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.rotate(rotation),
                 )
@@ -556,7 +576,7 @@ private fun AttendeeRow(attendee: Attendee, isSelf: Boolean, onEmail: (String) -
         }
         Column(Modifier.weight(1f)) {
             Text(
-                if (isSelf) "${attendee.label} (you)" else attendee.label,
+                if (isSelf) stringResource(R.string.detail_attendee_you, attendee.label) else attendee.label,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -596,9 +616,10 @@ private fun Attendee.initial(): String =
     label.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?"
 
 /** Who they are on this event and how to reach them; the answer itself sits at the end of the row. */
+@Composable
 private fun Attendee.detailLine(): String = listOfNotNull(
-    "Organizer".takeIf { isOrganizer },
-    "Optional".takeIf { optional && !isOrganizer },
+    stringResource(R.string.detail_attendee_organizer).takeIf { isOrganizer },
+    stringResource(R.string.detail_attendee_optional).takeIf { optional && !isOrganizer },
     email.takeIf { it != label },
 ).joinToString(" · ")
 
@@ -609,24 +630,28 @@ private fun Attendee.statusIcon(): ImageVector = when (status) {
     AttendeeStatus.INVITED -> Icons.Outlined.Schedule
 }
 
-private fun Attendee.statusLabel(): String = when (status) {
-    AttendeeStatus.ACCEPTED -> "Going"
-    AttendeeStatus.DECLINED -> "Not going"
-    AttendeeStatus.TENTATIVE -> "Maybe"
-    AttendeeStatus.INVITED -> "No reply"
-}
+@Composable
+private fun Attendee.statusLabel(): String = stringResource(
+    when (status) {
+        AttendeeStatus.ACCEPTED -> R.string.detail_status_going
+        AttendeeStatus.DECLINED -> R.string.detail_status_not_going
+        AttendeeStatus.TENTATIVE -> R.string.detail_status_maybe
+        AttendeeStatus.INVITED -> R.string.detail_status_no_reply
+    },
+)
 
 /** "4 going · 1 maybe · 2 no reply", with the answers nobody gave left out. */
+@Composable
 private fun List<Attendee>.answerSummary(): String {
     val counts = listOf(
-        AttendeeStatus.ACCEPTED to "going",
-        AttendeeStatus.TENTATIVE to "maybe",
-        AttendeeStatus.DECLINED to "not going",
-        AttendeeStatus.INVITED to "no reply",
+        AttendeeStatus.ACCEPTED to R.plurals.detail_summary_going,
+        AttendeeStatus.TENTATIVE to R.plurals.detail_summary_maybe,
+        AttendeeStatus.DECLINED to R.plurals.detail_summary_not_going,
+        AttendeeStatus.INVITED to R.plurals.detail_summary_no_reply,
     )
     return counts
-        .mapNotNull { (status, word) ->
-            count { it.status == status }.takeIf { it > 0 }?.let { "$it $word" }
+        .mapNotNull { (status, plural) ->
+            count { it.status == status }.takeIf { it > 0 }?.let { pluralStringResource(plural, it, it) }
         }
         .joinToString(" · ")
 }
@@ -789,6 +814,7 @@ private fun DetailRow(icon: ImageVector, text: AnnotatedString, onClick: (() -> 
  * stored at UTC midnight with an *exclusive* end, so reading it in the device zone shows the wrong
  * day for anyone west of UTC and always shows one day too many at the end.
  */
+@Composable
 private fun formatWhen(event: Event, is24Hour: Boolean, locale: Locale): String {
     val zone = ZoneId.systemDefault()
     val dateFmt = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", locale)
@@ -798,16 +824,27 @@ private fun formatWhen(event: Event, is24Hour: Boolean, locale: Locale): String 
 
     if (event.allDay) {
         return if (firstDay == lastDay) {
-            "All day · ${firstDay.format(dateFmt)}"
+            stringResource(R.string.detail_when_all_day, firstDay.format(dateFmt))
         } else {
-            "All day · ${firstDay.format(dateFmt)} – ${lastDay.format(dateFmt)}"
+            stringResource(R.string.detail_when_all_day_range, firstDay.format(dateFmt), lastDay.format(dateFmt))
         }
     }
     val start = event.start.atZone(zone)
     val end = event.end.atZone(zone)
     return if (firstDay == lastDay) {
-        "${firstDay.format(dateFmt)}\n${start.format(timeFmt)} – ${end.format(timeFmt)}"
+        stringResource(
+            R.string.detail_when_same_day,
+            firstDay.format(dateFmt),
+            start.format(timeFmt),
+            end.format(timeFmt),
+        )
     } else {
-        "${firstDay.format(dateFmt)} ${start.format(timeFmt)}\n– ${lastDay.format(dateFmt)} ${end.format(timeFmt)}"
+        stringResource(
+            R.string.detail_when_range,
+            firstDay.format(dateFmt),
+            start.format(timeFmt),
+            lastDay.format(dateFmt),
+            end.format(timeFmt),
+        )
     }
 }

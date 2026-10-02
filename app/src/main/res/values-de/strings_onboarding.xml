@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_tagline">Ein Open-Source-Kalender in Material Design 3</string>
+    <string name="onboarding_point_private">Kein Konto, kein Netzwerk, kein Tracking.</string>
+    <string name="onboarding_point_sync">Synchronisiert über DAVx⁵ mit Nextcloud, ownCloud und jedem CalDAV-Server.</string>
+    <string name="onboarding_point_views">Tag, Woche, Monat und Terminübersicht.</string>
+    <string name="onboarding_get_started">Los geht\'s</string>
+
+    <string name="onboarding_checking_phone">Schaue nach, was auf diesem Handy ist…</string>
+    <string name="onboarding_setting_up_calendar">Dein Kalender wird eingerichtet…</string>
+    <string name="onboarding_setting_up">Wird eingerichtet…</string>
+
+    <string name="onboarding_calendars_title">Deine Kalender</string>
+    <string name="onboarding_calendars_subtitle">Wähle einen Startpunkt. Du kannst das später ändern.</string>
+    <string name="onboarding_start_fresh_title">Neu anfangen</string>
+    <string name="onboarding_start_fresh_subtitle">Ein neuer Kalender auf diesem Handy.</string>
+    <string name="onboarding_start_fresh_button">Kalender erstellen</string>
+    <string name="onboarding_use_existing_title">Vorhandene verwenden</string>
+    <string name="onboarding_use_existing_subtitle">Die Kalender, die schon auf deinem Handy sind.</string>
+    <string name="onboarding_use_existing_button">Weiter</string>
+    <string name="onboarding_caldav_title">Mit CalDAV synchronisieren</string>
+    <string name="onboarding_caldav_subtitle_installed">Nextcloud, ownCloud und andere, über DAVx⁵.</string>
+    <string name="onboarding_caldav_subtitle_missing">Benötigt DAVx⁵, kostenlos bei F-Droid.</string>
+    <string name="onboarding_caldav_open">DAVx⁵ öffnen</string>
+    <string name="onboarding_caldav_install">DAVx⁵ installieren</string>
+    <string name="onboarding_local_calendar_name">Mein Kalender</string>
+    <string name="onboarding_error_create_calendar">Kalender konnte nicht erstellt werden. Erlaube den Kalenderzugriff und versuch es noch einmal.</string>
+
+    <string name="onboarding_personalize_title">Personalisieren</string>
+    <string name="onboarding_personalize_subtitle">Du kannst das alles später in den Einstellungen ändern.</string>
+    <string name="onboarding_theme_title">Design</string>
+    <string name="onboarding_theme_system">System</string>
+    <string name="onboarding_theme_light">Hell</string>
+    <string name="onboarding_theme_dark">Dunkel</string>
+    <string name="onboarding_accent_title">Akzentfarbe</string>
+    <string name="onboarding_reminders_title">Erinnerungen</string>
+    <string name="onboarding_reminders_subtitle">Ein Hinweis, bevor deine Termine beginnen.</string>
+    <string name="onboarding_notifications_off_title">Benachrichtigungen sind aus</string>
+    <string name="onboarding_notifications_off_subtitle">Android fragt nicht noch einmal. Erlaube Foscal in den Einstellungen Benachrichtigungen, um Erinnerungen zu erhalten.</string>
+    <string name="onboarding_notifications_off_button">Benachrichtigungen öffnen</string>
+    <string name="onboarding_battery_title">Erinnerungen könnten zu spät kommen</string>
+    <string name="onboarding_battery_subtitle">Die Akku-Optimierung hält sie zurück, bis das Handy aufwacht. Stell Foscal auf „Nicht eingeschränkt“, um das zu beheben.</string>
+    <string name="onboarding_battery_button">Akku-Einstellungen öffnen</string>
+    <string name="onboarding_no_battery_settings">Dieses Handy hat keine Akku-Einstellungen</string>
+    <string name="onboarding_maps_title">Orte auf der Karte wählen</string>
+    <string name="onboarding_maps_subtitle">Tippe auf einen Ort, statt ihn einzugeben. Deine Suche geht an OpenStreetMap.</string>
+    <string name="onboarding_done">Foscal starten</string>
+
+    <string name="permission_calendar_rationale">Foscal braucht Kalenderzugriff, um deine Termine anzuzeigen.</string>
+    <string name="permission_grant_access">Zugriff erlauben</string>
+    <string name="permission_calendar_off_title">Kalenderzugriff ist aus</string>
+    <string name="permission_calendar_off_body">Foscal speichert deine Termine im Kalenderspeicher von Android und kann ohne Zugriff nichts anzeigen oder speichern. Android fragt nicht noch einmal. Öffne in den Einstellungen „Berechtigungen“ und erlaube „Kalender“.</string>
+    <string name="permission_open_app_settings">App-Einstellungen öffnen</string>
+
+    <string name="notification_channel_reminders_name">Terminerinnerungen</string>
+    <string name="notification_channel_reminders_description">Benachrichtigungen zu anstehenden Terminen</string>
+    <string name="notification_untitled_event">Termin</string>
+    <plurals name="notification_snooze">
+        <item quantity="one">%d Min. schlummern</item>
+        <item quantity="other">%d Min. schlummern</item>
+    </plurals>
+    <plurals name="notification_in_minutes">
+        <item quantity="one">In %d Min.</item>
+        <item quantity="other">In %d Min.</item>
+    </plurals>
+    <string name="notification_now">Jetzt</string>
+    <plurals name="notification_minutes_ago">
+        <item quantity="one">Vor %d Min.</item>
+        <item quantity="other">Vor %d Min.</item>
+    </plurals>
+    <string name="notification_today">Heute</string>
+    <string name="notification_tomorrow">Morgen</string>
+    <string name="notification_yesterday">Gestern</string>
+    <string name="notification_day_at_time">%1$s um %2$s</string>
+
+    <string name="health_no_calendar_title">Kein Kalenderzugriff</string>
+    <string name="health_no_calendar_detail">Foscal kann deine Termine nicht lesen und hat daher nichts, woran es dich erinnern könnte.</string>
+    <string name="health_no_calendar_fix">Zugriff erlauben</string>
+    <string name="health_notifications_off_title">Benachrichtigungen sind aus</string>
+    <string name="health_notifications_off_detail">Erinnerungen werden weiter ausgelöst, aber Android verwirft die Benachrichtigung.</string>
+    <string name="health_notifications_off_fix">Benachrichtigungen</string>
+    <string name="health_background_blocked_title">Hintergrundnutzung ist blockiert</string>
+    <string name="health_background_blocked_detail">Foscal kann deinen Kalender nicht neu einlesen, daher gehen die Erinnerungen innerhalb einer Woche aus.</string>
+    <string name="health_app_settings_fix">App-Einstellungen</string>
+    <string name="health_restricted_title">Android hat Foscal eingeschränkt</string>
+    <string name="health_restricted_detail">Hintergrundaufgaben laufen hier nur etwa einmal am Tag. Öffne Foscal ab und zu oder schalte die Akku-Optimierung aus, um das zu ändern.</string>
+    <string name="health_battery_settings_fix">Akku-Einstellungen</string>
+    <string name="health_exact_alarms_title">Exakte Wecker sind aus</string>
+    <string name="health_exact_alarms_detail">Erinnerungen funktionieren weiter, können aber Minuten oder Stunden zu spät kommen.</string>
+    <string name="health_exact_alarms_fix">Exakte Wecker erlauben</string>
+    <string name="health_battery_title">Akku-Optimierung ist an</string>
+    <string name="health_battery_detail">Sie kann Erinnerungen zurückhalten, bis das Handy aufwacht. Foscal wird nur aktiv, wenn eine fällig ist.</string>
+    <string name="health_rare_title">Foscal wird selten geöffnet</string>
+    <string name="health_rare_detail">Android schränkt Hintergrundaufgaben selten genutzter Apps ein, daher werden Erinnerungen seltener aktualisiert.</string>
+    <string name="health_vendor_title">Dieses Handy beendet Hintergrund-Apps</string>
+    <string name="health_vendor_detail">Manche Hersteller beenden Apps, egal was Android sagt. Wenn Erinnerungen weiter ausbleiben, erlaube Foscal den Autostart.</string>
+    <string name="health_vendor_fix">Geräteeinstellungen</string>
+    <string name="health_read_failed_title">Kalender konnte zuletzt nicht gelesen werden</string>
+    <string name="health_read_failed_detail">Deine bestehenden Erinnerungen bleiben unverändert. Foscal versucht es von selbst erneut.</string>
+    <string name="health_resync_fix">Jetzt synchronisieren</string>
+    <string name="health_never_synced_title">Erinnerungen wurden noch nie eingerichtet</string>
+    <string name="health_never_synced_detail">Auf diesem Handy wurde noch keine Synchronisierung abgeschlossen.</string>
+    <string name="health_stale_title">Erinnerungen sind veraltet</string>
+    <plurals name="health_stale_detail">
+        <item quantity="one">Seit über %d Stunde wurde nichts synchronisiert. Meist heißt das, dass Hintergrundaufgaben blockiert werden.</item>
+        <item quantity="other">Seit über %d Stunden wurde nichts synchronisiert. Meist heißt das, dass Hintergrundaufgaben blockiert werden.</item>
+    </plurals>
+</resources>

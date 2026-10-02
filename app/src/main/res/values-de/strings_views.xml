@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="view_agenda">Terminliste</string>
+    <string name="view_day">Tag</string>
+    <string name="view_three_days">3 Tage</string>
+    <string name="view_week">Woche</string>
+    <string name="view_month">Monat</string>
+
+    <string name="view_new_event">Neuer Termin</string>
+    <string name="view_today">Heute</string>
+    <string name="view_all_day">Ganztägig</string>
+    <string name="view_sheet_calendars">Kalender</string>
+    <string name="view_sheet_settings">Einstellungen</string>
+    <string name="home_search">Suchen</string>
+
+    <string name="month_previous_year">Vorheriges Jahr</string>
+    <string name="month_next_year">Nächstes Jahr</string>
+    <string name="month_jump_go">Anzeigen</string>
+    <string name="month_no_events">Keine Termine</string>
+    <plurals name="month_event_count">
+        <item quantity="one">%d Termin</item>
+        <item quantity="other">%d Termine</item>
+    </plurals>
+    <string name="month_empty_day_hint">Tippe auf +, um an diesem Tag etwas einzutragen.</string>
+    <string name="month_no_visible_calendars">Keine Kalender sichtbar. Schalte im Ansichtsmenü unter „Kalender“ einen ein.</string>
+
+    <string name="week_previous">Vorheriger Zeitraum</string>
+    <string name="week_next">Nächster Zeitraum</string>
+
+    <string name="agenda_no_events">Keine Termine.</string>
+    <string name="agenda_no_visible_calendars">Keine Kalender sichtbar. Aktiviere einen in den Einstellungen.</string>
+    <string name="agenda_overnight">%1$s → über Nacht</string>
+    <string name="agenda_until">Bis %1$s</string>
+
+    <string name="search_hint">Termine suchen</string>
+    <string name="search_clear">Suche leeren</string>
+    <string name="search_empty_hint">Suche nach Titel, Ort oder Notizen.</string>
+    <string name="search_no_results">Keine passenden Termine.</string>
+    <string name="search_all_day_on">Ganztägig · %1$s</string>
+
+    <string name="location_pick_title">Ort wählen</string>
+    <string name="location_search_hint">Ort oder Adresse suchen</string>
+    <string name="location_no_match">Nichts gefunden</string>
+    <string name="location_looking_up">Adresse wird gesucht…</string>
+    <string name="location_use_this">Diesen Ort verwenden</string>
+    <string name="location_open_in_maps">In Karten-App öffnen</string>
+    <string name="location_not_found">„%1$s“ wurde auf der Karte nicht gefunden.</string>
+
+    <string name="calendars_add_failed">Der Kalender konnte nicht hinzugefügt werden.</string>
+    <string name="calendars_change_failed">Der Kalender konnte nicht geändert werden.</string>
+    <string name="calendars_remove_failed">Der Kalender konnte nicht entfernt werden.</string>
+
+    <string name="export_failed">Die Datei konnte nicht geschrieben werden</string>
+    <string name="export_none_selected">Keine Kalender ausgewählt</string>
+    <plurals name="export_done">
+        <item quantity="one">%d Termin exportiert</item>
+        <item quantity="other">%d Termine exportiert</item>
+    </plurals>
+    <string name="import_failed">Die Datei konnte nicht gelesen werden</string>
+    <plurals name="import_done">
+        <item quantity="one">%d Termin importiert</item>
+        <item quantity="other">%d Termine importiert</item>
+    </plurals>
+    <plurals name="import_duplicates">
+        <item quantity="one">%d schon vorhanden</item>
+        <item quantity="other">%d schon vorhanden</item>
+    </plurals>
+    <plurals name="import_skipped">
+        <item quantity="one">%d übersprungen</item>
+        <item quantity="other">%d übersprungen</item>
+    </plurals>
+    <string name="import_too_large">Die Datei ist zu groß zum Importieren</string>
+    <string name="import_access_lost">Kein Zugriff mehr auf diese Datei</string>
+    <string name="import_into_title">Importieren in</string>
+    <string name="import_title">Importieren</string>
+    <string name="import_working">Bitte warten…</string>
+    <string name="import_no_target">Es gibt noch keinen Kalender, in den du importieren kannst.</string>
+</resources>

@@ -1,5 +1,6 @@
 package app.foscal.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.foscal.R
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.EventColorStrength
 import app.foscal.ui.CalendarColors
@@ -57,7 +60,7 @@ fun CalendarStyleSettings(
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         StylePreview(modifier = Modifier.padding(horizontal = 12.dp))
 
-        StyleHeader("Colours")
+        StyleHeader(stringResource(R.string.settings_style_colours))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -74,7 +77,7 @@ fun CalendarStyleSettings(
             }
         }
 
-        StyleHeader("Title size")
+        StyleHeader(stringResource(R.string.settings_style_title_size))
         TextScaleSlider(
             percent = state.textScalePercent,
             onPercent = viewModel::setTextScalePercent,
@@ -82,12 +85,14 @@ fun CalendarStyleSettings(
         )
 
         ToggleRow(
-            title = "Wrap event titles",
-            subtitle = if (state.wrapTitles) {
-                "Long titles run onto a second line"
-            } else {
-                "One line, cut off where it runs out"
-            },
+            title = stringResource(R.string.settings_wrap_titles),
+            subtitle = stringResource(
+                if (state.wrapTitles) {
+                    R.string.settings_wrap_titles_on
+                } else {
+                    R.string.settings_wrap_titles_off
+                },
+            ),
             checked = state.wrapTitles,
             onToggle = viewModel::setWrapTitles,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -174,7 +179,7 @@ private fun PreviewBlock(sample: PreviewSample, modifier: Modifier) {
             .padding(horizontal = 3.dp, vertical = 1.dp),
     ) {
         Text(
-            sample.title,
+            stringResource(sample.title),
             color = colors.content,
             fontWeight = FontWeight.SemiBold,
             fontSize = 10.sp.scaledBy(LocalEventTextScale.current),
@@ -223,7 +228,7 @@ private fun StrengthSwatch(
             }
         }
         Text(
-            strength.label,
+            stringResource(strength.labelRes),
             style = MaterialTheme.typography.labelSmall,
             textAlign = TextAlign.Center,
             maxLines = 2,
@@ -270,7 +275,7 @@ private fun TextScaleSlider(
 }
 
 private data class PreviewSample(
-    val title: String,
+    @param:StringRes val title: Int,
     val column: Int,
     val startMinute: Int,
     val endMinute: Int,
@@ -284,12 +289,36 @@ private val PreviewHourHeight: Dp = 46.dp
 
 /** Deliberately includes a title too long for its column, since that is what wrapping decides. */
 private val PreviewSamples = listOf(
-    PreviewSample("Standup", column = 0, startMinute = 5, endMinute = 45, colorIndex = 0),
-    PreviewSample("Quarterly planning workshop", column = 0, startMinute = 55, endMinute = 155, colorIndex = 4),
-    PreviewSample("Design review", column = 1, startMinute = 0, endMinute = 95, colorIndex = 2),
-    PreviewSample("Gym", column = 1, startMinute = 110, endMinute = 175, colorIndex = 5),
-    PreviewSample("Lunch with Anna", column = 2, startMinute = 60, endMinute = 140, colorIndex = 3),
+    PreviewSample(
+        R.string.settings_preview_standup,
+        column = 0, startMinute = 5, endMinute = 45, colorIndex = 0,
+    ),
+    PreviewSample(
+        R.string.settings_preview_planning,
+        column = 0, startMinute = 55, endMinute = 155, colorIndex = 4,
+    ),
+    PreviewSample(
+        R.string.settings_preview_design_review,
+        column = 1, startMinute = 0, endMinute = 95, colorIndex = 2,
+    ),
+    PreviewSample(
+        R.string.settings_preview_gym,
+        column = 1, startMinute = 110, endMinute = 175, colorIndex = 5,
+    ),
+    PreviewSample(
+        R.string.settings_preview_lunch,
+        column = 2, startMinute = 60, endMinute = 140, colorIndex = 3,
+    ),
 )
+
+/** The name under a strength's swatch, kept here because `:core-model` has no resources. */
+private val EventColorStrength.labelRes: Int
+    @StringRes get() = when (this) {
+        EventColorStrength.VERY_SOFT -> R.string.settings_strength_very_soft
+        EventColorStrength.SOFT -> R.string.settings_strength_soft
+        EventColorStrength.BRIGHT -> R.string.settings_strength_bright
+        EventColorStrength.FULL -> R.string.settings_strength_full
+    }
 
 /** Four of the eight calendar presets, enough to show what a strength does to a mixed week. */
 private val SwatchColorIndices = listOf(2, 3, 0, 1)

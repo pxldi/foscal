@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import app.foscal.R
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.LocalIsDarkTheme
 import app.foscal.core.ui.theme.Motion
@@ -772,7 +774,7 @@ private fun NewEventPlaceholder(
     ) {
         Icon(
             Icons.Filled.Add,
-            contentDescription = "New event",
+            contentDescription = stringResource(R.string.view_new_event),
             tint = accent,
             modifier = Modifier.size(if (compact) 14.dp else 18.dp),
         )

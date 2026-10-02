@@ -39,18 +39,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.data.CalendarPermissionState
 import app.foscal.notifications.HealthSeverity
 import app.foscal.notifications.ReminderFix
 import app.foscal.notifications.ReminderFixIntents
 import app.foscal.notifications.ReminderHealth
 import app.foscal.notifications.ReminderIssue
+import app.foscal.ui.util.UiText
+import app.foscal.ui.util.asString
+import app.foscal.ui.util.uiPlural
+import app.foscal.ui.util.uiText
 import java.time.Duration
 import java.time.Instant
 
@@ -152,10 +159,11 @@ private fun DiagnosticsHeader(
         else -> MaterialTheme.colorScheme.primary
     }
     val subtitle = when {
-        loading -> "Checking…"
-        blocking > 0 -> "$blocking ${plural(blocking, "problem")} stopping reminders"
-        issues.isNotEmpty() -> "${issues.size} ${plural(issues.size, "thing")} that could delay them"
-        else -> "All good"
+        loading -> stringResource(R.string.settings_diag_checking)
+        blocking > 0 -> pluralStringResource(R.plurals.settings_diag_blocking, blocking, blocking)
+        issues.isNotEmpty() ->
+            pluralStringResource(R.plurals.settings_diag_warnings, issues.size, issues.size)
+        else -> stringResource(R.string.settings_diag_all_good)
     }
 
     Row(
@@ -169,7 +177,7 @@ private fun DiagnosticsHeader(
         Icon(icon, contentDescription = null, tint = tint)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "Not getting reminders?",
+                stringResource(R.string.settings_diag_title),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
             )
@@ -181,7 +189,9 @@ private fun DiagnosticsHeader(
         }
         Icon(
             if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-            contentDescription = if (expanded) "Collapse" else "Expand",
+            contentDescription = stringResource(
+                if (expanded) R.string.settings_collapse else R.string.settings_expand,
+            ),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -209,22 +219,23 @@ private fun IssueRow(issue: ReminderIssue, onFix: (ReminderFix) -> Unit) {
                 modifier = Modifier.size(18.dp),
             )
             Text(
-                issue.title,
+                issue.title.asString(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
         }
         Text(
-            issue.detail,
+            issue.detail.asString(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         val fix = issue.fix
-        if (fix != null && issue.fixLabel != null) {
+        val fixLabel = issue.fixLabel
+        if (fix != null && fixLabel != null) {
             TextButton(
                 onClick = { onFix(fix) },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            ) { Text(issue.fixLabel) }
+            ) { Text(fixLabel.asString()) }
         }
     }
 }
@@ -238,12 +249,13 @@ private fun SyncSummary(health: ReminderHealth?, resyncing: Boolean, onResync: (
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "Last checked ${lastSyncLabel(health?.lastSyncAt)}",
+                lastCheckedLabel(health?.lastSyncAt).asString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            val armed = health?.alarmsArmed ?: 0
             Text(
-                "${health?.alarmsArmed ?: 0} ${plural(health?.alarmsArmed ?: 0, "reminder")} scheduled",
+                pluralStringResource(R.plurals.settings_diag_scheduled, armed, armed),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -251,7 +263,7 @@ private fun SyncSummary(health: ReminderHealth?, resyncing: Boolean, onResync: (
         if (resyncing) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         } else {
-            TextButton(onClick = onResync) { Text("Resync now") }
+            TextButton(onClick = onResync) { Text(stringResource(R.string.settings_diag_resync)) }
         }
     }
 }
@@ -260,19 +272,20 @@ private fun SyncSummary(health: ReminderHealth?, resyncing: Boolean, onResync: (
  * Coarse and relative on purpose. The exact minute is noise — what the user needs to know is
  * whether this happened recently or has quietly not happened for two days.
  */
-private fun lastSyncLabel(at: Instant?): String {
-    if (at == null) return "never"
+private fun lastCheckedLabel(at: Instant?): UiText {
+    if (at == null) return uiText(R.string.settings_diag_checked_never)
     val elapsed = Duration.between(at, Instant.now())
     return when {
-        elapsed.isNegative -> "just now" // the clock moved backwards; not worth a second message
-        elapsed.toMinutes() < 1 -> "just now"
-        elapsed.toHours() < 1 -> "${elapsed.toMinutes()} ${plural(elapsed.toMinutes().toInt(), "minute")} ago"
-        elapsed.toDays() < 1 -> "${elapsed.toHours()} ${plural(elapsed.toHours().toInt(), "hour")} ago"
-        else -> "${elapsed.toDays()} ${plural(elapsed.toDays().toInt(), "day")} ago"
+        // The clock moved backwards; not worth a second message.
+        elapsed.isNegative -> uiText(R.string.settings_diag_checked_now)
+        elapsed.toMinutes() < 1 -> uiText(R.string.settings_diag_checked_now)
+        elapsed.toHours() < 1 ->
+            uiPlural(R.plurals.settings_diag_checked_minutes, elapsed.toMinutes().toInt())
+        elapsed.toDays() < 1 ->
+            uiPlural(R.plurals.settings_diag_checked_hours, elapsed.toHours().toInt())
+        else -> uiPlural(R.plurals.settings_diag_checked_days, elapsed.toDays().toInt())
     }
 }
-
-private fun plural(count: Int, noun: String): String = if (count == 1) noun else "${noun}s"
 
 /**
  * Amber for "this still works, but it may be late".
@@ -294,7 +307,7 @@ private fun runFix(
         else -> {
             val intent = ReminderFixIntents.intentFor(context, fix)
             if (intent == null) {
-                toast(context, "This device has no such setting")
+                toast(context, context.getString(R.string.settings_diag_no_setting))
                 return
             }
             // Some of these screens exist on the device but refuse to be launched from outside the
@@ -302,9 +315,9 @@ private fun runFix(
             try {
                 context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (_: ActivityNotFoundException) {
-                toast(context, "Couldn't open that settings screen")
+                toast(context, context.getString(R.string.settings_diag_open_failed))
             } catch (_: SecurityException) {
-                toast(context, "Couldn't open that settings screen")
+                toast(context, context.getString(R.string.settings_diag_open_failed))
             }
         }
     }

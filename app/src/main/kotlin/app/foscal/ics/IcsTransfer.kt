@@ -28,6 +28,9 @@ import javax.inject.Singleton
  */
 data class ImportSummary(val imported: Int, val skipped: Int, val duplicates: Int = 0)
 
+/** The chosen file is over the import cap; its own type so the screen can say so in words. */
+class ImportTooLargeException : IOException("File is too large to import")
+
 /**
  * Reads and writes `.ics` files through Storage Access Framework URIs.
  *
@@ -81,7 +84,7 @@ class IcsTransfer @Inject constructor(
                 } ?: throw IOException("Could not open $source for reading")
                 Ics.readDocument(text, zone)
             } catch (_: OutOfMemoryError) {
-                throw IOException("File is too large to import")
+                throw ImportTooLargeException()
             }
             // An unknown calendar takes the synced path, which never writes exception rows.
             val isLocal = repository.getCalendars().firstOrNull { it.id == calendarId }?.isLocal == true
@@ -102,7 +105,7 @@ class IcsTransfer @Inject constructor(
         while (true) {
             val read = read(buffer)
             if (read < 0) break
-            if (out.size() + read > limit) throw IOException("File is too large to import")
+            if (out.size() + read > limit) throw ImportTooLargeException()
             out.write(buffer, 0, read)
         }
         return out.toString(Charsets.UTF_8.name())

@@ -28,8 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.core.model.Calendar
 
 /**
@@ -58,14 +61,16 @@ fun ExportPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Export to .ics") },
+        title = { Text(stringResource(R.string.settings_export_title)) },
         text = {
             Column {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { selected = calendars.map { it.id }.toSet() }) {
-                        Text("All")
+                        Text(stringResource(R.string.settings_select_all))
                     }
-                    TextButton(onClick = { selected = emptySet() }) { Text("None") }
+                    TextButton(onClick = { selected = emptySet() }) {
+                        Text(stringResource(R.string.settings_select_none))
+                    }
                 }
                 Column(
                     modifier = Modifier
@@ -108,7 +113,7 @@ fun ExportPickerDialog(
                                 if (known) {
                                     val n = counts[calendar.id] ?: 0
                                     Text(
-                                        if (n == 1) "1 event" else "$n events",
+                                        pluralStringResource(R.plurals.settings_event_count, n, n),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -125,15 +130,17 @@ fun ExportPickerDialog(
                 enabled = selected.isNotEmpty(),
             ) {
                 Text(
-                    when {
-                        selected.isEmpty() -> "Export"
-                        !known -> "Export"
-                        else -> "Export $total ${if (total == 1) "event" else "events"}"
+                    if (selected.isEmpty() || !known) {
+                        stringResource(R.string.settings_export)
+                    } else {
+                        pluralStringResource(R.plurals.settings_export_events, total, total)
                     },
                 )
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -154,7 +161,7 @@ fun ImportTargetDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Import into") },
+        title = { Text(stringResource(R.string.settings_import_into)) },
         text = {
             Column(
                 modifier = Modifier
@@ -191,13 +198,15 @@ fun ImportTargetDialog(
                         tint = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        "New calendar…",
+                        stringResource(R.string.settings_new_calendar_ellipsis),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }

@@ -24,9 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.core.model.AccentColor
 import app.foscal.core.ui.theme.LocalIsDarkTheme
 import app.foscal.core.ui.theme.tokens
@@ -44,14 +46,14 @@ fun AccentPicker(
     onPickCustom: (Int) -> Unit,
     modifier: Modifier = Modifier,
     // Null where the surrounding card already names the setting, so it isn't labelled twice.
-    label: String? = "Accent colour",
+    label: String? = stringResource(R.string.settings_accent_colour),
 ) {
     val dark = LocalIsDarkTheme.current
     var showPicker by remember { mutableStateOf(false) }
     val presets = listOf(
-        AccentColor.COBALT to "Cobalt",
-        AccentColor.VIOLET to "Violet",
-        AccentColor.FOREST to "Forest",
+        AccentColor.COBALT to stringResource(R.string.settings_accent_cobalt),
+        AccentColor.VIOLET to stringResource(R.string.settings_accent_violet),
+        AccentColor.FOREST to stringResource(R.string.settings_accent_forest),
     )
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (label != null) Text(label, style = MaterialTheme.typography.bodyMedium)
@@ -67,7 +69,7 @@ fun AccentPicker(
             }
             AccentSwatch(
                 color = Color(customColor),
-                label = "Custom",
+                label = stringResource(R.string.settings_accent_custom),
                 selected = selected == AccentColor.CUSTOM,
                 rainbowRing = true,
                 onClick = { showPicker = true },

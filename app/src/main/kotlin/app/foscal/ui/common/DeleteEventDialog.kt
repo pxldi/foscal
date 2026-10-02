@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.ui.editor.RecurrenceScope
 
 /**
@@ -39,19 +41,25 @@ fun DeleteEventDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (recurring) "Delete recurring event" else "Delete event?") },
+        title = {
+            Text(
+                stringResource(
+                    if (recurring) R.string.scope_delete_recurring_title else R.string.scope_delete_title,
+                ),
+            )
+        },
         // A one-off needs no body: the title asks the question, and the snackbar that follows
         // offers Undo.
         text = if (recurring) {
             {
                 Column {
-                    Text("This event repeats. Delete:")
+                    Text(stringResource(R.string.scope_delete_message))
                     Spacer(Modifier.height(16.dp))
-                    DeleteChoice("This event") { confirm(RecurrenceScope.SINGLE) }
-                    DeleteChoice("This and following events") {
+                    DeleteChoice(stringResource(R.string.scope_delete_this)) { confirm(RecurrenceScope.SINGLE) }
+                    DeleteChoice(stringResource(R.string.scope_delete_following)) {
                         confirm(RecurrenceScope.THIS_AND_FOLLOWING)
                     }
-                    DeleteChoice("All events") { confirm(RecurrenceScope.ALL_EVENTS) }
+                    DeleteChoice(stringResource(R.string.scope_delete_all)) { confirm(RecurrenceScope.ALL_EVENTS) }
                 }
             }
         } else {
@@ -59,15 +67,15 @@ fun DeleteEventDialog(
         },
         confirmButton = {
             if (recurring) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             } else {
                 TextButton(onClick = { confirm(RecurrenceScope.ALL_EVENTS) }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             }
         },
         dismissButton = {
-            if (!recurring) TextButton(onClick = onDismiss) { Text("Cancel") }
+            if (!recurring) TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

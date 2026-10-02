@@ -78,6 +78,8 @@
         <item quantity="one">%d Termin gelöscht</item>
         <item quantity="other">%d Termine gelöscht</item>
     </plurals>
+    <string name="message_deleted_untitled">Termin ohne Titel gelöscht</string>
+    <string name="message_delete_failed_untitled">Der Termin konnte nicht gelöscht werden</string>
     <string name="message_save_failed">Der Termin konnte nicht gespeichert werden</string>
     <string name="message_add_failed">Der Termin konnte nicht hinzugefügt werden</string>
     <string name="message_move_failed">Der Termin konnte nicht verschoben werden</string>

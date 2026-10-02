@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Event editor. -->
+    <string name="editor_title_new">New event</string>
+    <string name="editor_title_edit">Edit event</string>
+    <string name="editor_read_only">This event\'s calendar is read-only, so it cannot be changed here.</string>
+    <!-- Placeholder in the empty title field. -->
+    <string name="editor_title_hint">Add title</string>
+    <string name="editor_calendar">Calendar</string>
+    <string name="editor_select_calendar">Select calendar</string>
+    <string name="editor_all_day">All day</string>
+    <!-- Labels in front of the start and end date and time of the event. -->
+    <string name="editor_starts">Starts</string>
+    <string name="editor_ends">Ends</string>
+    <string name="editor_repeats">Repeats</string>
+    <!-- The "does not repeat" choice next to Daily, Weekly, Monthly and Yearly. -->
+    <string name="editor_repeat_once">Once</string>
+    <string name="editor_recurrence_customize">Customize…</string>
+    <string name="editor_recurrence_hide">Hide options</string>
+    <!-- Followed by a number stepper and a unit: "Repeat every [2] weeks". -->
+    <string name="editor_repeat_every">Repeat every</string>
+    <!-- The unit after the stepper; the number itself is shown separately. -->
+    <plurals name="editor_unit_days">
+        <item quantity="one">day</item>
+        <item quantity="other">days</item>
+    </plurals>
+    <plurals name="editor_unit_weeks">
+        <item quantity="one">week</item>
+        <item quantity="other">weeks</item>
+    </plurals>
+    <plurals name="editor_unit_months">
+        <item quantity="one">month</item>
+        <item quantity="other">months</item>
+    </plurals>
+    <plurals name="editor_unit_years">
+        <item quantity="one">year</item>
+        <item quantity="other">years</item>
+    </plurals>
+    <string name="editor_decrease">Less</string>
+    <string name="editor_increase">More</string>
+    <!-- When a repeating series stops: Forever, On date, or After a number of occurrences. -->
+    <string name="editor_recurrence_ends">Ends</string>
+    <string name="editor_recurrence_forever">Forever</string>
+    <string name="editor_recurrence_on_date">On date</string>
+    <string name="editor_recurrence_after">After</string>
+    <string name="editor_recurrence_occurrences">Occurrences</string>
+    <string name="editor_recurrence_date">Date</string>
+    <string name="editor_recurrence_pick_date">Pick date</string>
+    <!-- Above the weekday chips of a weekly series: "On M T W T F S S". -->
+    <string name="editor_recurrence_on_days">On</string>
+    <string name="editor_color">Colour</string>
+    <!-- Spoken by TalkBack for the swatch that puts the event back on its calendar's colour. -->
+    <string name="editor_color_calendar">The calendar\'s colour</string>
+    <string name="editor_reminders">Reminders</string>
+    <string name="editor_reminder_none">None</string>
+    <string name="editor_reminder_custom">Custom…</string>
+    <string name="editor_location">Location</string>
+    <string name="editor_pick_on_map">Pick on map</string>
+    <string name="editor_guests">Attendees</string>
+    <string name="editor_guest_add">Add attendee</string>
+    <!-- Example address in the empty guest field. -->
+    <string name="editor_guest_hint">name@example.com</string>
+    <!-- Spoken by TalkBack; %s is the guest's name or address. -->
+    <string name="editor_guest_remove">Remove %s</string>
+    <string name="editor_guests_read_only">Only the organizer can change who is invited.</string>
+    <string name="editor_notes">Notes</string>
+    <string name="editor_delete_event">Delete event</string>
+    <string name="editor_discard_title">Discard changes?</string>
+    <string name="editor_discard">Discard</string>
+    <string name="editor_keep_editing">Keep editing</string>
+
+    <!-- Date and time pickers. Spoken by TalkBack for the button switching between dial and keyboard. -->
+    <string name="editor_time_type">Type the time</string>
+    <string name="editor_time_dial">Use the dial</string>
+
+    <!-- Custom reminder dialog, shared by the editor and Settings. -->
+    <string name="event_reminder_custom_title">Custom reminder</string>
+    <string name="event_reminder_amount">Amount</string>
+    <!-- %s is a duration such as "4 weeks". -->
+    <string name="event_reminder_too_long">Choose at most %s</string>
+    <!-- %s is a duration such as "2 hours". -->
+    <string name="event_reminder_before">Reminds %s before</string>
+    <string name="event_reminder_set">Set</string>
+
+    <!-- Asked when a recurring event is changed (in the editor) or moved (by dragging it on the grid). -->
+    <string name="scope_change_title">Change recurring event</string>
+    <string name="scope_move_title">Move recurring event</string>
+    <string name="scope_message">This event repeats. Apply your change to:</string>
+    <string name="scope_change_this">Change this event</string>
+    <string name="scope_change_following">Change this and following events</string>
+    <string name="scope_change_all">Change all events</string>
+    <string name="scope_move_this">Move this event</string>
+    <string name="scope_move_following">Move this and following events</string>
+    <string name="scope_move_all">Move all events</string>
+
+    <!-- Delete confirmation. -->
+    <string name="scope_delete_title">Delete event?</string>
+    <string name="scope_delete_recurring_title">Delete recurring event</string>
+    <string name="scope_delete_message">This event repeats. Delete:</string>
+    <string name="scope_delete_this">This event</string>
+    <string name="scope_delete_following">This and following events</string>
+    <string name="scope_delete_all">All events</string>
+
+    <!-- Event detail screen. -->
+    <string name="detail_not_found">Event not found.</string>
+    <!-- Shown when the event's calendar is unknown. -->
+    <string name="detail_calendar_fallback">Calendar</string>
+    <!-- %s is the calendar's name. -->
+    <string name="detail_calendar_read_only">%s · read-only</string>
+    <string name="detail_edit">Edit event</string>
+    <string name="detail_duplicate">Duplicate</string>
+    <!-- %s is a video-call service, e.g. "Zoom" or "Google Meet". -->
+    <string name="detail_join_provider">Join %s</string>
+    <string name="detail_join_call">Join video call</string>
+    <!-- %s is a date such as "Wed, 19 Aug 2026". -->
+    <string name="detail_when_all_day">All day · %s</string>
+    <!-- %1$s and %2$s are the first and last date. -->
+    <string name="detail_when_all_day_range">All day · %1$s – %2$s</string>
+    <!-- %1$s is the date, %2$s and %3$s the start and end time; the line break is deliberate. -->
+    <string name="detail_when_same_day">%1$s\n%2$s – %3$s</string>
+    <!-- %1$s start date, %2$s start time, %3$s end date, %4$s end time; the line break is deliberate. -->
+    <string name="detail_when_range">%1$s %2$s\n– %3$s %4$s</string>
+    <!-- Heading above Yes / Maybe / No for an invitation. -->
+    <string name="detail_rsvp">RSVP</string>
+    <string name="detail_rsvp_yes">Yes</string>
+    <string name="detail_rsvp_maybe">Maybe</string>
+    <string name="detail_rsvp_no">No</string>
+    <string name="detail_rsvp_failed">Your answer could not be saved. This calendar may be read-only.</string>
+    <plurals name="detail_attendees_count">
+        <item quantity="one">%d attendee</item>
+        <item quantity="other">%d attendees</item>
+    </plurals>
+    <!-- Parts of a summary line such as "4 going · 1 maybe · 2 no reply". -->
+    <plurals name="detail_summary_going">
+        <item quantity="one">%d going</item>
+        <item quantity="other">%d going</item>
+    </plurals>
+    <plurals name="detail_summary_maybe">
+        <item quantity="one">%d maybe</item>
+        <item quantity="other">%d maybe</item>
+    </plurals>
+    <plurals name="detail_summary_not_going">
+        <item quantity="one">%d not going</item>
+        <item quantity="other">%d not going</item>
+    </plurals>
+    <plurals name="detail_summary_no_reply">
+        <item quantity="one">%d no reply</item>
+        <item quantity="other">%d no reply</item>
+    </plurals>
+    <string name="detail_attendees_show">Show attendees</string>
+    <string name="detail_attendees_hide">Hide attendees</string>
+    <!-- Marks the user's own row in the guest list; %s is their name or address. -->
+    <string name="detail_attendee_you">%s (you)</string>
+    <string name="detail_attendee_organizer">Organizer</string>
+    <string name="detail_attendee_optional">Optional</string>
+    <!-- One guest's answer, at the end of their row. -->
+    <string name="detail_status_going">Going</string>
+    <string name="detail_status_not_going">Not going</string>
+    <string name="detail_status_maybe">Maybe</string>
+    <string name="detail_status_no_reply">No reply</string>
+</resources>

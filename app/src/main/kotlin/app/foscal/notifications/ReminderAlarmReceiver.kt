@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.provider.CalendarContract.Events
 import android.provider.CalendarContract.Instances
+import android.text.format.DateFormat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.foscal.MainActivity
@@ -55,7 +56,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
         val eventId = intent.getLongExtra(AlarmReminderScheduler.EXTRA_EVENT_ID, -1L)
         val title = intent.getStringExtra(AlarmReminderScheduler.EXTRA_TITLE)
-            ?.takeIf { it.isNotBlank() } ?: "Event"
+            ?.takeIf { it.isNotBlank() } ?: context.getString(R.string.notification_untitled_event)
         val whenMillis = intent.getLongExtra(AlarmReminderScheduler.EXTRA_WHEN_MILLIS, 0L)
         val location = intent.getStringExtra(AlarmReminderScheduler.EXTRA_LOCATION) ?: ""
         val minutes = intent.getIntExtra(AlarmReminderScheduler.EXTRA_MINUTES, 0)
@@ -123,6 +124,9 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             zone = ZoneId.systemDefault(),
         )
 
+        // The resources' locale rather than the process default, so the dates and the words around
+        // them are always in the same language.
+        val locale = context.resources.configuration.locales[0] ?: Locale.getDefault()
         val contentText = listOfNotNull(
             reminderWhen(
                 startMillis = displayStart,
@@ -130,11 +134,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
                 allDay = allDay,
                 use24Hour = use24HourClock(context),
                 zone = ZoneId.systemDefault(),
-                locale = Locale.getDefault(),
-            ),
+                locale = locale,
+                datePattern = DateFormat.getBestDateTimePattern(locale, "EEEMMMd"),
+            )?.resolve(context.resources),
             location.takeIf { it.isNotBlank() },
         ).joinToString(" · ")
-
 
         val tapIntent = Intent(context, MainActivity::class.java).apply {
             putExtra(MainActivity.EXTRA_OPEN_EVENT_ID, eventId)
@@ -154,7 +158,11 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             .setContentIntent(tapPi)
             .addAction(
                 R.drawable.ic_notification_snooze,
-                "Snooze ${SnoozeMinutes}m",
+                context.resources.getQuantityString(
+                    R.plurals.notification_snooze,
+                    SnoozeMinutes,
+                    SnoozeMinutes,
+                ),
                 snoozePendingIntent(context, key, eventId, title, whenMillis, location, minutes, allDay),
             )
             .setAutoCancel(true)

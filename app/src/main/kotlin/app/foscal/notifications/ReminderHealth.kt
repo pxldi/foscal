@@ -1,6 +1,10 @@
 package app.foscal.notifications
 
+import app.foscal.R
 import app.foscal.core.data.ReminderSyncStatus
+import app.foscal.ui.util.UiText
+import app.foscal.ui.util.uiPlural
+import app.foscal.ui.util.uiText
 import java.time.Duration
 import java.time.Instant
 
@@ -53,12 +57,13 @@ enum class ReminderFix {
     RESYNC,
 }
 
+/** The texts are resolved where they are shown, so the decisions here stay testable on the JVM. */
 data class ReminderIssue(
     val severity: HealthSeverity,
-    val title: String,
-    val detail: String,
+    val title: UiText,
+    val detail: UiText,
     val fix: ReminderFix?,
-    val fixLabel: String? = null,
+    val fixLabel: UiText? = null,
 )
 
 /**
@@ -85,10 +90,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "No calendar access",
-                    detail = "Foscal can't read your events, so there's nothing to remind you about.",
+                    title = uiText(R.string.health_no_calendar_title),
+                    detail = uiText(R.string.health_no_calendar_detail),
                     fix = ReminderFix.GRANT_CALENDAR,
-                    fixLabel = "Grant access",
+                    fixLabel = uiText(R.string.health_no_calendar_fix),
                 ),
             )
         }
@@ -96,10 +101,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Notifications are off",
-                    detail = "Alarms still fire, but Android throws the notification away.",
+                    title = uiText(R.string.health_notifications_off_title),
+                    detail = uiText(R.string.health_notifications_off_detail),
                     fix = ReminderFix.OPEN_NOTIFICATION_SETTINGS,
-                    fixLabel = "Open notifications",
+                    fixLabel = uiText(R.string.health_notifications_off_fix),
                 ),
             )
         }
@@ -107,10 +112,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Background use is blocked",
-                    detail = "Foscal can't re-read your calendar, so reminders run out within a week.",
+                    title = uiText(R.string.health_background_blocked_title),
+                    detail = uiText(R.string.health_background_blocked_detail),
                     fix = ReminderFix.OPEN_APP_SETTINGS,
-                    fixLabel = "App settings",
+                    fixLabel = uiText(R.string.health_app_settings_fix),
                 ),
             )
         }
@@ -118,11 +123,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.BLOCKING,
-                    title = "Android has restricted Foscal",
-                    detail = "Background work runs about once a day here. Opening Foscal now and " +
-                        "then, or turning off battery optimization, gets it out.",
+                    title = uiText(R.string.health_restricted_title),
+                    detail = uiText(R.string.health_restricted_detail),
                     fix = ReminderFix.OPEN_BATTERY_OPTIMIZATION,
-                    fixLabel = "Battery settings",
+                    fixLabel = uiText(R.string.health_battery_settings_fix),
                 ),
             )
         }
@@ -131,10 +135,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Exact alarms are off",
-                    detail = "Reminders still work, but Android may deliver them minutes or hours late.",
+                    title = uiText(R.string.health_exact_alarms_title),
+                    detail = uiText(R.string.health_exact_alarms_detail),
                     fix = ReminderFix.REQUEST_EXACT_ALARMS,
-                    fixLabel = "Allow exact alarms",
+                    fixLabel = uiText(R.string.health_exact_alarms_fix),
                 ),
             )
         }
@@ -142,11 +146,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Battery optimization is on",
-                    detail = "It can hold reminders back until the phone wakes up. Foscal only " +
-                        "wakes when one is due.",
+                    title = uiText(R.string.health_battery_title),
+                    detail = uiText(R.string.health_battery_detail),
                     fix = ReminderFix.OPEN_BATTERY_OPTIMIZATION,
-                    fixLabel = "Battery settings",
+                    fixLabel = uiText(R.string.health_battery_settings_fix),
                 ),
             )
         }
@@ -156,9 +159,8 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Foscal is opened rarely",
-                    detail = "Android limits background work for apps you seldom use, so reminders " +
-                        "refresh less often.",
+                    title = uiText(R.string.health_rare_title),
+                    detail = uiText(R.string.health_rare_detail),
                     fix = null,
                 ),
             )
@@ -167,11 +169,10 @@ object ReminderHealthCheck {
             add(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "This phone kills background apps",
-                    detail = "Some manufacturers stop apps whatever Android says. If reminders keep " +
-                        "failing, allow Foscal to autostart.",
+                    title = uiText(R.string.health_vendor_title),
+                    detail = uiText(R.string.health_vendor_detail),
                     fix = ReminderFix.OPEN_VENDOR_AUTOSTART,
-                    fixLabel = "Device settings",
+                    fixLabel = uiText(R.string.health_vendor_fix),
                 ),
             )
         }
@@ -188,10 +189,10 @@ object ReminderHealthCheck {
             return listOf(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "The last calendar read failed",
-                    detail = "Your existing reminders were left alone. Foscal will retry on its own.",
+                    title = uiText(R.string.health_read_failed_title),
+                    detail = uiText(R.string.health_read_failed_detail),
                     fix = ReminderFix.RESYNC,
-                    fixLabel = "Resync now",
+                    fixLabel = uiText(R.string.health_resync_fix),
                 ),
             )
         }
@@ -200,10 +201,10 @@ object ReminderHealthCheck {
             return listOf(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Reminders have never been set up",
-                    detail = "No sync has finished on this phone yet.",
+                    title = uiText(R.string.health_never_synced_title),
+                    detail = uiText(R.string.health_never_synced_detail),
                     fix = ReminderFix.RESYNC,
-                    fixLabel = "Resync now",
+                    fixLabel = uiText(R.string.health_resync_fix),
                 ),
             )
         }
@@ -211,11 +212,10 @@ object ReminderHealthCheck {
             return listOf(
                 ReminderIssue(
                     severity = HealthSeverity.DEGRADING,
-                    title = "Reminders are out of date",
-                    detail = "Nothing has synced for over ${STALE_AFTER.toHours()} hours, which " +
-                        "usually means background work is being blocked.",
+                    title = uiText(R.string.health_stale_title),
+                    detail = uiPlural(R.plurals.health_stale_detail, STALE_AFTER.toHours().toInt()),
                     fix = ReminderFix.RESYNC,
-                    fixLabel = "Resync now",
+                    fixLabel = uiText(R.string.health_resync_fix),
                 ),
             )
         }

@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarPermissionState
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.UserPreferencesRepository
@@ -17,6 +18,8 @@ import app.foscal.core.model.ThemeMode
 import app.foscal.ui.CalendarColors
 import app.foscal.notifications.ReminderFix
 import app.foscal.notifications.ReminderFixIntents
+import app.foscal.ui.util.UiText
+import app.foscal.ui.util.uiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +51,7 @@ data class OnboardingUiState(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val accentColor: AccentColor = AccentColor.Default,
     val accentCustomColor: Int = AccentColor.DEFAULT_CUSTOM_COLOR,
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 @HiltViewModel
@@ -171,19 +174,24 @@ class OnboardingViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val color = CalendarColors.pick(0)
-                val id = repository.ensureLocalCalendar(name = "My calendar", color = color)
+                val id = repository.ensureLocalCalendar(
+                    name = context.getString(R.string.onboarding_local_calendar_name),
+                    color = color,
+                )
                 if (id == null) {
                     _internal.update {
                         it.copy(
                             completing = false,
-                            error = "Couldn't create a calendar. Please grant calendar access and try again.",
+                            error = uiText(R.string.onboarding_error_create_calendar),
                         )
                     }
                     return@launch
                 }
                 _internal.update { it.copy(completing = false, setupComplete = true) }
             } catch (t: Throwable) {
-                _internal.update { it.copy(completing = false, error = t.message) }
+                _internal.update {
+                    it.copy(completing = false, error = t.message?.let { m -> UiText.Raw(m) })
+                }
             }
         }
     }

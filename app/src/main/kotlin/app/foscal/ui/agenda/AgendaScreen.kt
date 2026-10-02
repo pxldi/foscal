@@ -40,11 +40,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.amberTextColor
@@ -108,7 +110,9 @@ fun AgendaRoute(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
-                title = { Text("Agenda", fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Text(stringResource(R.string.view_agenda), fontWeight = FontWeight.SemiBold)
+                },
             )
         },
     ) { padding ->
@@ -237,8 +241,8 @@ private fun AgendaEmpty(hasVisibleCalendars: Boolean, modifier: Modifier = Modif
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            if (hasVisibleCalendars) "No events."
-            else "No visible calendars. Open Settings to enable one.",
+            if (hasVisibleCalendars) stringResource(R.string.agenda_no_events)
+            else stringResource(R.string.agenda_no_visible_calendars),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -386,6 +390,7 @@ private fun AgendaEventCard(event: Event, date: LocalDate, onClick: () -> Unit) 
     }
 }
 
+@Composable
 private fun buildEventSubtitle(
     event: Event,
     date: LocalDate,
@@ -394,7 +399,7 @@ private fun buildEventSubtitle(
 ): String {
     val parts = mutableListOf<String>()
     if (event.allDay) {
-        parts += "All day"
+        parts += stringResource(R.string.view_all_day)
     } else {
         val zone = ZoneId.systemDefault()
         val fmt = timeFormatter(is24Hour, locale)
@@ -408,9 +413,9 @@ private fun buildEventSubtitle(
             firstDay == lastDay -> "$startT – $endT"
             // Genuine multi-day timed event: show only the portion that belongs to this day so
             // the times aren't misread as a single-day span (e.g. a bare "22:00 – 03:00").
-            date == firstDay -> "$startT → overnight"
-            date == lastDay -> "Until $endT"
-            else -> "All day"
+            date == firstDay -> stringResource(R.string.agenda_overnight, startT)
+            date == lastDay -> stringResource(R.string.agenda_until, endT)
+            else -> stringResource(R.string.view_all_day)
         }
     }
     if (!event.location.isNullOrBlank()) parts += event.location!!

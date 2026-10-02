@@ -22,8 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.core.model.Calendar
+import app.foscal.ui.util.asString
 
 /**
  * Asks which calendar an incoming `.ics` file should be added to, then reports what happened.
@@ -44,11 +47,17 @@ fun ImportIcsDialog(
     val targets = calendars.filter { it.isWritable }
     AlertDialog(
         onDismissRequest = { if (!transfer.busy) onDismiss() },
-        title = { Text(if (message == null) "Import into" else "Import") },
+        title = {
+            Text(
+                stringResource(
+                    if (message == null) R.string.import_into_title else R.string.import_title,
+                ),
+            )
+        },
         text = {
             when {
                 message != null -> Text(
-                    message,
+                    message.asString(),
                     color = if (transfer.failed) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -61,10 +70,10 @@ fun ImportIcsDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text("Working…")
+                    Text(stringResource(R.string.import_working))
                 }
 
-                targets.isEmpty() -> Text("There is no calendar to import into yet.")
+                targets.isEmpty() -> Text(stringResource(R.string.import_no_target))
 
                 // Scrollable because this list is however many calendars the phone has, and an
                 // incoming file is exactly when the user cannot go and tidy them up first.
@@ -96,7 +105,11 @@ fun ImportIcsDialog(
                 onClick = onDismiss,
                 enabled = !transfer.busy,
             ) {
-                Text(if (message == null) "Cancel" else "Done")
+                Text(
+                    stringResource(
+                        if (message == null) R.string.action_cancel else R.string.action_done,
+                    ),
+                )
             }
         },
     )

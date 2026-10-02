@@ -1,6 +1,10 @@
 package app.foscal.notifications
 
+import app.foscal.R
 import app.foscal.core.data.ReminderSyncStatus
+import app.foscal.ui.util.UiText
+import app.foscal.ui.util.uiPlural
+import app.foscal.ui.util.uiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -154,7 +158,7 @@ class ReminderHealthCheckTest {
     fun `never having synced is reported`() {
         val issues = issuesFor(healthy(lastSyncAt = null))
         assertEquals(ReminderFix.RESYNC, issues.single().fix)
-        assertTrue(issues.single().title.contains("never"))
+        assertEquals(uiText(R.string.health_never_synced_title), issues.single().title)
     }
 
     @Test
@@ -168,6 +172,15 @@ class ReminderHealthCheckTest {
         val old = now.minus(ReminderHealthCheck.STALE_AFTER).minusSeconds(60)
         val issues = issuesFor(healthy(lastSyncAt = old))
         assertEquals(ReminderFix.RESYNC, issues.single().fix)
+        assertEquals(uiText(R.string.health_stale_title), issues.single().title)
+        // The hours in the text are the threshold itself, so the two cannot drift apart.
+        assertEquals(
+            uiPlural(
+                R.plurals.health_stale_detail,
+                ReminderHealthCheck.STALE_AFTER.toHours().toInt(),
+            ),
+            issues.single().detail,
+        )
     }
 
     /**
@@ -214,6 +227,6 @@ class ReminderHealthCheckTest {
             ),
         )
         assertFalse(issues.isEmpty())
-        assertTrue(issues.filter { it.fix != null }.all { !it.fixLabel.isNullOrBlank() })
+        assertTrue(issues.filter { it.fix != null }.all { it.fixLabel is UiText.Res })
     }
 }

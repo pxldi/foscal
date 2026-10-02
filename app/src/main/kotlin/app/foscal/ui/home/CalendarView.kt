@@ -1,5 +1,6 @@
 package app.foscal.ui.home
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -10,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 
 /**
  * The five ways to look at your events.
@@ -18,12 +20,12 @@ import androidx.compose.ui.unit.dp
  * same timeline with a different [timelineDays]; Month and Agenda are their own layouts. They live
  * together in one switcher because choosing between them is a single decision.
  */
-enum class CalendarView(val label: String, val timelineDays: Int?) {
-    Agenda("Agenda", null),
-    Day("Day", 1),
-    ThreeDay("3 Days", 3),
-    Week("Week", 7),
-    Month("Month", null),
+enum class CalendarView(@param:StringRes val labelRes: Int, val timelineDays: Int?) {
+    Agenda(R.string.view_agenda, null),
+    Day(R.string.view_day, 1),
+    ThreeDay(R.string.view_three_days, 3),
+    Week(R.string.view_week, 7),
+    Month(R.string.view_month, null),
 }
 
 /**

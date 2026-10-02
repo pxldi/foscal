@@ -200,6 +200,18 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   pattern. `Dates` no longer holds any top-level `DateTimeFormatter` vals: those were frozen at
   class-init and lint cannot see through them, so build formatters with `rememberDateFormatter`
   at the composable that needs one instead of adding a shared val back.
+- **Text** — every word the user can see lives in `res/values*/strings_*.xml`, one file per area
+  (`strings_common`, `strings_event`, `strings_settings`, `strings_onboarding`, `strings_views`),
+  with its German in the same file under `values-de`. Lint's `MissingTranslation` is an error, so
+  a new English string without German fails the build; something that must not be translated is
+  `translatable="false"`. Text decided outside a composable (a view model, a singleton, a helper
+  under test) travels as `UiText` (`ui/util/UiText.kt`) and is resolved where it is shown, never
+  when it is posted: a snackbar queued before a language change would otherwise come up in the old
+  language. `:core-model` holds no words at all — `RecurrenceSummary` is data and
+  `recurrenceText` puts it into words in `:app`. Never assemble a sentence from translated pieces;
+  give it one format string with positional arguments, and counts a `<plurals>`. The app's
+  languages are whatever `values-*` folders exist: `generateLocaleConfig` lists them for Android
+  13's per-app language setting. German is informal ("du") and calls an event a *Termin*.
 - **Light/dark branching** — read `LocalIsDarkTheme.current` (provided by `FoscalTheme`),
   never `isSystemInDarkTheme()`. The latter reports only the OS setting, so it disagrees
   with the rest of the UI whenever the user has forced Light or Dark in Settings. The only

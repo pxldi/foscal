@@ -145,7 +145,15 @@ class PendingDeletes internal constructor(
             // Released after the write, not before, so the event does not reappear for the few
             // frames the provider's change takes to come back through the views' flows.
             _pending.update { list -> list.filterNot { it.key == item.key } }
-            if (!gone) messages.post(uiText(R.string.message_delete_failed, item.title))
+            if (!gone) {
+                messages.post(
+                    if (item.title.isBlank()) {
+                        uiText(R.string.message_delete_failed_untitled)
+                    } else {
+                        uiText(R.string.message_delete_failed, item.title)
+                    },
+                )
+            }
         }
     }
 
@@ -157,7 +165,13 @@ class PendingDeletes internal constructor(
 
 /** The snackbar text for the deletes an Undo would cancel. */
 fun undoMessage(waiting: List<PendingDelete>): UiText =
-    waiting.singleOrNull()?.let { uiText(R.string.message_deleted_one, it.title) }
+    waiting.singleOrNull()?.let {
+        if (it.title.isBlank()) {
+            uiText(R.string.message_deleted_untitled)
+        } else {
+            uiText(R.string.message_deleted_one, it.title)
+        }
+    }
         ?: uiPlural(R.plurals.message_deleted_many, waiting.size)
 
 /** [events] without the occurrences a pending delete is about to remove. */

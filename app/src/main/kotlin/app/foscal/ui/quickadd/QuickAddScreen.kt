@@ -40,11 +40,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.QuickAddParser
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
@@ -71,10 +73,13 @@ fun QuickAddRoute(
         snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
-                title = { Text("Quick add") },
+                title = { Text(stringResource(R.string.quick_add_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            stringResource(R.string.action_cancel),
+                        )
                     }
                 },
             )
@@ -124,8 +129,8 @@ private fun QuickAddForm(
             value = state.query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("What's the event?") },
-            placeholder = { Text("e.g. \"Dentist friday 9:30am\"") },
+            label = { Text(stringResource(R.string.quick_add_label)) },
+            placeholder = { Text(stringResource(R.string.quick_add_hint)) },
             singleLine = true,
             textStyle = MaterialTheme.typography.titleMedium,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -147,7 +152,7 @@ private fun QuickAddForm(
             horizontalArrangement = Arrangement.End,
         ) {
             TextButton(onClick = { onSave(use24Hour) }, enabled = state.canSave) {
-                Text("Add event", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.quick_add_save), fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -159,12 +164,13 @@ private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
     val date = parsed.date ?: LocalDate.now()
     val dateText = date.format(rememberDateFormatter("EEE, MMM d"))
     val timeText = if (parsed.allDay) {
-        "All day"
+        stringResource(R.string.view_all_day)
     } else {
         val t = parsed.time ?: defaultNextHour()
         t.format(rememberTimeFormatter())
     }
-    val title = parsed.title.ifBlank { "(Untitled)" }
+    val untitled = stringResource(R.string.quick_add_untitled)
+    val title = parsed.title.ifBlank { untitled }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             title,
@@ -178,7 +184,7 @@ private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
         )
         if (parsed.allDay) {
             Text(
-                "All-day event",
+                stringResource(R.string.quick_add_all_day_event),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -204,10 +210,10 @@ private fun CalendarPicker(
         modifier = Modifier.fillMaxWidth(),
     ) {
         OutlinedTextField(
-            value = selected?.displayName ?: "Calendar",
+            value = selected?.displayName ?: stringResource(R.string.quick_add_calendar),
             onValueChange = {},
             readOnly = true,
-            label = { Text("Calendar") },
+            label = { Text(stringResource(R.string.quick_add_calendar)) },
             leadingIcon = {
                 Box(
                     Modifier

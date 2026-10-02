@@ -115,8 +115,8 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
         val timeFmt = DateTimeFormatter.ofPattern(if (use24Hour) "HH:mm" else "h:mm a", locale)
 
         val whenLabel = when {
-            event.allDay && first == last -> "All day"
-            event.allDay -> "All day until ${last.format(dayFmt)}"
+            event.allDay && first == last -> context.getString(R.string.widget_all_day)
+            event.allDay -> context.getString(R.string.widget_all_day_until, last.format(dayFmt))
             first == last -> {
                 val start = event.start.atZone(zone).toLocalTime().format(timeFmt)
                 val end = event.end.atZone(zone).toLocalTime().format(timeFmt)
@@ -124,7 +124,7 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
             }
             else -> {
                 val start = event.start.atZone(zone).toLocalTime().format(timeFmt)
-                "$start until ${last.format(dayFmt)}"
+                context.getString(R.string.widget_time_until, start, last.format(dayFmt))
             }
         }
         // Location last, on the same separator as the rest: it is the thing you check second,

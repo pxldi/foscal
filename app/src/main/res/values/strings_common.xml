@@ -86,6 +86,8 @@
         <item quantity="one">Deleted %d event</item>
         <item quantity="other">Deleted %d events</item>
     </plurals>
+    <string name="message_deleted_untitled">Deleted an untitled event</string>
+    <string name="message_delete_failed_untitled">Couldn\'t delete the event</string>
     <string name="message_save_failed">Couldn\'t save the event</string>
     <string name="message_add_failed">Couldn\'t add the event</string>
     <string name="message_move_failed">Couldn\'t move the event</string>

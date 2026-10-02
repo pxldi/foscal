@@ -18,9 +18,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.core.model.DayTapAction
 import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.home.BehaviourState
@@ -29,7 +31,9 @@ import app.foscal.ui.home.CalendarView
 import app.foscal.ui.util.asString
 import app.foscal.ui.util.currentLocale
 import app.foscal.ui.util.reminderLabel
+import app.foscal.ui.util.timeFormatter
 import java.time.DayOfWeek
+import java.time.LocalTime
 import java.time.format.TextStyle
 
 /**
@@ -50,14 +54,14 @@ fun CalendarViewSettings(
 
     when (picker) {
         ViewPicker.StartView -> ChoiceDialog(
-            title = "Opens on",
+            title = stringResource(R.string.settings_opens_on),
             options = startViewOptions(),
             selected = state.startView,
             onSelect = { viewModel.setStartView(it); picker = null },
             onDismiss = { picker = null },
         )
         ViewPicker.FirstDay -> ChoiceDialog(
-            title = "Week starts on",
+            title = stringResource(R.string.settings_week_starts_on),
             options = DayOfWeek.entries.map {
                 it.name to it.getDisplayName(TextStyle.FULL, currentLocale())
             },
@@ -66,17 +70,17 @@ fun CalendarViewSettings(
             onDismiss = { picker = null },
         )
         ViewPicker.MonthMinimum -> ChoiceDialog(
-            title = "Skip short events in Month",
-            options = MonthMinimumOptions.map { (minutes, label) -> minutes.toString() to label },
+            title = stringResource(R.string.settings_skip_short),
+            options = MonthMinimumOptions.map { it.toString() to monthMinimumLabel(it) },
             selected = state.monthMinimumMinutes.toString(),
             onSelect = { viewModel.setMonthMinimumMinutes(it.toInt()); picker = null },
             onDismiss = { picker = null },
         )
         ViewPicker.DayTap -> ChoiceDialog(
-            title = "Tapping a day",
+            title = stringResource(R.string.settings_tapping_day),
             options = listOf(
-                DayTapAction.OPEN_DAY.name to "Open that day",
-                DayTapAction.NEW_EVENT.name to "Start a new event",
+                DayTapAction.OPEN_DAY.name to stringResource(R.string.settings_day_tap_open),
+                DayTapAction.NEW_EVENT.name to stringResource(R.string.settings_day_tap_new),
             ),
             selected = state.dayTapAction.name,
             onSelect = { viewModel.setDayTapAction(DayTapAction.valueOf(it)); picker = null },
@@ -87,40 +91,46 @@ fun CalendarViewSettings(
 
     Column {
         ValueRow(
-            title = "Opens on",
+            title = stringResource(R.string.settings_opens_on),
             value = startViewOptions().firstOrNull { it.first == state.startView }?.second
-                ?: "Last used",
+                ?: stringResource(R.string.settings_last_used),
             onClick = { picker = ViewPicker.StartView },
         )
         ValueRow(
-            title = "Week starts on",
+            title = stringResource(R.string.settings_week_starts_on),
             value = state.firstDayOfWeek.getDisplayName(TextStyle.FULL, currentLocale()),
             onClick = { picker = ViewPicker.FirstDay },
         )
         ValueRow(
-            title = "Tapping a day",
+            title = stringResource(R.string.settings_tapping_day),
             value = when (state.dayTapAction) {
-                DayTapAction.OPEN_DAY -> "Opens that day"
-                DayTapAction.NEW_EVENT -> "Starts a new event"
+                DayTapAction.OPEN_DAY -> stringResource(R.string.settings_day_tap_opens)
+                DayTapAction.NEW_EVENT -> stringResource(R.string.settings_day_tap_starts)
             },
             onClick = { picker = ViewPicker.DayTap },
         )
         ValueRow(
-            title = "Skip short events in Month",
-            value = MonthMinimumOptions.firstOrNull { it.first == state.monthMinimumMinutes }?.second
-                ?: "Show all",
+            title = stringResource(R.string.settings_skip_short),
+            value = MonthMinimumOptions.firstOrNull { it == state.monthMinimumMinutes }
+                ?.let { monthMinimumLabel(it) }
+                ?: stringResource(R.string.settings_show_all),
             onClick = { picker = ViewPicker.MonthMinimum },
         )
         ToggleRow(
-            title = "Week numbers",
-            subtitle = if (state.showWeekNumbers) "Shown in Month" else "Hidden",
+            title = stringResource(R.string.settings_week_numbers),
+            subtitle = if (state.showWeekNumbers) {
+                stringResource(R.string.settings_week_numbers_shown)
+            } else {
+                stringResource(R.string.settings_hidden)
+            },
             checked = state.showWeekNumbers,
             onToggle = viewModel::setShowWeekNumbers,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
         )
         ToggleRow(
-            title = "24-hour time",
-            subtitle = if (use24HourClock) "13:00" else "1:00 PM",
+            title = stringResource(R.string.settings_24_hour),
+            // An example time in the chosen form, so the subtitle follows the locale's AM/PM.
+            subtitle = SampleTime.format(timeFormatter(use24HourClock, currentLocale())),
             checked = use24HourClock,
             onToggle = onUse24HourClock,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -140,20 +150,20 @@ fun NewEventSettings(
     var picker by remember { mutableStateOf<EventPicker?>(null) }
     // Hidden calendars are left out: nominating one would put new events somewhere you cannot see
     // them. "First available" leads, because it is the default and needs no decision.
-    val options = listOf("" to "First available") +
+    val options = listOf("" to stringResource(R.string.settings_first_available)) +
         calendars.filter { !it.isHidden && it.calendar.isWritable }
             .map { it.calendar.id.toString() to it.calendar.displayName }
 
     when (picker) {
         EventPicker.Calendar -> ChoiceDialog(
-            title = "Default calendar",
+            title = stringResource(R.string.settings_default_calendar),
             options = options,
             selected = state.defaultCalendarId?.toString() ?: "",
             onSelect = { viewModel.setDefaultCalendarId(it.toLongOrNull()); picker = null },
             onDismiss = { picker = null },
         )
         EventPicker.Length -> ChoiceDialog(
-            title = "Length",
+            title = stringResource(R.string.settings_length),
             options = EventLengths.map { it.toString() to reminderLabel(it).asString() },
             selected = state.defaultEventMinutes.toString(),
             onSelect = { viewModel.setDefaultEventMinutes(it.toInt()); picker = null },
@@ -164,23 +174,21 @@ fun NewEventSettings(
 
     Column {
         ValueRow(
-            title = "Default calendar",
+            title = stringResource(R.string.settings_default_calendar),
             value = options.firstOrNull { it.first == (state.defaultCalendarId?.toString() ?: "") }
-                ?.second ?: "First available",
+                ?.second ?: stringResource(R.string.settings_first_available),
             onClick = { picker = EventPicker.Calendar },
         )
         ValueRow(
-            title = "Length",
+            title = stringResource(R.string.settings_length),
             value = reminderLabel(state.defaultEventMinutes).asString(),
             onClick = { picker = EventPicker.Length },
         )
         ToggleRow(
-            title = "Pick locations on a map",
-            subtitle = if (mapsEnabled) {
-                "Searches OpenStreetMap"
-            } else {
-                "Type addresses by hand"
-            },
+            title = stringResource(R.string.settings_maps),
+            subtitle = stringResource(
+                if (mapsEnabled) R.string.settings_maps_on else R.string.settings_maps_off,
+            ),
             checked = mapsEnabled,
             onToggle = onMapsEnabled,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -196,12 +204,17 @@ private enum class ViewPicker { StartView, FirstDay, DayTap, MonthMinimum }
  * Coarse on purpose: the point is "stop drawing the ten-minute things", not a dial. All-day
  * events are never skipped whatever is chosen here — being all day is what earns a month cell.
  */
-private val MonthMinimumOptions = listOf(
-    0 to "Show all",
-    30 to "Skip under 30 min",
-    60 to "Skip under 1 hour",
-    120 to "Skip under 2 hours",
-)
+private val MonthMinimumOptions = listOf(0, 30, 60, 120)
+
+@Composable
+private fun monthMinimumLabel(minutes: Int): String =
+    if (minutes == 0) {
+        stringResource(R.string.settings_show_all)
+    } else {
+        stringResource(R.string.settings_skip_under, reminderLabel(minutes).asString())
+    }
+
+private val SampleTime: LocalTime = LocalTime.of(13, 0)
 
 private enum class EventPicker { Calendar, Length }
 
@@ -209,8 +222,10 @@ private enum class EventPicker { Calendar, Length }
 private val EventLengths = listOf(15, 30, 45, 60, 90, 120)
 
 /** "Last used" first, because it is the default and the answer most people never change. */
+@Composable
 private fun startViewOptions(): List<Pair<String, String>> =
-    listOf("" to "Last used") + CalendarView.entries.map { it.name to it.label }
+    listOf("" to stringResource(R.string.settings_last_used)) +
+        CalendarView.entries.map { it.name to stringResource(it.labelRes) }
 
 @Composable
 private fun ValueRow(title: String, value: String, onClick: () -> Unit) {
@@ -258,7 +273,7 @@ private fun ChoiceDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
         },
     )
 }

@@ -1,5 +1,8 @@
 package app.foscal.ui.settings
 
+import androidx.annotation.StringRes
+import app.foscal.R
+
 /**
  * The pages Settings is divided into.
  *
@@ -9,13 +12,13 @@ package app.foscal.ui.settings
  * these carry no summary: anything that cannot be said in a word or two belongs on a page of its
  * own rather than behind a caption.
  */
-enum class SettingsSection(val title: String) {
-    Appearance("Appearance"),
-    Behaviour("Behaviour"),
-    Calendars("Calendars"),
-    Reminders("Reminders"),
-    Transfer("Import & export"),
-    About("About"),
+enum class SettingsSection(@param:StringRes val title: Int) {
+    Appearance(R.string.settings_section_appearance),
+    Behaviour(R.string.settings_section_behaviour),
+    Calendars(R.string.settings_section_calendars),
+    Reminders(R.string.settings_section_reminders),
+    Transfer(R.string.settings_section_transfer),
+    About(R.string.settings_section_about),
     ;
 
     companion object {

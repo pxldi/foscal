@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="editor_title_new">Neuer Termin</string>
+    <string name="editor_title_edit">Termin bearbeiten</string>
+    <string name="editor_read_only">Der Kalender dieses Termins ist schreibgeschützt, daher kannst du ihn hier nicht ändern.</string>
+    <string name="editor_title_hint">Titel hinzufügen</string>
+    <string name="editor_calendar">Kalender</string>
+    <string name="editor_select_calendar">Kalender auswählen</string>
+    <string name="editor_all_day">Ganztägig</string>
+    <string name="editor_starts">Beginn</string>
+    <string name="editor_ends">Ende</string>
+    <string name="editor_repeats">Wiederholen</string>
+    <string name="editor_repeat_once">Einmalig</string>
+    <string name="editor_recurrence_customize">Anpassen…</string>
+    <string name="editor_recurrence_hide">Optionen ausblenden</string>
+    <string name="editor_repeat_every">Wiederholen alle</string>
+    <plurals name="editor_unit_days">
+        <item quantity="one">Tag</item>
+        <item quantity="other">Tage</item>
+    </plurals>
+    <plurals name="editor_unit_weeks">
+        <item quantity="one">Woche</item>
+        <item quantity="other">Wochen</item>
+    </plurals>
+    <plurals name="editor_unit_months">
+        <item quantity="one">Monat</item>
+        <item quantity="other">Monate</item>
+    </plurals>
+    <plurals name="editor_unit_years">
+        <item quantity="one">Jahr</item>
+        <item quantity="other">Jahre</item>
+    </plurals>
+    <string name="editor_decrease">Weniger</string>
+    <string name="editor_increase">Mehr</string>
+    <string name="editor_recurrence_ends">Endet</string>
+    <string name="editor_recurrence_forever">Nie</string>
+    <string name="editor_recurrence_on_date">Am Datum</string>
+    <string name="editor_recurrence_after">Nach</string>
+    <string name="editor_recurrence_occurrences">Wiederholungen</string>
+    <string name="editor_recurrence_date">Datum</string>
+    <string name="editor_recurrence_pick_date">Datum wählen</string>
+    <string name="editor_recurrence_on_days">Am</string>
+    <string name="editor_color">Farbe</string>
+    <string name="editor_color_calendar">Farbe des Kalenders</string>
+    <string name="editor_reminders">Erinnerungen</string>
+    <string name="editor_reminder_none">Keine</string>
+    <string name="editor_reminder_custom">Eigene…</string>
+    <string name="editor_location">Ort</string>
+    <string name="editor_pick_on_map">Auf Karte wählen</string>
+    <string name="editor_guests">Gäste</string>
+    <string name="editor_guest_add">Gast hinzufügen</string>
+    <string name="editor_guest_hint">name@beispiel.de</string>
+    <string name="editor_guest_remove">%s entfernen</string>
+    <string name="editor_guests_read_only">Nur der Organisator kann die Gästeliste ändern.</string>
+    <string name="editor_notes">Notizen</string>
+    <string name="editor_delete_event">Termin löschen</string>
+    <string name="editor_discard_title">Änderungen verwerfen?</string>
+    <string name="editor_discard">Verwerfen</string>
+    <string name="editor_keep_editing">Weiter bearbeiten</string>
+
+    <string name="editor_time_type">Uhrzeit eintippen</string>
+    <string name="editor_time_dial">Zifferblatt verwenden</string>
+
+    <string name="event_reminder_custom_title">Eigene Erinnerung</string>
+    <string name="event_reminder_amount">Anzahl</string>
+    <string name="event_reminder_too_long">Höchstens %s</string>
+    <string name="event_reminder_before">Erinnert %s vorher</string>
+    <string name="event_reminder_set">Festlegen</string>
+
+    <string name="scope_change_title">Wiederkehrenden Termin ändern</string>
+    <string name="scope_move_title">Wiederkehrenden Termin verschieben</string>
+    <string name="scope_message">Dieser Termin wiederholt sich. Änderung anwenden auf:</string>
+    <string name="scope_change_this">Dieser Termin</string>
+    <string name="scope_change_following">Dieser und alle folgenden</string>
+    <string name="scope_change_all">Alle Termine</string>
+    <string name="scope_move_this">Dieser Termin</string>
+    <string name="scope_move_following">Dieser und alle folgenden</string>
+    <string name="scope_move_all">Alle Termine</string>
+
+    <string name="scope_delete_title">Termin löschen?</string>
+    <string name="scope_delete_recurring_title">Wiederkehrenden Termin löschen</string>
+    <string name="scope_delete_message">Dieser Termin wiederholt sich. Löschen:</string>
+    <string name="scope_delete_this">Dieser Termin</string>
+    <string name="scope_delete_following">Dieser und alle folgenden</string>
+    <string name="scope_delete_all">Alle Termine</string>
+
+    <string name="detail_not_found">Termin nicht gefunden.</string>
+    <string name="detail_calendar_fallback">Kalender</string>
+    <string name="detail_calendar_read_only">%s · schreibgeschützt</string>
+    <string name="detail_edit">Termin bearbeiten</string>
+    <string name="detail_duplicate">Duplizieren</string>
+    <string name="detail_join_provider">An %s teilnehmen</string>
+    <string name="detail_join_call">An Videoanruf teilnehmen</string>
+    <string name="detail_when_all_day">Ganztägig · %s</string>
+    <string name="detail_when_all_day_range">Ganztägig · %1$s – %2$s</string>
+    <string name="detail_when_same_day">%1$s\n%2$s – %3$s</string>
+    <string name="detail_when_range">%1$s %2$s\n– %3$s %4$s</string>
+    <string name="detail_rsvp">Teilnahme</string>
+    <string name="detail_rsvp_yes">Ja</string>
+    <string name="detail_rsvp_maybe">Vielleicht</string>
+    <string name="detail_rsvp_no">Nein</string>
+    <string name="detail_rsvp_failed">Deine Antwort konnte nicht gespeichert werden. Der Kalender ist möglicherweise schreibgeschützt.</string>
+    <plurals name="detail_attendees_count">
+        <item quantity="one">%d Gast</item>
+        <item quantity="other">%d Gäste</item>
+    </plurals>
+    <plurals name="detail_summary_going">
+        <item quantity="one">%d Zusage</item>
+        <item quantity="other">%d Zusagen</item>
+    </plurals>
+    <plurals name="detail_summary_maybe">
+        <item quantity="one">%d vielleicht</item>
+        <item quantity="other">%d vielleicht</item>
+    </plurals>
+    <plurals name="detail_summary_not_going">
+        <item quantity="one">%d Absage</item>
+        <item quantity="other">%d Absagen</item>
+    </plurals>
+    <plurals name="detail_summary_no_reply">
+        <item quantity="one">%d ohne Antwort</item>
+        <item quantity="other">%d ohne Antwort</item>
+    </plurals>
+    <string name="detail_attendees_show">Gäste anzeigen</string>
+    <string name="detail_attendees_hide">Gäste ausblenden</string>
+    <string name="detail_attendee_you">%s (du)</string>
+    <string name="detail_attendee_organizer">Organisator</string>
+    <string name="detail_attendee_optional">Optional</string>
+    <string name="detail_status_going">Zugesagt</string>
+    <string name="detail_status_not_going">Abgesagt</string>
+    <string name="detail_status_maybe">Vielleicht</string>
+    <string name="detail_status_no_reply">Keine Antwort</string>
+</resources>

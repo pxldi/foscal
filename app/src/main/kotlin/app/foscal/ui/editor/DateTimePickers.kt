@@ -19,11 +19,13 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import app.foscal.R
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -50,9 +52,9 @@ fun DatePickerModal(
                     onSelect(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate())
                 }
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(stringResource(R.string.action_ok)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     ) {
         DatePicker(state = state)
     }
@@ -86,9 +88,9 @@ fun TimePickerModal(
                 lastDisplayMode = displayMode
                 onSelect(LocalTime.of(state.hour, state.minute))
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text(stringResource(R.string.action_ok)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
         title = { TimePickerDialogDefaults.Title(displayMode = displayMode) },
         modeToggleButton = {
             val toggle = {
@@ -100,7 +102,13 @@ fun TimePickerModal(
             }
             // Material 1.4 labels the keyboard icon "Switch to clock mode", the opposite of what
             // it does, so TalkBack gets a label of our own.
-            val label = if (displayMode == TimePickerDisplayMode.Picker) "Type the time" else "Use the dial"
+            val label = stringResource(
+                if (displayMode == TimePickerDisplayMode.Picker) {
+                    R.string.editor_time_type
+                } else {
+                    R.string.editor_time_dial
+                },
+            )
             TimePickerDialogDefaults.DisplayModeToggle(
                 onDisplayModeChange = toggle,
                 displayMode = displayMode,

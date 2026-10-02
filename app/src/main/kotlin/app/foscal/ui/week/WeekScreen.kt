@@ -41,16 +41,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.ui.theme.Motion
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
 import app.foscal.core.ui.theme.weekendLabelColor
 import app.foscal.ui.common.RecurrenceScopeDialog
+import app.foscal.ui.common.ScopeAction
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.common.TimelineEndInset
 import app.foscal.ui.common.TimelineGutterWidth
@@ -100,7 +103,7 @@ fun TimelineRoute(
 
     pendingMove?.let { move ->
         RecurrenceScopeDialog(
-            verb = "Move",
+            action = ScopeAction.MOVE,
             onScope = { scope ->
                 pendingMove = null
                 viewModel.moveEvent(move.event, move.startMillis, move.endMillis, scope)
@@ -128,12 +131,18 @@ fun TimelineRoute(
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.previous() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous")
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            stringResource(R.string.week_previous),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.next() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next")
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            stringResource(R.string.week_next),
+                        )
                     }
                 },
             )

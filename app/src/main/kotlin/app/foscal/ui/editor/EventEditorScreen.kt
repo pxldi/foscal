@@ -1,6 +1,7 @@
 package app.foscal.ui.editor
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.PluralsRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -80,6 +81,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -92,6 +95,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.Attendee
 import app.foscal.core.model.Frequency
 import app.foscal.core.ui.theme.Motion
@@ -99,6 +103,7 @@ import app.foscal.ui.CalendarColors
 import app.foscal.ui.common.DeleteEventDialog
 import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.ReminderDurationDialog
+import app.foscal.ui.common.ScopeAction
 import app.foscal.ui.contrastColor
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
@@ -141,7 +146,7 @@ fun EventEditorRoute(
 
     state.scopePrompt?.let {
         RecurrenceScopeDialog(
-            verb = "Change",
+            action = ScopeAction.CHANGE,
             onScope = viewModel::resolveScope,
             onDismiss = viewModel::dismissScopePrompt,
         )
@@ -177,15 +182,21 @@ fun EventEditorRoute(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
-                title = { Text(if (state.isEditing) "Edit event" else "New event") },
+                title = {
+                    Text(
+                        stringResource(
+                            if (state.isEditing) R.string.editor_title_edit else R.string.editor_title_new,
+                        ),
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = leave) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_cancel))
                     }
                 },
                 actions = {
                     TextButton(onClick = viewModel::save, enabled = state.canSave) {
-                        Text("Save", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.action_save), fontWeight = FontWeight.SemiBold)
                     }
                 },
             )
@@ -233,7 +244,7 @@ private fun EditorForm(
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
         if (state.calendarReadOnly) {
             Text(
-                "This event's calendar is read-only, so it cannot be changed here.",
+                stringResource(R.string.editor_read_only),
                 modifier = rowPadding,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
@@ -272,7 +283,7 @@ private fun EditorForm(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp)
                     .focusRequester(titleFocus),
-                placeholder = { Text("Add title") },
+                placeholder = { Text(stringResource(R.string.editor_title_hint)) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.titleLarge,
             )
@@ -291,10 +302,10 @@ private fun EditorForm(
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                 ) {
                     OutlinedTextField(
-                        value = selected?.displayName ?: "Select calendar",
+                        value = selected?.displayName ?: stringResource(R.string.editor_select_calendar),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Calendar") },
+                        label = { Text(stringResource(R.string.editor_calendar)) },
                         leadingIcon = {
                             ColorDot(Modifier.size(14.dp), color = selected?.color ?: 0xFF1976D2.toInt())
                         },
@@ -326,7 +337,7 @@ private fun EditorForm(
         // All-day toggle
         Section {
             ToggleRow(
-                label = "All day",
+                label = stringResource(R.string.editor_all_day),
                 checked = state.allDay,
                 onCheckedChange = viewModel::updateAllDay,
                 modifier = rowPadding.fillMaxWidth(),
@@ -336,7 +347,7 @@ private fun EditorForm(
         // Start / End
         Section {
             DateTimeRow(
-                label = "Starts",
+                label = stringResource(R.string.editor_starts),
                 date = state.startDate,
                 time = state.startTime,
                 showTime = !state.allDay,
@@ -345,7 +356,7 @@ private fun EditorForm(
                 modifier = rowPadding.fillMaxWidth(),
             )
             DateTimeRow(
-                label = "Ends",
+                label = stringResource(R.string.editor_ends),
                 date = state.endDate,
                 time = state.endTime,
                 showTime = !state.allDay,
@@ -362,7 +373,7 @@ private fun EditorForm(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ChipRow(
-                    title = "Repeats",
+                    title = stringResource(R.string.editor_repeats),
                     selected = state.frequency,
                 ) { freq -> viewModel.updateFrequency(freq) }
                 // Grown into rather than popped in. Choosing "Weekly" adds a button and, behind
@@ -378,7 +389,15 @@ private fun EditorForm(
                 ) {
                     Column {
                         TextButton(onClick = viewModel::toggleCustomRecurrence) {
-                            Text(if (state.showCustomRecurrence) "Hide options" else "Customize…")
+                            Text(
+                                stringResource(
+                                    if (state.showCustomRecurrence) {
+                                        R.string.editor_recurrence_hide
+                                    } else {
+                                        R.string.editor_recurrence_customize
+                                    },
+                                ),
+                            )
                         }
                         AnimatedVisibility(
                             visible = state.showCustomRecurrence,
@@ -445,7 +464,7 @@ private fun EditorForm(
                     modifier = Modifier
                         .fillMaxWidth()
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
-                    label = { Text("Location") },
+                    label = { Text(stringResource(R.string.editor_location)) },
                     singleLine = true,
                     trailingIcon = if (suggestions.isNotEmpty()) {
                         { ExposedDropdownMenuDefaults.TrailingIcon(menuOpen) }
@@ -482,7 +501,7 @@ private fun EditorForm(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.size(8.dp))
-                    Text("Pick on map")
+                    Text(stringResource(R.string.editor_pick_on_map))
                 }
             }
         }
@@ -514,7 +533,7 @@ private fun EditorForm(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                label = { Text("Notes") },
+                label = { Text(stringResource(R.string.editor_notes)) },
                 minLines = 3,
                 maxLines = 6,
             )
@@ -539,7 +558,7 @@ private fun EditorForm(
                     ) {
                         Icon(Icons.Outlined.Delete, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
-                        Text("Delete event")
+                        Text(stringResource(R.string.editor_delete_event))
                     }
                 }
             }
@@ -552,13 +571,15 @@ private fun EditorForm(
 private fun DiscardChangesDialog(onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
     AlertDialog(
         onDismissRequest = onKeepEditing,
-        title = { Text("Discard changes?") },
+        title = { Text(stringResource(R.string.editor_discard_title)) },
         confirmButton = {
             TextButton(onClick = onDiscard) {
-                Text("Discard", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.editor_discard), color = MaterialTheme.colorScheme.error)
             }
         },
-        dismissButton = { TextButton(onClick = onKeepEditing) { Text("Keep editing") } },
+        dismissButton = {
+            TextButton(onClick = onKeepEditing) { Text(stringResource(R.string.editor_keep_editing)) }
+        },
     )
 }
 
@@ -677,11 +698,11 @@ private fun ChipRow(
     onSelect: (Frequency) -> Unit,
 ) {
     val options = listOf(
-        Frequency.NONE to "Once",
-        Frequency.DAILY to "Daily",
-        Frequency.WEEKLY to "Weekly",
-        Frequency.MONTHLY to "Monthly",
-        Frequency.YEARLY to "Yearly",
+        Frequency.NONE to stringResource(R.string.editor_repeat_once),
+        Frequency.DAILY to stringResource(R.string.repeat_daily),
+        Frequency.WEEKLY to stringResource(R.string.repeat_weekly),
+        Frequency.MONTHLY to stringResource(R.string.repeat_monthly),
+        Frequency.YEARLY to stringResource(R.string.repeat_yearly),
     )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.bodyLarge)
@@ -724,7 +745,7 @@ private fun ColorRow(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Colour", style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.editor_color), style = MaterialTheme.typography.bodyLarge)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -733,7 +754,7 @@ private fun ColorRow(
                 EventColorSwatch(
                     colorArgb = it,
                     selected = selected == null,
-                    contentDescription = "The calendar's colour",
+                    contentDescription = stringResource(R.string.editor_color_calendar),
                     onClick = { onSelect(null) },
                 )
             }
@@ -788,12 +809,12 @@ private fun ReminderRow(
     var picking by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Reminders", style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.editor_reminders), style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(
                 selected = selected.isEmpty(),
                 onClick = { onToggle(null) },
-                label = { Text("None") },
+                label = { Text(stringResource(R.string.editor_reminder_none)) },
             )
             options.forEach { minutes ->
                 FilterChip(
@@ -807,7 +828,7 @@ private fun ReminderRow(
             FilterChip(
                 selected = false,
                 onClick = { picking = true },
-                label = { Text("Custom…") },
+                label = { Text(stringResource(R.string.editor_reminder_custom)) },
             )
         }
     }
@@ -849,7 +870,7 @@ private fun GuestsField(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Attendees", style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.editor_guests), style = MaterialTheme.typography.bodyLarge)
         if (attendees.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 attendees.forEach { attendee ->
@@ -863,7 +884,7 @@ private fun GuestsField(
                             {
                                 Icon(
                                     Icons.Outlined.Close,
-                                    contentDescription = "Remove ${attendee.label}",
+                                    contentDescription = stringResource(R.string.editor_guest_remove, attendee.label),
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
@@ -879,8 +900,8 @@ private fun GuestsField(
                 value = draft,
                 onValueChange = onDraftChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Add attendee") },
-                placeholder = { Text("name@example.com") },
+                label = { Text(stringResource(R.string.editor_guest_add)) },
+                placeholder = { Text(stringResource(R.string.editor_guest_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
@@ -889,13 +910,13 @@ private fun GuestsField(
                 keyboardActions = KeyboardActions(onDone = { onAdd() }),
                 trailingIcon = {
                     IconButton(onClick = onAdd, enabled = canAdd) {
-                        Icon(Icons.Outlined.Add, contentDescription = "Add attendee")
+                        Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.editor_guest_add))
                     }
                 },
             )
         } else {
             Text(
-                "Only the organizer can change who is invited.",
+                stringResource(R.string.editor_guests_read_only),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -912,7 +933,9 @@ private fun CustomRecurrenceControls(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         IntervalRow(
             interval = state.interval,
-            unit = unitLabel(state.frequency, state.interval),
+            unit = unitPlural(state.frequency)
+                ?.let { pluralStringResource(it, state.interval) }
+                .orEmpty(),
             onDecrement = { viewModel.updateInterval(state.interval - 1) },
             onIncrement = { viewModel.updateInterval(state.interval + 1) },
         )
@@ -923,15 +946,14 @@ private fun CustomRecurrenceControls(
     }
 }
 
-private fun unitLabel(frequency: Frequency, interval: Int): String {
-    val singular = when (frequency) {
-        Frequency.DAILY -> "day"
-        Frequency.WEEKLY -> "week"
-        Frequency.MONTHLY -> "month"
-        Frequency.YEARLY -> "year"
-        Frequency.NONE -> ""
-    }
-    return if (interval == 1) singular else singular + "s"
+/** The unit after the interval stepper, as a quantity string; null when the event does not repeat. */
+@PluralsRes
+private fun unitPlural(frequency: Frequency): Int? = when (frequency) {
+    Frequency.DAILY -> R.plurals.editor_unit_days
+    Frequency.WEEKLY -> R.plurals.editor_unit_weeks
+    Frequency.MONTHLY -> R.plurals.editor_unit_months
+    Frequency.YEARLY -> R.plurals.editor_unit_years
+    Frequency.NONE -> null
 }
 
 @Composable
@@ -942,7 +964,11 @@ private fun IntervalRow(
     onIncrement: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Repeat every", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Text(
+            stringResource(R.string.editor_repeat_every),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
         Stepper(
             value = interval,
             onDecrement = onDecrement,
@@ -967,7 +993,7 @@ private fun Stepper(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         IconButton(onClick = onDecrement, enabled = decrementEnabled) {
-            Icon(Icons.Outlined.Remove, contentDescription = "Less")
+            Icon(Icons.Outlined.Remove, contentDescription = stringResource(R.string.editor_decrease))
         }
         Text(
             value.toString(),
@@ -976,7 +1002,7 @@ private fun Stepper(
             textAlign = TextAlign.Center,
         )
         IconButton(onClick = onIncrement) {
-            Icon(Icons.Outlined.Add, contentDescription = "More")
+            Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.editor_increase))
         }
     }
 }
@@ -992,7 +1018,7 @@ private fun EndRow(state: EditorUiState, viewModel: EventEditorViewModel) {
         else -> EndMode.FOREVER
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Ends", style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.editor_recurrence_ends), style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(
                 selected = mode == EndMode.FOREVER,
@@ -1000,7 +1026,7 @@ private fun EndRow(state: EditorUiState, viewModel: EventEditorViewModel) {
                     viewModel.updateRecurrenceCount(null)
                     viewModel.updateRecurrenceEndDate(null)
                 },
-                label = { Text("Forever") },
+                label = { Text(stringResource(R.string.editor_recurrence_forever)) },
             )
             FilterChip(
                 selected = mode == EndMode.UNTIL,
@@ -1009,12 +1035,12 @@ private fun EndRow(state: EditorUiState, viewModel: EventEditorViewModel) {
                         state.recurrenceEndDate ?: state.startDate.plusMonths(1),
                     )
                 },
-                label = { Text("On date") },
+                label = { Text(stringResource(R.string.editor_recurrence_on_date)) },
             )
             FilterChip(
                 selected = mode == EndMode.COUNT,
                 onClick = { viewModel.updateRecurrenceCount(state.recurrenceCount ?: 10) },
-                label = { Text("After") },
+                label = { Text(stringResource(R.string.editor_recurrence_after)) },
             )
         }
         when (mode) {
@@ -1026,7 +1052,7 @@ private fun EndRow(state: EditorUiState, viewModel: EventEditorViewModel) {
                 val count = state.recurrenceCount ?: 1
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Occurrences",
+                        stringResource(R.string.editor_recurrence_occurrences),
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.weight(1f),
                     )
@@ -1047,9 +1073,14 @@ private fun EndRow(state: EditorUiState, viewModel: EventEditorViewModel) {
 private fun EndDateRow(date: LocalDate?, onPick: (LocalDate) -> Unit) {
     var showPicker by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Date", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Text(
-            date?.format(rememberDateFormatter("EEE, MMM d, yyyy")) ?: "Pick date",
+            stringResource(R.string.editor_recurrence_date),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            date?.format(rememberDateFormatter("EEE, MMM d, yyyy"))
+                ?: stringResource(R.string.editor_recurrence_pick_date),
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { showPicker = true }
@@ -1075,7 +1106,7 @@ private fun EndDateRow(date: LocalDate?, onPick: (LocalDate) -> Unit) {
 private fun ByWeekdayRow(byWeekday: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
     val locale = currentLocale()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("On", style = MaterialTheme.typography.bodyLarge)
+        Text(stringResource(R.string.editor_recurrence_on_days), style = MaterialTheme.typography.bodyLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(
                 DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,

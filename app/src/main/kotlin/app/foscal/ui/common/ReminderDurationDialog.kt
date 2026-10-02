@@ -20,8 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.core.model.ReminderDuration
 import app.foscal.core.model.ReminderUnit
 import app.foscal.ui.util.asString
@@ -60,14 +62,17 @@ fun ReminderDurationDialog(
     // A blank field is "still typing", not an error; only a value that cannot become a reminder is
     // called out.
     val error = if (amount.isNotBlank() && minutes == null) {
-        "Choose at most ${reminderLabel(ReminderDuration.MAX_MINUTES).asString()}"
+        stringResource(
+            R.string.event_reminder_too_long,
+            reminderLabel(ReminderDuration.MAX_MINUTES).asString(),
+        )
     } else {
         null
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Custom reminder") },
+        title = { Text(stringResource(R.string.event_reminder_custom_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
@@ -77,7 +82,7 @@ fun ReminderDurationDialog(
                         // keyboards and several IMEs will happily send "-" or "1e5".
                         if (new.length <= MAX_DIGITS && new.all(Char::isDigit)) amount = new
                     },
-                    label = { Text("Amount") },
+                    label = { Text(stringResource(R.string.event_reminder_amount)) },
                     singleLine = true,
                     isError = error != null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -100,7 +105,10 @@ fun ReminderDurationDialog(
                 Text(
                     // Always occupies a line so switching between valid and invalid input does not
                     // make the dialog jump.
-                    text = error ?: minutes?.let { "Reminds ${reminderLabel(it).asString()} before" }
+                    text = error
+                        ?: minutes?.let {
+                            stringResource(R.string.event_reminder_before, reminderLabel(it).asString())
+                        }
                         ?: " ",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (error != null) {
@@ -115,9 +123,9 @@ fun ReminderDurationDialog(
             TextButton(
                 onClick = { minutes?.let(onConfirm) },
                 enabled = minutes != null,
-            ) { Text("Set") }
+            ) { Text(stringResource(R.string.event_reminder_set)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
