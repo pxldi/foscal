@@ -1,0 +1,5 @@
+A new first-run welcome: the mark, the waits and the theme choice now animate.
+
+Quick add understands German: "morgen 14 Uhr", "nächsten Montag", "vom 19. bis 23. Okt".
+
+Events can be moved without dragging: Move… in the event's menu picks a new day and time. TalkBack now reads the calendar, and timeline blocks offer actions to move them.
