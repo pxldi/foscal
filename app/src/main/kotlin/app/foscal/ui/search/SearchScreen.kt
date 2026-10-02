@@ -55,6 +55,7 @@ import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.localizedPattern
 import app.foscal.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -279,8 +280,8 @@ private fun buildSubtitle(
     val dateText = if (isToday) {
         stringResource(R.string.view_today)
     } else {
-        date.format(DateTimeFormatter.ofPattern("EEE, MMM d", locale)) +
-            if (date.year != today.year) " ${date.year}" else ""
+        val skeleton = if (date.year != today.year) "EEEMMMdy" else "EEEMMMd"
+        date.format(DateTimeFormatter.ofPattern(localizedPattern(skeleton, locale), locale))
     }
     parts += if (event.allDay) {
         stringResource(R.string.search_all_day_on, dateText)

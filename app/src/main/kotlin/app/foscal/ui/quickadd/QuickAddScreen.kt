@@ -50,7 +50,7 @@ import app.foscal.R
 import app.foscal.core.model.QuickAddParser
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
-import app.foscal.ui.util.rememberDateFormatter
+import app.foscal.ui.util.rememberSkeletonFormatter
 import app.foscal.ui.util.rememberTimeFormatter
 import java.time.LocalDate
 import java.time.LocalTime
@@ -162,7 +162,7 @@ private fun QuickAddForm(
 private fun PreviewRow(parsed: app.foscal.core.model.QuickAddResult) {
     val zone = ZoneId.systemDefault()
     val date = parsed.date ?: LocalDate.now()
-    val dateText = date.format(rememberDateFormatter("EEE, MMM d"))
+    val dateText = date.format(rememberSkeletonFormatter("EEEMMMd"))
     val timeText = if (parsed.allDay) {
         stringResource(R.string.view_all_day)
     } else {

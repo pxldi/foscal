@@ -105,6 +105,7 @@ import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.asString
 import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.localizedPattern
 import app.foscal.ui.util.recurrenceText
 import app.foscal.ui.util.reminderLabel
 import app.foscal.ui.util.timeFormatter
@@ -817,7 +818,7 @@ private fun DetailRow(icon: ImageVector, text: AnnotatedString, onClick: (() -> 
 @Composable
 private fun formatWhen(event: Event, is24Hour: Boolean, locale: Locale): String {
     val zone = ZoneId.systemDefault()
-    val dateFmt = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", locale)
+    val dateFmt = DateTimeFormatter.ofPattern(localizedPattern("EEEdMMMy", locale), locale)
     val timeFmt = timeFormatter(is24Hour, locale)
     val firstDay = event.startLocalDate(zone)
     val lastDay = event.lastLocalDate(zone).coerceAtLeast(firstDay)

@@ -109,7 +109,7 @@ import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.asString
 import app.foscal.ui.util.currentLocale
-import app.foscal.ui.util.rememberDateFormatter
+import app.foscal.ui.util.rememberSkeletonFormatter
 import app.foscal.ui.util.rememberTimeFormatter
 import app.foscal.ui.util.reminderLabel
 import java.time.DayOfWeek
@@ -643,7 +643,7 @@ private fun DateTimeRow(
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         Text(
-            date.format(rememberDateFormatter("EEE, MMM d")),
+            date.format(rememberSkeletonFormatter("EEEMMMd")),
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { showDatePicker = true }
@@ -1079,7 +1079,7 @@ private fun EndDateRow(date: LocalDate?, onPick: (LocalDate) -> Unit) {
             modifier = Modifier.weight(1f),
         )
         Text(
-            date?.format(rememberDateFormatter("EEE, MMM d, yyyy"))
+            date?.format(rememberSkeletonFormatter("EEEMMMdy"))
                 ?: stringResource(R.string.editor_recurrence_pick_date),
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))

@@ -7,6 +7,7 @@ import android.widget.RemoteViewsService
 import app.foscal.MainActivity
 import app.foscal.R
 import app.foscal.core.model.Event
+import app.foscal.ui.util.localizedPattern
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -111,7 +112,7 @@ class AgendaWidgetFactory(private val context: Context) : RemoteViewsService.Rem
     ): String {
         val first = event.startLocalDate(zone)
         val last = event.lastLocalDate(zone).coerceAtLeast(first)
-        val dayFmt = DateTimeFormatter.ofPattern("MMM d", locale)
+        val dayFmt = DateTimeFormatter.ofPattern(localizedPattern("MMMd", locale), locale)
         val timeFmt = DateTimeFormatter.ofPattern(if (use24Hour) "HH:mm" else "h:mm a", locale)
 
         val whenLabel = when {

@@ -1,5 +1,6 @@
 package app.foscal.ui.util
 
+import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
@@ -32,4 +33,21 @@ fun currentLocale(): Locale = LocalConfiguration.current.locales[0] ?: Locale.ge
 fun rememberDateFormatter(pattern: String): DateTimeFormatter {
     val locale = currentLocale()
     return remember(pattern, locale) { DateTimeFormatter.ofPattern(pattern, locale) }
+}
+
+/**
+ * The pattern [locale] itself uses for the fields in [skeleton], in its own order and punctuation:
+ * "EEEMMMd" is "EEE, MMM d" in English and "EEE, d. MMM" in German. A pattern written out by hand
+ * fixes the English order for every language.
+ */
+fun localizedPattern(skeleton: String, locale: Locale): String =
+    DateFormat.getBestDateTimePattern(locale, skeleton)
+
+/** A [DateTimeFormatter] for [skeleton] laid out the way the current locale writes it. */
+@Composable
+fun rememberSkeletonFormatter(skeleton: String): DateTimeFormatter {
+    val locale = currentLocale()
+    return remember(skeleton, locale) {
+        DateTimeFormatter.ofPattern(localizedPattern(skeleton, locale), locale)
+    }
 }

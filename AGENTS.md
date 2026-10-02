@@ -199,7 +199,11 @@ project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-syste
   take a `Locale` parameter threaded from the call site — `Dates.weekStartLabels(locale)` is the
   pattern. `Dates` no longer holds any top-level `DateTimeFormatter` vals: those were frozen at
   class-init and lint cannot see through them, so build formatters with `rememberDateFormatter`
-  at the composable that needs one instead of adding a shared val back.
+  at the composable that needs one instead of adding a shared val back. A pattern that orders fields
+  (`"EEE, MMM d"`) is English word order in every language; build those from a skeleton with
+  `rememberSkeletonFormatter("EEEMMMd")` or `localizedPattern(skeleton, locale)`, which ask the
+  platform how the locale writes those fields. A week's range title goes through
+  `DateUtils.formatDateRange`, because how a range shares its month is the language's business.
 - **Text** — every word the user can see lives in `res/values*/strings_*.xml`, one file per area
   (`strings_common`, `strings_event`, `strings_settings`, `strings_onboarding`, `strings_views`),
   with its German in the same file under `values-de`. Lint's `MissingTranslation` is an error, so

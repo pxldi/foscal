@@ -71,7 +71,7 @@ import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
-import app.foscal.ui.util.rememberDateFormatter
+import app.foscal.ui.util.rememberSkeletonFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -367,7 +367,7 @@ private fun DayPreviewPanel(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = date.format(rememberDateFormatter("EEE, MMM d")),
+                            text = date.format(rememberSkeletonFormatter("EEEMMMd")),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
