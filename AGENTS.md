@@ -171,8 +171,8 @@ and what's next.
 
 ## Design system
 
-The visual identity ("the Foscal voice") is derived from the Claude Design
-project *Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-system:
+The visual identity ("the Foscal voice") is derived from the design project
+*Android Calendar App Design* (`Calendar.dc.html`). Keep new UI on-system:
 
 - **Typography** — two variable fonts bundled in `core/core-ui/src/main/res/font`:
   **Bricolage Grotesque** (display/voice: date numerals, month header, screen
