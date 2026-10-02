@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_section_appearance">Darstellung</string>
+    <string name="settings_section_behaviour">Verhalten</string>
+    <string name="settings_section_calendars">Kalender</string>
+    <string name="settings_section_reminders">Erinnerungen</string>
+    <string name="settings_section_transfer">Import &amp; Export</string>
+    <string name="settings_section_about">Über</string>
+
+    <string name="settings_header_app">Die App</string>
+    <string name="settings_header_grid">Termine im Raster</string>
+    <string name="settings_header_calendar">Der Kalender</string>
+    <string name="settings_header_new_events">Neue Termine</string>
+
+    <string name="settings_on">An</string>
+    <string name="settings_off">Aus</string>
+    <string name="settings_expand">Ausklappen</string>
+    <string name="settings_collapse">Einklappen</string>
+
+    <string name="settings_wallpaper_colours">Farben vom Hintergrundbild</string>
+    <string name="settings_theme">Design</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_accent_colour">Akzentfarbe</string>
+    <string name="settings_accent_cobalt">Kobalt</string>
+    <string name="settings_accent_violet">Violett</string>
+    <string name="settings_accent_forest">Wald</string>
+    <string name="settings_accent_custom">Eigene</string>
+    <string name="settings_color_custom_title">Eigene Farbe</string>
+    <string name="settings_color_select">Auswählen</string>
+
+    <string name="settings_style_colours">Farben</string>
+    <string name="settings_style_title_size">Titelgröße</string>
+    <string name="settings_wrap_titles">Termintitel umbrechen</string>
+    <string name="settings_wrap_titles_on">Lange Titel laufen in eine zweite Zeile</string>
+    <string name="settings_wrap_titles_off">Eine Zeile, abgeschnitten, wo der Platz endet</string>
+    <string name="settings_strength_very_soft">Sehr sanft</string>
+    <string name="settings_strength_soft">Sanft</string>
+    <string name="settings_strength_bright">Kräftig</string>
+    <string name="settings_strength_full">Voll</string>
+    <string name="settings_preview_standup">Stand-up</string>
+    <string name="settings_preview_planning">Workshop zur Quartalsplanung</string>
+    <string name="settings_preview_design_review">Design-Review</string>
+    <string name="settings_preview_gym">Fitnessstudio</string>
+    <string name="settings_preview_lunch">Mittagessen mit Anna</string>
+
+    <string name="settings_opens_on">Startansicht</string>
+    <string name="settings_last_used">Zuletzt verwendet</string>
+    <string name="settings_week_starts_on">Woche beginnt am</string>
+    <string name="settings_tapping_day">Beim Tippen auf einen Tag</string>
+    <string name="settings_day_tap_open">Diesen Tag öffnen</string>
+    <string name="settings_day_tap_new">Neuen Termin anlegen</string>
+    <string name="settings_day_tap_opens">Öffnet den Tag</string>
+    <string name="settings_day_tap_starts">Legt einen neuen Termin an</string>
+    <string name="settings_skip_short">Kurze Termine im Monat ausblenden</string>
+    <string name="settings_show_all">Alle zeigen</string>
+    <string name="settings_skip_under">Unter %1$s ausblenden</string>
+    <string name="settings_week_numbers">Kalenderwochen</string>
+    <string name="settings_week_numbers_shown">In der Monatsansicht sichtbar</string>
+    <string name="settings_hidden">Ausgeblendet</string>
+    <string name="settings_24_hour">24-Stunden-Format</string>
+    <string name="settings_default_calendar">Standardkalender</string>
+    <string name="settings_first_available">Erster verfügbarer</string>
+    <string name="settings_length">Dauer</string>
+    <string name="settings_maps">Orte auf der Karte wählen</string>
+    <string name="settings_maps_on">Sucht über OpenStreetMap</string>
+    <string name="settings_maps_off">Adressen von Hand eingeben</string>
+
+    <string name="settings_calendars_hint">Tippe auf einen Kalender, um ihm eine eigene Erinnerung zu geben.</string>
+    <string name="settings_add_calendar">Kalender hinzufügen</string>
+    <string name="settings_kept_on_phone">Nur auf diesem Gerät</string>
+    <string name="settings_not_synced">Nicht synchronisiert</string>
+    <string name="settings_not_synced_hint">Für diese Kalender ist die Synchronisierung auf diesem Gerät aus, deshalb lässt Foscal sie weg. „Synchronisieren“ bittet das Konto des Kalenders, die Termine hierher zu holen.</string>
+    <string name="settings_sync">Synchronisieren</string>
+    <string name="settings_account_local">Lokal</string>
+    <string name="settings_no_reminder">Keine Erinnerung</string>
+    <string name="settings_show_in_month">In der Monatsansicht zeigen</string>
+    <string name="settings_show_in_month_hint">Wenn aus, bleibt er in Tag, Woche und Terminliste. Eine Monatszelle ist nur wenige Millimeter hoch, und ein Kalender voller Blöcke verdrängt dort die Termine, die du sehen willst.</string>
+    <string name="settings_calendar_reminder">Erinnerung für neue Termine hier</string>
+    <string name="settings_reminder_default">Standard · %1$s</string>
+    <string name="settings_reminder_default_none">Standard · keine</string>
+    <string name="settings_calendar_rename">Umbenennen oder umfärben</string>
+    <string name="settings_calendar_remove">Diesen Kalender entfernen</string>
+    <string name="settings_remove_calendar_title">„%1$s“ entfernen?</string>
+    <string name="settings_remove_calendar_empty">Er enthält keine Termine. Das lässt sich nicht rückgängig machen.</string>
+    <plurals name="settings_remove_calendar_events">
+        <item quantity="one">Sein einziger Termin wird mitgelöscht. Das lässt sich nicht rückgängig machen.</item>
+        <item quantity="other">Seine %d Termine werden mitgelöscht. Das lässt sich nicht rückgängig machen.</item>
+    </plurals>
+    <string name="settings_calendar_new">Neuer Kalender</string>
+    <string name="settings_calendar_edit">Kalender bearbeiten</string>
+    <string name="settings_calendar_name">Name</string>
+    <string name="settings_calendar_dialog_hint">Nur auf diesem Gerät. Synchronisierte Kalender bekommen Name und Farbe dort, von wo sie synchronisiert werden.</string>
+
+    <string name="settings_default_reminder">Standard-Erinnerung</string>
+    <string name="settings_reminder_none">Keine</string>
+    <string name="settings_reminder_custom">Eigene…</string>
+
+    <string name="settings_export_title">Als .ics exportieren</string>
+    <string name="settings_export_subtitle">Wähle die Kalender für die Datei</string>
+    <string name="settings_import_title">Aus .ics importieren</string>
+    <string name="settings_import_subtitle">Fügt die Termine einer Datei einem Kalender deiner Wahl hinzu</string>
+    <string name="settings_working">Wird verarbeitet…</string>
+    <string name="settings_no_file_app">Auf diesem Gerät gibt es keine App zur Dateiauswahl.</string>
+    <string name="settings_create_and_import">Erstellen und importieren</string>
+    <string name="settings_select_all">Alle</string>
+    <string name="settings_select_none">Keine</string>
+    <plurals name="settings_event_count">
+        <item quantity="one">%d Termin</item>
+        <item quantity="other">%d Termine</item>
+    </plurals>
+    <string name="settings_export">Exportieren</string>
+    <plurals name="settings_export_events">
+        <item quantity="one">%d Termin exportieren</item>
+        <item quantity="other">%d Termine exportieren</item>
+    </plurals>
+    <string name="settings_import_into">Importieren in</string>
+    <string name="settings_new_calendar_ellipsis">Neuer Kalender…</string>
+
+    <string name="settings_diag_title">Keine Erinnerungen erhalten?</string>
+    <string name="settings_diag_checking">Wird geprüft…</string>
+    <plurals name="settings_diag_blocking">
+        <item quantity="one">%d Problem verhindert Erinnerungen</item>
+        <item quantity="other">%d Probleme verhindern Erinnerungen</item>
+    </plurals>
+    <plurals name="settings_diag_warnings">
+        <item quantity="one">%d Faktor könnte sie verzögern</item>
+        <item quantity="other">%d Faktoren könnten sie verzögern</item>
+    </plurals>
+    <string name="settings_diag_all_good">Alles in Ordnung</string>
+    <string name="settings_diag_checked_never">Noch nie geprüft</string>
+    <string name="settings_diag_checked_now">Gerade eben geprüft</string>
+    <plurals name="settings_diag_checked_minutes">
+        <item quantity="one">Vor %d Minute geprüft</item>
+        <item quantity="other">Vor %d Minuten geprüft</item>
+    </plurals>
+    <plurals name="settings_diag_checked_hours">
+        <item quantity="one">Vor %d Stunde geprüft</item>
+        <item quantity="other">Vor %d Stunden geprüft</item>
+    </plurals>
+    <plurals name="settings_diag_checked_days">
+        <item quantity="one">Vor %d Tag geprüft</item>
+        <item quantity="other">Vor %d Tagen geprüft</item>
+    </plurals>
+    <plurals name="settings_diag_scheduled">
+        <item quantity="one">%d Erinnerung geplant</item>
+        <item quantity="other">%d Erinnerungen geplant</item>
+    </plurals>
+    <string name="settings_diag_resync">Jetzt synchronisieren</string>
+    <string name="settings_diag_no_setting">Dieses Gerät hat diese Einstellung nicht</string>
+    <string name="settings_diag_open_failed">Diese Einstellungsseite ließ sich nicht öffnen</string>
+
+    <string name="settings_about_sync">Foscal synchronisiert nicht selbst. DAVx⁵ oder die App deines Kontos hält die Kalender aktuell.</string>
+</resources>

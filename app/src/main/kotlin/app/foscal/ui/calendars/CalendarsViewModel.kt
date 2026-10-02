@@ -3,14 +3,19 @@ package app.foscal.ui.calendars
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.UserPreferencesRepository
 import app.foscal.core.model.AccentColor
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.ThemeMode
 import app.foscal.ics.IcsTransfer
+import app.foscal.ics.ImportTooLargeException
 import app.foscal.notifications.ReminderSyncScheduler
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.UiText
+import app.foscal.ui.util.uiPlural
+import app.foscal.ui.util.uiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,7 +46,7 @@ data class CalendarsUiState(
     val osmMapsEnabled: Boolean = false,
     val transfer: TransferState = TransferState(),
     /** Why the last attempt to add a calendar came to nothing, if it did. */
-    val createError: String? = null,
+    val createError: UiText? = null,
     /** The calendar the user is being asked to confirm deleting, and what it would take with it. */
     val pendingDelete: PendingDelete? = null,
     /** The calendar open for renaming and recolouring, if one is. */
@@ -65,7 +70,7 @@ data class CalendarsUiState(
  * the overloads stop at.
  */
 private data class Dialogs(
-    val error: String?,
+    val error: UiText?,
     val pendingDelete: PendingDelete?,
     val editing: EditingCalendar?,
     val eventCounts: Map<Long, Int>,
@@ -89,7 +94,7 @@ data class PendingDelete(
 /** Progress and outcome of an `.ics` import or export, shown inline in Settings. */
 data class TransferState(
     val busy: Boolean = false,
-    val message: String? = null,
+    val message: UiText? = null,
     val failed: Boolean = false,
 )
 
@@ -153,7 +158,7 @@ class CalendarsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val transferState = MutableStateFlow(TransferState())
-    private val createError = MutableStateFlow<String?>(null)
+    private val createError = MutableStateFlow<UiText?>(null)
     private val eventCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
     private val createdForImport = MutableStateFlow<Long?>(null)
     private val pendingDelete = MutableStateFlow<PendingDelete?>(null)
@@ -239,7 +244,7 @@ class CalendarsViewModel @Inject constructor(
                 // reminder due in that gap would still fire for a calendar just unticked.
                 syncScheduler.syncNow()
             } else {
-                messages.post("Couldn't change “${row.calendar.displayName}”")
+                messages.post(uiText(R.string.message_calendar_change_failed, row.calendar.displayName))
             }
         }
     }
@@ -250,7 +255,7 @@ class CalendarsViewModel @Inject constructor(
             if (repository.setCalendarSynced(calendar.id)) {
                 syncScheduler.syncNow()
             } else {
-                messages.post("Couldn't sync “${calendar.displayName}”")
+                messages.post(uiText(R.string.message_calendar_sync_failed, calendar.displayName))
             }
         }
     }
@@ -278,7 +283,7 @@ class CalendarsViewModel @Inject constructor(
         createError.value = null
         viewModelScope.launch {
             if (repository.createLocalCalendar(trimmed, color) == null) {
-                createError.value = "Couldn't add the calendar."
+                createError.value = uiText(R.string.calendars_add_failed)
             }
         }
     }
@@ -324,7 +329,7 @@ class CalendarsViewModel @Inject constructor(
         editing.value = null
         viewModelScope.launch {
             if (!repository.updateLocalCalendar(calendarId, trimmed, color)) {
-                createError.value = "Couldn't change the calendar."
+                createError.value = uiText(R.string.calendars_change_failed)
             }
         }
     }
@@ -333,7 +338,7 @@ class CalendarsViewModel @Inject constructor(
         pendingDelete.value = null
         viewModelScope.launch {
             if (!repository.deleteLocalCalendar(calendarId)) {
-                createError.value = "Couldn't remove the calendar."
+                createError.value = uiText(R.string.calendars_remove_failed)
             }
         }
     }
@@ -398,12 +403,12 @@ class CalendarsViewModel @Inject constructor(
      * on screen.
      */
     fun exportTo(target: Uri, calendarIds: Set<Long>) {
-        runTransfer {
+        runTransfer(failure = uiText(R.string.export_failed)) {
             if (calendarIds.isEmpty()) {
-                TransferState(message = "No calendars selected", failed = true)
+                TransferState(message = uiText(R.string.export_none_selected), failed = true)
             } else {
                 val count = icsTransfer.export(target, calendarIds)
-                TransferState(message = "Exported $count ${plural(count, "event")}")
+                TransferState(message = uiPlural(R.plurals.export_done, count))
             }
         }
     }
@@ -421,7 +426,7 @@ class CalendarsViewModel @Inject constructor(
         viewModelScope.launch {
             val id = repository.createLocalCalendar(trimmed, color)
             if (id == null) {
-                createError.value = "Couldn't add the calendar."
+                createError.value = uiText(R.string.calendars_add_failed)
             } else {
                 createdForImport.value = id
             }
@@ -435,13 +440,18 @@ class CalendarsViewModel @Inject constructor(
 
     /** Creates every event in the document at [source] on [calendarId]. */
     fun importFrom(source: Uri, calendarId: Long) {
-        runTransfer {
+        runTransfer(failure = uiText(R.string.import_failed)) {
             val summary = icsTransfer.import(source, calendarId)
-            val message = buildString {
-                append("Imported ${summary.imported} ${plural(summary.imported, "event")}")
-                if (summary.duplicates > 0) append(" · ${summary.duplicates} already there")
-                if (summary.skipped > 0) append(" · ${summary.skipped} skipped")
-            }
+            val message = UiText.Joined(
+                listOfNotNull(
+                    uiPlural(R.plurals.import_done, summary.imported),
+                    summary.duplicates.takeIf { it > 0 }
+                        ?.let { uiPlural(R.plurals.import_duplicates, it) },
+                    summary.skipped.takeIf { it > 0 }
+                        ?.let { uiPlural(R.plurals.import_skipped, it) },
+                ),
+                separator = " · ",
+            )
             // A second import of the same file writes nothing and is still not a failure.
             TransferState(message = message, failed = summary.imported == 0 && summary.duplicates == 0)
         }
@@ -456,20 +466,23 @@ class CalendarsViewModel @Inject constructor(
      * A document URI can go stale between the picker returning it and the read (the file is
      * deleted, the provider is uninstalled, a network volume drops), and the file itself is
      * arbitrary user input — none of that should take the app down.
+     *
+     * An unreadable or unwritable document reports [failure], not the exception's own message:
+     * that is written for a log, in English, and often names a content URI.
      */
-    private fun runTransfer(block: suspend () -> TransferState) {
+    private fun runTransfer(failure: UiText, block: suspend () -> TransferState) {
         if (transferState.value.busy) return
         viewModelScope.launch {
             transferState.value = TransferState(busy = true)
             transferState.value = try {
                 block()
-            } catch (e: IOException) {
-                TransferState(message = e.message ?: "Could not read the file", failed = true)
+            } catch (_: ImportTooLargeException) {
+                TransferState(message = uiText(R.string.import_too_large), failed = true)
+            } catch (_: IOException) {
+                TransferState(message = failure, failed = true)
             } catch (_: SecurityException) {
-                TransferState(message = "No longer allowed to access that file", failed = true)
+                TransferState(message = uiText(R.string.import_access_lost), failed = true)
             }
         }
     }
-
-    private fun plural(count: Int, noun: String): String = if (count == 1) noun else "${noun}s"
 }

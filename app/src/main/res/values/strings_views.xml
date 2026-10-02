@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The five views, in the view switcher and the sheet behind it. Keep them short: five sit
+         side by side in one row. -->
+    <string name="view_agenda">Agenda</string>
+    <string name="view_day">Day</string>
+    <string name="view_three_days">3 Days</string>
+    <string name="view_week">Week</string>
+    <string name="view_month">Month</string>
+
+    <!-- Shared by the calendar views. -->
+    <string name="view_new_event">New event</string>
+    <string name="view_today">Today</string>
+    <string name="view_all_day">All day</string>
+    <string name="view_sheet_calendars">Calendars</string>
+    <string name="view_sheet_settings">Settings</string>
+    <string name="home_search">Search</string>
+
+    <!-- Month view and its month/year jump dialog. -->
+    <string name="month_previous_year">Previous year</string>
+    <string name="month_next_year">Next year</string>
+    <!-- Confirms the month/year jump dialog. -->
+    <string name="month_jump_go">Go</string>
+    <string name="month_no_events">No events</string>
+    <plurals name="month_event_count">
+        <item quantity="one">%d event</item>
+        <item quantity="other">%d events</item>
+    </plurals>
+    <string name="month_empty_day_hint">Tap + to add something to this day.</string>
+    <string name="month_no_visible_calendars">No visible calendars. Turn one on under Calendars in the view menu.</string>
+
+    <!-- Day, 3 Days and Week: the arrows that page back and forward by the shown span. -->
+    <string name="week_previous">Previous</string>
+    <string name="week_next">Next</string>
+
+    <!-- Agenda. -->
+    <string name="agenda_no_events">No events.</string>
+    <string name="agenda_no_visible_calendars">No visible calendars. Open Settings to enable one.</string>
+    <!-- An event that runs past midnight, on its first day. %1$s is its start time. -->
+    <string name="agenda_overnight">%1$s → overnight</string>
+    <!-- An event that started on an earlier day, on its last day. %1$s is its end time. -->
+    <string name="agenda_until">Until %1$s</string>
+
+    <!-- Search. -->
+    <string name="search_hint">Search events</string>
+    <!-- Clears the search box. -->
+    <string name="search_clear">Clear</string>
+    <string name="search_empty_hint">Search by title, location, or notes.</string>
+    <string name="search_no_results">No matching events.</string>
+    <!-- %1$s is the date, or "Today". -->
+    <string name="search_all_day_on">All day · %1$s</string>
+
+    <!-- The map screens, only reachable when OpenStreetMap is turned on. -->
+    <string name="location_pick_title">Pick location</string>
+    <string name="location_search_hint">Search for a place or address</string>
+    <string name="location_no_match">No match found</string>
+    <string name="location_looking_up">Looking up address…</string>
+    <string name="location_use_this">Use this location</string>
+    <string name="location_open_in_maps">Open in maps app</string>
+    <!-- %1$s is the event's location text. -->
+    <string name="location_not_found">Couldn\'t find “%1$s” on the map.</string>
+
+    <!-- Adding, editing and removing a local calendar. -->
+    <string name="calendars_add_failed">Couldn\'t add the calendar.</string>
+    <string name="calendars_change_failed">Couldn\'t change the calendar.</string>
+    <string name="calendars_remove_failed">Couldn\'t remove the calendar.</string>
+
+    <!-- .ics export and import. -->
+    <string name="export_failed">Couldn\'t write the file</string>
+    <string name="export_none_selected">No calendars selected</string>
+    <plurals name="export_done">
+        <item quantity="one">Exported %d event</item>
+        <item quantity="other">Exported %d events</item>
+    </plurals>
+    <string name="import_failed">Couldn\'t read the file</string>
+    <!-- The import result is these three joined with " · ", the last two only when not zero. -->
+    <plurals name="import_done">
+        <item quantity="one">Imported %d event</item>
+        <item quantity="other">Imported %d events</item>
+    </plurals>
+    <plurals name="import_duplicates">
+        <item quantity="one">%d already there</item>
+        <item quantity="other">%d already there</item>
+    </plurals>
+    <plurals name="import_skipped">
+        <item quantity="one">%d skipped</item>
+        <item quantity="other">%d skipped</item>
+    </plurals>
+    <string name="import_too_large">File is too large to import</string>
+    <string name="import_access_lost">No longer allowed to access that file</string>
+    <!-- Title of the dialog shown when a .ics file is opened from another app, before a calendar
+         is picked. -->
+    <string name="import_into_title">Import into</string>
+    <string name="import_title">Import</string>
+    <string name="import_working">Working…</string>
+    <string name="import_no_target">There is no calendar to import into yet.</string>
+</resources>

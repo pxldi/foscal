@@ -14,21 +14,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.ui.editor.RecurrenceScope
+
+/** What the user is about to do to a series, which the dialog's wording names. */
+enum class ScopeAction { CHANGE, MOVE }
 
 /**
  * "This event, this and following, or all of them?" — asked wherever a series can be changed.
  *
  * One dialog rather than a copy per caller. There are three places that have to ask (saving an
  * edit, deleting, and dropping an occurrence somewhere else on the grid) and the answer means the
- * same thing in all three, so the wording should not drift between them. [verb] is what the user
- * is about to do, in the imperative, because "Delete this event" reads as a button and "Apply your
- * change to this event" does not.
+ * same thing in all three, so the wording should not drift between them. [action] names what the
+ * user is about to do, in the imperative, because "Move this event" reads as a button and "Apply
+ * your change to this event" does not. Each choice is a whole string per action rather than a verb
+ * spliced into a sentence, since the verb does not sit in the same place in every language.
  */
 @Composable
 fun RecurrenceScopeDialog(
-    verb: String,
+    action: ScopeAction,
     onScope: (RecurrenceScope) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -37,22 +43,31 @@ fun RecurrenceScopeDialog(
         haptics.performHapticFeedback(HapticFeedbackType.Confirm)
         onScope(scope)
     }
+    val move = action == ScopeAction.MOVE
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("$verb recurring event") },
+        title = {
+            Text(stringResource(if (move) R.string.scope_move_title else R.string.scope_change_title))
+        },
         text = {
             Column {
-                Text("This event repeats. Apply your change to:")
+                Text(stringResource(R.string.scope_message))
                 Spacer(Modifier.height(16.dp))
-                ScopeChoice("$verb this event") { choose(RecurrenceScope.SINGLE) }
-                ScopeChoice("$verb this and following events") {
-                    choose(RecurrenceScope.THIS_AND_FOLLOWING)
-                }
-                ScopeChoice("$verb all events") { choose(RecurrenceScope.ALL_EVENTS) }
+                ScopeChoice(
+                    stringResource(if (move) R.string.scope_move_this else R.string.scope_change_this),
+                ) { choose(RecurrenceScope.SINGLE) }
+                ScopeChoice(
+                    stringResource(
+                        if (move) R.string.scope_move_following else R.string.scope_change_following,
+                    ),
+                ) { choose(RecurrenceScope.THIS_AND_FOLLOWING) }
+                ScopeChoice(
+                    stringResource(if (move) R.string.scope_move_all else R.string.scope_change_all),
+                ) { choose(RecurrenceScope.ALL_EVENTS) }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

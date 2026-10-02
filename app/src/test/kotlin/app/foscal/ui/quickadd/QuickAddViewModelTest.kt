@@ -1,9 +1,11 @@
 package app.foscal.ui.quickadd
 
+import app.foscal.R
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
 import app.foscal.testCalendar
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -96,6 +98,6 @@ class QuickAddViewModelTest {
         assertFalse(state.finished)
         assertFalse(state.saving)
         assertEquals("Dentist tomorrow 3pm", state.query)
-        assertEquals("Couldn't add the event", messages.messages.first())
+        assertEquals(uiText(R.string.message_add_failed), messages.messages.first())
     }
 }

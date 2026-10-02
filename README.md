@@ -86,6 +86,8 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   colors, tap-to-open, and a "+" quick-add button.
 - **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
   tomorrow noon", "PTO all-day") and it parses the title, date, and time.
+- **English and German** — follows the phone's language, or the one picked for Foscal under
+  Settings → System → Languages → App languages on Android 13 and later.
 - **Import & export `.ics`** — export every event on your visible calendars to a
   standard iCalendar file — choosing which calendars go into it, with each one's
   event count next to it — or import one into a calendar you pick, or into a new
@@ -111,7 +113,6 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- Translations, starting with German.
 - TalkBack and large-text support, with a non-drag way to move events.
 - Landscape, tablet and foldable layouts.
 

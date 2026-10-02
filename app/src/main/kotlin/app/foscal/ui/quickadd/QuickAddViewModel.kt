@@ -2,6 +2,7 @@ package app.foscal.ui.quickadd
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Calendar
@@ -11,6 +12,7 @@ import app.foscal.core.model.Frequency
 import app.foscal.core.model.QuickAddParser
 import app.foscal.core.model.QuickAddResult
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -98,7 +100,7 @@ class QuickAddViewModel @Inject constructor(
             // Kept open with the text still in the field, so the user can retry or pick another
             // calendar instead of retyping it.
             mutate { it.copy(saving = false, finished = created) }
-            if (!created) messages.post("Couldn't add the event")
+            if (!created) messages.post(uiText(R.string.message_add_failed))
         }
     }
 

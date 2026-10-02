@@ -1,5 +1,6 @@
 package app.foscal.ui.week
 
+import app.foscal.R
 import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.core.data.FakePreferences
@@ -7,6 +8,7 @@ import app.foscal.testCalendar
 import app.foscal.testPendingDeletes
 import app.foscal.timedEvent
 import app.foscal.ui.feedback.UserMessages
+import app.foscal.ui.util.uiText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -144,7 +146,7 @@ class WeekViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, vm.moveRefusals.value)
-        assertEquals("Couldn't move the event", messages.messages.first())
+        assertEquals(uiText(R.string.message_move_failed), messages.messages.first())
     }
 
     @Test

@@ -7,11 +7,11 @@ package app.foscal.core.model
  * through the block, and the whole point of a block is that it is a solid object on the grid. The
  * text colour is still chosen against whatever fill comes out, so every step stays readable.
  */
-enum class EventColorStrength(val key: String, val label: String) {
-    VERY_SOFT("very_soft", "Very soft"),
-    SOFT("soft", "Soft"),
-    BRIGHT("bright", "Bright"),
-    FULL("full", "Full"),
+enum class EventColorStrength(val key: String) {
+    VERY_SOFT("very_soft"),
+    SOFT("soft"),
+    BRIGHT("bright"),
+    FULL("full"),
     ;
 
     /** How far toward the surface the fill is pulled, on top of what the theme already does. */

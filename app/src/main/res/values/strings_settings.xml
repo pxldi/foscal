@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings screen title and the names of its pages. -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_behaviour">Behaviour</string>
+    <string name="settings_section_calendars">Calendars</string>
+    <string name="settings_section_reminders">Reminders</string>
+    <string name="settings_section_transfer">Import &amp; export</string>
+    <string name="settings_section_about">About</string>
+
+    <!-- Group headers inside a settings page. -->
+    <string name="settings_header_app">The app</string>
+    <string name="settings_header_grid">Events on the grid</string>
+    <string name="settings_header_calendar">The calendar</string>
+    <string name="settings_header_new_events">New events</string>
+
+    <!-- Subtitle of a switch row. -->
+    <string name="settings_on">On</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_expand">Expand</string>
+    <string name="settings_collapse">Collapse</string>
+
+    <!-- Appearance. -->
+    <string name="settings_wallpaper_colours">Use wallpaper colours</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_accent_colour">Accent colour</string>
+    <!-- Names of the accent presets, shown under a colour swatch. -->
+    <string name="settings_accent_cobalt">Cobalt</string>
+    <string name="settings_accent_violet">Violet</string>
+    <string name="settings_accent_forest">Forest</string>
+    <string name="settings_accent_custom">Custom</string>
+    <string name="settings_color_custom_title">Custom color</string>
+    <string name="settings_color_select">Select</string>
+
+    <!-- Calendar style: how events are drawn on the grid. -->
+    <string name="settings_style_colours">Colours</string>
+    <string name="settings_style_title_size">Title size</string>
+    <string name="settings_wrap_titles">Wrap event titles</string>
+    <string name="settings_wrap_titles_on">Long titles run onto a second line</string>
+    <string name="settings_wrap_titles_off">One line, cut off where it runs out</string>
+    <!-- How strongly calendar colours fill event blocks; short, shown under a narrow swatch. -->
+    <string name="settings_strength_very_soft">Very soft</string>
+    <string name="settings_strength_soft">Soft</string>
+    <string name="settings_strength_bright">Bright</string>
+    <string name="settings_strength_full">Full</string>
+    <!-- Made-up event titles in the style preview. The second one should be too long for its narrow column. -->
+    <string name="settings_preview_standup">Standup</string>
+    <string name="settings_preview_planning">Quarterly planning workshop</string>
+    <string name="settings_preview_design_review">Design review</string>
+    <string name="settings_preview_gym">Gym</string>
+    <string name="settings_preview_lunch">Lunch with Anna</string>
+
+    <!-- Behaviour. -->
+    <string name="settings_opens_on">Opens on</string>
+    <string name="settings_last_used">Last used</string>
+    <string name="settings_week_starts_on">Week starts on</string>
+    <string name="settings_tapping_day">Tapping a day</string>
+    <!-- Choices in the "Tapping a day" dialog. -->
+    <string name="settings_day_tap_open">Open that day</string>
+    <string name="settings_day_tap_new">Start a new event</string>
+    <!-- The current "Tapping a day" choice, shown under the setting's name. -->
+    <string name="settings_day_tap_opens">Opens that day</string>
+    <string name="settings_day_tap_starts">Starts a new event</string>
+    <string name="settings_skip_short">Skip short events in Month</string>
+    <string name="settings_show_all">Show all</string>
+    <!-- %1$s is a duration such as "30 min" or "2 hours". -->
+    <string name="settings_skip_under">Skip under %1$s</string>
+    <string name="settings_week_numbers">Week numbers</string>
+    <string name="settings_week_numbers_shown">Shown in Month</string>
+    <string name="settings_hidden">Hidden</string>
+    <string name="settings_24_hour">24-hour time</string>
+    <string name="settings_default_calendar">Default calendar</string>
+    <string name="settings_first_available">First available</string>
+    <!-- Default length of a new event. -->
+    <string name="settings_length">Length</string>
+    <string name="settings_maps">Pick locations on a map</string>
+    <string name="settings_maps_on">Searches OpenStreetMap</string>
+    <string name="settings_maps_off">Type addresses by hand</string>
+
+    <!-- Calendars. -->
+    <string name="settings_calendars_hint">Tap a calendar to give it its own reminder.</string>
+    <string name="settings_add_calendar">Add a calendar</string>
+    <string name="settings_kept_on_phone">Kept on this phone</string>
+    <string name="settings_not_synced">Not synced</string>
+    <string name="settings_not_synced_hint">Sync is off for these on this phone, so Foscal leaves them out. Sync asks the calendar\'s account to bring its events here.</string>
+    <string name="settings_sync">Sync</string>
+    <!-- Account type of a calendar that lives only on this phone. -->
+    <string name="settings_account_local">Local</string>
+    <!-- Two facts about a calendar side by side: account name and type, or that and its reminder. -->
+    <string name="settings_joined" translatable="false">%1$s • %2$s</string>
+    <string name="settings_no_reminder">No reminder</string>
+    <string name="settings_show_in_month">Show in Month</string>
+    <string name="settings_show_in_month_hint">Off keeps it in Day, Week and Agenda. A month cell is a few millimetres tall, so a calendar you fill in blocks crowds out the appointments worth seeing there.</string>
+    <string name="settings_calendar_reminder">Reminder for new events here</string>
+    <!-- Chip that follows the app-wide reminder; %1$s is that reminder, such as "15 min". -->
+    <string name="settings_reminder_default">Default · %1$s</string>
+    <string name="settings_reminder_default_none">Default · none</string>
+    <string name="settings_calendar_rename">Rename or recolour</string>
+    <string name="settings_calendar_remove">Remove this calendar</string>
+    <!-- %1$s is the calendar's name. -->
+    <string name="settings_remove_calendar_title">Remove %1$s?</string>
+    <string name="settings_remove_calendar_empty">It has no events on it. This cannot be undone.</string>
+    <plurals name="settings_remove_calendar_events">
+        <item quantity="one">Its one event goes with it. This cannot be undone.</item>
+        <item quantity="other">Its %d events go with it. This cannot be undone.</item>
+    </plurals>
+    <string name="settings_calendar_new">New calendar</string>
+    <string name="settings_calendar_edit">Edit calendar</string>
+    <string name="settings_calendar_name">Name</string>
+    <string name="settings_calendar_dialog_hint">Kept on this phone. Calendars that sync are named and coloured where they sync from.</string>
+
+    <!-- Reminders. -->
+    <string name="settings_default_reminder">Default reminder</string>
+    <string name="settings_reminder_none">None</string>
+    <string name="settings_reminder_custom">Custom…</string>
+
+    <!-- Import and export. -->
+    <string name="settings_export_title">Export to .ics</string>
+    <string name="settings_export_subtitle">Pick the calendars to write out</string>
+    <string name="settings_import_title">Import from .ics</string>
+    <string name="settings_import_subtitle">Adds a file\'s events to a calendar you pick</string>
+    <string name="settings_working">Working…</string>
+    <string name="settings_no_file_app">No app on this phone can pick a file.</string>
+    <string name="settings_create_and_import">Create and import</string>
+    <string name="settings_select_all">All</string>
+    <string name="settings_select_none">None</string>
+    <plurals name="settings_event_count">
+        <item quantity="one">%d event</item>
+        <item quantity="other">%d events</item>
+    </plurals>
+    <string name="settings_export">Export</string>
+    <plurals name="settings_export_events">
+        <item quantity="one">Export %d event</item>
+        <item quantity="other">Export %d events</item>
+    </plurals>
+    <string name="settings_import_into">Import into</string>
+    <string name="settings_new_calendar_ellipsis">New calendar…</string>
+
+    <!-- The "Not getting reminders?" troubleshooting panel. -->
+    <string name="settings_diag_title">Not getting reminders?</string>
+    <string name="settings_diag_checking">Checking…</string>
+    <plurals name="settings_diag_blocking">
+        <item quantity="one">%d problem stopping reminders</item>
+        <item quantity="other">%d problems stopping reminders</item>
+    </plurals>
+    <plurals name="settings_diag_warnings">
+        <item quantity="one">%d thing that could delay them</item>
+        <item quantity="other">%d things that could delay them</item>
+    </plurals>
+    <string name="settings_diag_all_good">All good</string>
+    <string name="settings_diag_checked_never">Last checked never</string>
+    <string name="settings_diag_checked_now">Last checked just now</string>
+    <plurals name="settings_diag_checked_minutes">
+        <item quantity="one">Last checked %d minute ago</item>
+        <item quantity="other">Last checked %d minutes ago</item>
+    </plurals>
+    <plurals name="settings_diag_checked_hours">
+        <item quantity="one">Last checked %d hour ago</item>
+        <item quantity="other">Last checked %d hours ago</item>
+    </plurals>
+    <plurals name="settings_diag_checked_days">
+        <item quantity="one">Last checked %d day ago</item>
+        <item quantity="other">Last checked %d days ago</item>
+    </plurals>
+    <plurals name="settings_diag_scheduled">
+        <item quantity="one">%d reminder scheduled</item>
+        <item quantity="other">%d reminders scheduled</item>
+    </plurals>
+    <string name="settings_diag_resync">Resync now</string>
+    <string name="settings_diag_no_setting">This device has no such setting</string>
+    <string name="settings_diag_open_failed">Couldn\'t open that settings screen</string>
+
+    <!-- About. %1$s is the version number. -->
+    <string name="settings_about_version" translatable="false">Foscal %1$s</string>
+    <string name="settings_about_sync">Foscal doesn\'t sync by itself. DAVx⁵ or your account app keeps calendars current.</string>
+</resources>

@@ -1,9 +1,12 @@
 package app.foscal.ui.feedback
 
+import app.foscal.R
 import app.foscal.at
 import app.foscal.core.data.FakeCalendarRepository
 import app.foscal.timedEvent
 import app.foscal.ui.editor.RecurrenceScope
+import app.foscal.ui.util.uiPlural
+import app.foscal.ui.util.uiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,7 +89,7 @@ class PendingDeletesTest {
         advanceUntilIdle()
 
         assertTrue(deletes.pending.value.isEmpty())
-        assertEquals("Couldn't delete “Standup”", messages.messages.first())
+        assertEquals(uiText(R.string.message_delete_failed, "Standup"), messages.messages.first())
     }
 
     @Test
@@ -110,7 +113,7 @@ class PendingDeletesTest {
         deletes.request(10L, 1_000L, RecurrenceScope.ALL_EVENTS, "Standup")
         advanceTimeBy(5_000L)
         deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
-        assertEquals("Deleted 2 events", undoMessage(deletes.undoable.value))
+        assertEquals(uiPlural(R.plurals.message_deleted_many, 2), undoMessage(deletes.undoable.value))
 
         deletes.undo(deletes.undoable.value.map { it.key })
         advanceUntilIdle()
@@ -126,7 +129,7 @@ class PendingDeletesTest {
         deletes.request(11L, 2_000L, RecurrenceScope.ALL_EVENTS, "Lunch")
 
         deletes.undo(deletes.undoable.value.last().key)
-        assertEquals("Deleted “Standup”", undoMessage(deletes.undoable.value))
+        assertEquals(uiText(R.string.message_deleted_one, "Standup"), undoMessage(deletes.undoable.value))
         advanceUntilIdle()
 
         assertEquals(listOf(10L), repo.deletedIds)
@@ -157,7 +160,7 @@ class PendingDeletesTest {
         advanceUntilIdle()
 
         assertEquals(listOf(10L, 11L), repo.deletedIds)
-        assertEquals("Couldn't delete “Standup”", messages.messages.first())
+        assertEquals(uiText(R.string.message_delete_failed, "Standup"), messages.messages.first())
         assertTrue(deletes.pending.value.isEmpty())
     }
 

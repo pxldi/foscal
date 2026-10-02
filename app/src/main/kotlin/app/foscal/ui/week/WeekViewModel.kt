@@ -2,6 +2,7 @@ package app.foscal.ui.week
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.foscal.R
 import app.foscal.core.data.CalendarRepository
 import app.foscal.core.data.Preferences
 import app.foscal.core.model.Event
@@ -16,6 +17,7 @@ import app.foscal.ui.feedback.UserMessages
 import app.foscal.ui.feedback.withoutPendingDeletes
 import app.foscal.ui.util.DayWindow
 import app.foscal.ui.util.Dates
+import app.foscal.ui.util.uiText
 import app.foscal.ui.util.visibleCalendarIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -285,7 +287,7 @@ class WeekViewModel @Inject constructor(
             }
             if (!moved) {
                 _moveRefusals.update { it + 1 }
-                messages.post("Couldn't move the event")
+                messages.post(uiText(R.string.message_move_failed))
             }
         }
     }

@@ -6,15 +6,11 @@ package app.foscal.core.model
  * Ordered ascending by [minutes]; [ReminderDuration.split] relies on that to find the coarsest unit
  * a value divides into exactly.
  */
-enum class ReminderUnit(val minutes: Int, val singular: String) {
-    MINUTES(1, "minute"),
-    HOURS(60, "hour"),
-    DAYS(1440, "day"),
-    WEEKS(10_080, "week"),
-    ;
-
-    /** "minutes" / "1 minute" — the label the picker shows next to the amount. */
-    fun label(count: Int): String = if (count == 1) singular else "${singular}s"
+enum class ReminderUnit(val minutes: Int) {
+    MINUTES(1),
+    HOURS(60),
+    DAYS(1440),
+    WEEKS(10_080),
 }
 
 /**
@@ -57,21 +53,5 @@ object ReminderDuration {
         if (minutes <= 0) return 0 to ReminderUnit.MINUTES
         val unit = ReminderUnit.entries.last { minutes % it.minutes == 0 }
         return minutes / unit.minutes to unit
-    }
-
-    /**
-     * Chip and list label for an offset.
-     *
-     * Non-positive offsets all read "At start": the provider uses 0 for that, and a negative value
-     * is sentinel noise — `Reminders.MINUTES_DEFAULT` is -1, meaning "the calendar's own default"
-     * rather than an offset — which must never render as "-1 min".
-     */
-    fun label(minutes: Int): String {
-        if (minutes <= 0) return "At start"
-        val (value, unit) = split(minutes)
-        // "min" rather than "minutes": these are chips, and the short form is what every other
-        // calendar app shows.
-        if (unit == ReminderUnit.MINUTES) return "$value min"
-        return "$value ${unit.label(value)}"
     }
 }

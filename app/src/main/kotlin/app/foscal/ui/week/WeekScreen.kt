@@ -1,5 +1,7 @@
 package app.foscal.ui.week
 
+import android.content.Context
+import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
@@ -41,16 +43,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.ui.theme.Motion
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
 import app.foscal.core.ui.theme.weekendLabelColor
 import app.foscal.ui.common.RecurrenceScopeDialog
+import app.foscal.ui.common.ScopeAction
 import app.foscal.ui.common.TimelineDay
 import app.foscal.ui.common.TimelineEndInset
 import app.foscal.ui.common.TimelineGutterWidth
@@ -59,7 +65,8 @@ import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.home.BehaviourViewModel
 import app.foscal.ui.util.currentLocale
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
+import java.time.ZoneOffset
+import java.util.Formatter
 import java.util.Locale
 
 /** A drop that is waiting on the user to say how much of a series it applies to. */
@@ -100,7 +107,7 @@ fun TimelineRoute(
 
     pendingMove?.let { move ->
         RecurrenceScopeDialog(
-            verb = "Move",
+            action = ScopeAction.MOVE,
             onScope = { scope ->
                 pendingMove = null
                 viewModel.moveEvent(move.event, move.startMillis, move.endMillis, scope)
@@ -122,18 +129,30 @@ fun TimelineRoute(
                 ),
                 title = {
                     Text(
-                        formatSpanRange(state.anchor, state.spanDays, currentLocale(), state.today.year),
+                        formatSpanRange(
+                            LocalContext.current,
+                            state.anchor,
+                            state.spanDays,
+                            currentLocale(),
+                            state.today.year,
+                        ),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.previous() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous")
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            stringResource(R.string.week_previous),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.next() }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next")
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            stringResource(R.string.week_next),
+                        )
                     }
                 },
             )
@@ -304,27 +323,45 @@ private fun TimelineDayHeader(
 }
 
 /**
- * "Mon, Aug 17" for a single day; "Aug 17 – 23" or "Jul 30 – Aug 5" for a range. Outside
- * [currentYear] the year is added, as the month header does, since paging a week at a time gives
- * no other clue which year is on screen: "Dec 28, 2026 – Jan 3, 2027".
+ * Whether a span title names its year: outside [currentYear] it does, as the month header does,
+ * since paging a week at a time gives no other clue which year is on screen.
  */
-internal fun formatSpanRange(start: LocalDate, spanDays: Int, locale: Locale, currentYear: Int): String {
+internal fun spanShowsYear(start: LocalDate, spanDays: Int, currentYear: Int): Boolean {
     val end = start.plusDays((spanDays - 1L).coerceAtLeast(0L))
-    val withYear = start.year != currentYear || end.year != currentYear
-    if (spanDays <= 1) {
-        val pattern = if (withYear) "EEE, MMM d, yyyy" else "EEE, MMM d"
-        return start.format(DateTimeFormatter.ofPattern(pattern, locale))
+    return start.year != currentYear || end.year != currentYear
+}
+
+/**
+ * "Wed, Sep 23" for a single day; "Sep 21 – 27" or "Aug 31 – Sep 6" for a range, with the year
+ * when [spanShowsYear] says so. The platform formats the range because how a range collapses its
+ * shared month is the language's business: German writes the same week "21.–27. Sept.".
+ */
+internal fun formatSpanRange(
+    context: Context,
+    start: LocalDate,
+    spanDays: Int,
+    locale: Locale,
+    currentYear: Int,
+): String {
+    val days = spanDays.coerceAtLeast(1).toLong()
+    var flags = DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH or
+        DateUtils.FORMAT_ABBREV_WEEKDAY
+    flags = flags or if (spanShowsYear(start, spanDays, currentYear)) {
+        DateUtils.FORMAT_SHOW_YEAR
+    } else {
+        DateUtils.FORMAT_NO_YEAR
     }
-    val f = DateTimeFormatter.ofPattern("MMM d", locale)
-    return when {
-        start.year != end.year -> {
-            val y = DateTimeFormatter.ofPattern("MMM d, yyyy", locale)
-            "${start.format(y)} – ${end.format(y)}"
-        }
-        start.month == end.month -> {
-            val month = start.month.getDisplayName(java.time.format.TextStyle.SHORT, locale)
-            "$month ${start.dayOfMonth} – ${end.dayOfMonth}" + if (withYear) ", ${start.year}" else ""
-        }
-        else -> "${start.format(f)} – ${end.format(f)}" + if (withYear) ", ${start.year}" else ""
-    }
+    if (days == 1L) flags = flags or DateUtils.FORMAT_SHOW_WEEKDAY
+    // Whole days in UTC, with an exclusive end at midnight, which the platform reads as "up to and
+    // including the day before" rather than as one more day.
+    val startMillis = start.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val endMillis = start.plusDays(days).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    return DateUtils.formatDateRange(
+        context,
+        Formatter(StringBuilder(), locale),
+        startMillis,
+        endMillis,
+        flags,
+        "UTC",
+    ).toString()
 }

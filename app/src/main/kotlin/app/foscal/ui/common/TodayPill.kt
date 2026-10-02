@@ -16,8 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 
 /**
  * "Jump back to today" affordance shared by the calendar screens, so the way back is the same
@@ -45,7 +47,7 @@ fun TodayPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
                     .background(MaterialTheme.colorScheme.primary),
             )
             Text(
-                "Today",
+                stringResource(R.string.view_today),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,

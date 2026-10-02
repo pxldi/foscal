@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Anstehende Termine auf einen Blick – neue schnell hinzufügen.</string>
+    <string name="widget_empty">Keine anstehenden Termine</string>
+    <string name="widget_refresh">Aktualisieren</string>
+    <string name="widget_quick_add">Neuer Termin</string>
+    <string name="widget_all_day">Ganztägig</string>
+    <string name="widget_all_day_until">Ganztägig bis %1$s</string>
+    <string name="widget_time_until">%1$s bis %2$s</string>
+    <string name="quick_add_hint">z. B. „Dentist friday 9:30am“</string>
+    <string name="quick_add_label">Was steht an?</string>
+    <string name="quick_add_save">Termin hinzufügen</string>
+    <string name="quick_add_title">Schnell hinzufügen</string>
+    <string name="quick_add_untitled">(Ohne Titel)</string>
+    <string name="quick_add_all_day_event">Ganztägiger Termin</string>
+    <string name="quick_add_calendar">Kalender</string>
+</resources>

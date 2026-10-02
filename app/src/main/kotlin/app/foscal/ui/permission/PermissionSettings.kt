@@ -16,9 +16,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import app.foscal.R
 
 /**
  * Whether a request for [permission] that just came back denied will never show its dialog again.
@@ -73,20 +75,18 @@ fun CalendarAccessOff(onOpenSettings: () -> Unit, modifier: Modifier = Modifier)
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            "Calendar access is off",
+            stringResource(R.string.permission_calendar_off_title),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
         Text(
-            "Foscal keeps your events in Android's calendar storage, so it cannot show or save " +
-                "anything without access. Android will not ask again. In settings, open " +
-                "Permissions and allow Calendar.",
+            stringResource(R.string.permission_calendar_off_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
         Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
-            Text("Open app settings")
+            Text(stringResource(R.string.permission_open_app_settings))
         }
     }
 }

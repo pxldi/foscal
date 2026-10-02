@@ -30,12 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.location.openInMaps
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import org.osmdroid.config.Configuration
@@ -132,13 +134,19 @@ fun LocationViewerRoute(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
                 actions = {
                     // Hand off to a full maps app for directions/navigation.
                     IconButton(onClick = { openInMaps(context, viewModel.locationText) }) {
-                        Icon(Icons.Outlined.Directions, contentDescription = "Open in maps app")
+                        Icon(
+                            Icons.Outlined.Directions,
+                            contentDescription = stringResource(R.string.location_open_in_maps),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -168,12 +176,12 @@ fun LocationViewerRoute(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        "Couldn't find “${viewModel.locationText}” on the map.",
+                        stringResource(R.string.location_not_found, viewModel.locationText),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     TextButton(onClick = { openInMaps(context, viewModel.locationText) }) {
-                        Text("Open in maps app")
+                        Text(stringResource(R.string.location_open_in_maps))
                     }
                 }
             }

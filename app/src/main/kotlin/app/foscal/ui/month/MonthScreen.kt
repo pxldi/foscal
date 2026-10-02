@@ -50,6 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +61,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.Event
 import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
@@ -68,7 +71,7 @@ import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
-import app.foscal.ui.util.rememberDateFormatter
+import app.foscal.ui.util.rememberSkeletonFormatter
 import app.foscal.ui.util.timeFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -238,7 +241,10 @@ private fun MonthJumpDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 IconButton(onClick = { year-- }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous year")
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        stringResource(R.string.month_previous_year),
+                    )
                 }
                 Text(
                     year.toString(),
@@ -246,7 +252,10 @@ private fun MonthJumpDialog(
                     fontWeight = FontWeight.Bold,
                 )
                 IconButton(onClick = { year++ }) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next year")
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        stringResource(R.string.month_next_year),
+                    )
                 }
             }
         },
@@ -291,12 +300,12 @@ private fun MonthJumpDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSelect(YearMonth.of(year, initialMonth.month)) }) {
-                Text("Go")
+                Text(stringResource(R.string.month_jump_go))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         },
     )
@@ -358,7 +367,7 @@ private fun DayPreviewPanel(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = date.format(rememberDateFormatter("EEE, MMM d")),
+                            text = date.format(rememberSkeletonFormatter("EEEMMMd")),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -366,8 +375,14 @@ private fun DayPreviewPanel(
                             modifier = Modifier.weight(1f, fill = false),
                         )
                         Text(
-                            text = if (events.isEmpty()) "No events" else {
-                                "${events.size} event${if (events.size == 1) "" else "s"}"
+                            text = if (events.isEmpty()) {
+                                stringResource(R.string.month_no_events)
+                            } else {
+                                pluralStringResource(
+                                    R.plurals.month_event_count,
+                                    events.size,
+                                    events.size,
+                                )
                             },
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -377,7 +392,7 @@ private fun DayPreviewPanel(
                 }
                 if (events.isEmpty()) {
                     Text(
-                        "Tap + to add something to this day.",
+                        stringResource(R.string.month_empty_day_hint),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp),
@@ -424,7 +439,12 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
                 .background(Color(event.color)),
         )
         Text(
-            text = previewTimeLabel(event, LocalUse24HourClock.current, currentLocale()),
+            text = previewTimeLabel(
+                event,
+                LocalUse24HourClock.current,
+                currentLocale(),
+                stringResource(R.string.view_all_day),
+            ),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -442,9 +462,14 @@ private fun MonthPreviewEventRow(event: Event, onClick: () -> Unit) {
     }
 }
 
-private fun previewTimeLabel(event: Event, is24Hour: Boolean, locale: Locale): String =
+private fun previewTimeLabel(
+    event: Event,
+    is24Hour: Boolean,
+    locale: Locale,
+    allDayLabel: String,
+): String =
     if (event.allDay) {
-        "All day"
+        allDayLabel
     } else {
         event.start.atZone(ZoneId.systemDefault())
             .toLocalTime()
@@ -647,7 +672,7 @@ private fun EmptyStateHint() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "No visible calendars. Turn one on under Calendars in the view menu.",
+            stringResource(R.string.month_no_visible_calendars),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

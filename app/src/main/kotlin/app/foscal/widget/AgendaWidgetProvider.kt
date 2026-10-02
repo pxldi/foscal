@@ -10,6 +10,7 @@ import android.net.Uri
 import android.widget.RemoteViews
 import app.foscal.MainActivity
 import app.foscal.R
+import app.foscal.ui.util.localizedPattern
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -125,7 +126,7 @@ class AgendaWidgetProvider : AppWidgetProvider() {
             )
             views.setTextViewText(
                 R.id.widget_header_date,
-                today.format(DateTimeFormatter.ofPattern("MMMM d", locale)),
+                today.format(DateTimeFormatter.ofPattern(localizedPattern("MMMMd", locale), locale)),
             )
             return views
         }

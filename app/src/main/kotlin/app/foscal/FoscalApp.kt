@@ -43,8 +43,10 @@ class FoscalApp : Application(), Configuration.Provider {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel() {
-        val name = "Event reminders"
-        val desc = "Notifications for upcoming calendar events"
+        // Created on every start, which is also what renames the channel after a language change:
+        // creating a channel that already exists updates its name and description, nothing else.
+        val name = getString(R.string.notification_channel_reminders_name)
+        val desc = getString(R.string.notification_channel_reminders_description)
         val importance = NotificationManager.IMPORTANCE_HIGH
         val channel = NotificationChannel(ReminderAlarmReceiver.CHANNEL_ID, name, importance)
         channel.description = desc

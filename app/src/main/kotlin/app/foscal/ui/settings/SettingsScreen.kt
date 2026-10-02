@@ -76,6 +76,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -85,7 +87,6 @@ import app.foscal.BuildConfig
 import app.foscal.R
 import app.foscal.core.model.Calendar
 import app.foscal.core.model.Ics
-import app.foscal.core.model.ReminderDuration
 import app.foscal.core.model.ThemeMode
 import app.foscal.ics.IcsTransfer
 import app.foscal.ui.CalendarColors
@@ -98,6 +99,9 @@ import app.foscal.ui.common.ReminderDurationDialog
 import app.foscal.ui.contrastColor
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.home.BehaviourViewModel
+import app.foscal.ui.util.UiText
+import app.foscal.ui.util.asString
+import app.foscal.ui.util.reminderLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,7 +128,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        section?.title ?: "Settings",
+                        stringResource(section?.title ?: R.string.settings_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -137,7 +141,7 @@ fun SettingsScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.action_back),
                         )
                     }
                 },
@@ -154,15 +158,15 @@ fun SettingsScreen(
             when (section) {
                 null -> settingsIndex(onOpenSection)
                 SettingsSection.Appearance -> {
-                    item { SectionHeader("The app") }
+                    item { SectionHeader(stringResource(R.string.settings_header_app)) }
                     appearanceSection(state, viewModel)
-                    item { SectionHeader("Events on the grid") }
+                    item { SectionHeader(stringResource(R.string.settings_header_grid)) }
                     item {
                         CalendarStyleSettings(state = eventStyle, viewModel = eventStyleViewModel)
                     }
                 }
                 SettingsSection.Behaviour -> {
-                    item { SectionHeader("The calendar") }
+                    item { SectionHeader(stringResource(R.string.settings_header_calendar)) }
                     item {
                         CalendarViewSettings(
                             state = behaviour,
@@ -171,7 +175,7 @@ fun SettingsScreen(
                             onUse24HourClock = viewModel::setUse24HourClock,
                         )
                     }
-                    item { SectionHeader("New events") }
+                    item { SectionHeader(stringResource(R.string.settings_header_new_events)) }
                     item {
                         NewEventSettings(
                             state = behaviour,
@@ -216,8 +220,8 @@ fun SettingsScreen(
 
         if (addingCalendar) {
             CalendarDialog(
-                title = "New calendar",
-                confirmLabel = "Add",
+                title = stringResource(R.string.settings_calendar_new),
+                confirmLabel = stringResource(R.string.action_add),
                 initialName = "",
                 initialColor = CalendarColors.pick(0),
                 error = state.createError,
@@ -234,8 +238,8 @@ fun SettingsScreen(
 
         state.editing?.let { editing ->
             CalendarDialog(
-                title = "Edit calendar",
-                confirmLabel = "Save",
+                title = stringResource(R.string.settings_calendar_edit),
+                confirmLabel = stringResource(R.string.action_save),
                 initialName = editing.name,
                 initialColor = editing.color,
                 error = state.createError,
@@ -272,7 +276,7 @@ private fun SectionRow(section: SettingsSection, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            section.title,
+            stringResource(section.title),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
@@ -294,8 +298,10 @@ private fun LazyListScope.appearanceSection(
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         item {
             ToggleRow(
-                title = "Use wallpaper colours",
-                subtitle = if (state.dynamicColor) "On" else "Off",
+                title = stringResource(R.string.settings_wallpaper_colours),
+                subtitle = stringResource(
+                    if (state.dynamicColor) R.string.settings_on else R.string.settings_off,
+                ),
                 checked = state.dynamicColor,
                 onToggle = { viewModel.setDynamicColor(it) },
                 modifier = Modifier.padding(horizontal = 12.dp),
@@ -335,7 +341,7 @@ private fun LazyListScope.calendarsSection(
 ) {
     item {
         Text(
-            "Tap a calendar to give it its own reminder.",
+            stringResource(R.string.settings_calendars_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
@@ -364,8 +370,8 @@ private fun LazyListScope.calendarsSection(
     }
     item {
         ActionRow(
-            title = "Add a calendar",
-            subtitle = "Kept on this phone",
+            title = stringResource(R.string.settings_add_calendar),
+            subtitle = stringResource(R.string.settings_kept_on_phone),
             icon = Icons.Outlined.Add,
             enabled = true,
             onClick = onAddCalendar,
@@ -377,7 +383,7 @@ private fun LazyListScope.calendarsSection(
     state.createError?.let { error ->
         item {
             Text(
-                error,
+                error.asString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -387,11 +393,10 @@ private fun LazyListScope.calendarsSection(
     // The only place an unsynced calendar is listed. Without it, a calendar some app created
     // without setting SYNC_EVENTS (the provider defaults it to 0) would be gone with no way back.
     if (state.unsynced.isNotEmpty()) {
-        item { SectionHeader("Not synced") }
+        item { SectionHeader(stringResource(R.string.settings_not_synced)) }
         item {
             Text(
-                "Sync is off for these on this phone, so Foscal leaves them out. Sync asks the " +
-                    "calendar's account to bring its events here.",
+                stringResource(R.string.settings_not_synced_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
@@ -448,7 +453,7 @@ private fun UnsyncedCalendarRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onSync) { Text("Sync") }
+            TextButton(onClick = onSync) { Text(stringResource(R.string.settings_sync)) }
         }
     }
 }
@@ -462,7 +467,10 @@ private fun LazyListScope.remindersSection(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Default reminder", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(R.string.settings_default_reminder),
+                style = MaterialTheme.typography.bodyMedium,
+            )
             ReminderChips(
                 selection = state.defaultReminderMinutes
                     ?.let { ReminderSelection.Minutes(it) }
@@ -496,9 +504,12 @@ private fun AboutSection() {
                 .padding(bottom = 6.dp)
                 .size(64.dp),
         )
-        Text("Foscal ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
         Text(
-            "Foscal doesn't sync by itself. DAVx\u2075 or your account app keeps calendars current.",
+            stringResource(R.string.settings_about_version, BuildConfig.VERSION_NAME),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Text(
+            stringResource(R.string.settings_about_sync),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -535,6 +546,17 @@ private fun CalendarRowCard(
     modifier: Modifier = Modifier,
 ) {
     val calendar = row.calendar
+    val account = accountLabel(calendar)
+    val subtitle = if (row.usesGlobalReminder) {
+        account
+    } else {
+        stringResource(
+            R.string.settings_joined,
+            account,
+            row.reminderOverride?.let { reminderLabel(it).asString() }
+                ?: stringResource(R.string.settings_no_reminder),
+        )
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -562,20 +584,16 @@ private fun CalendarRowCard(
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        buildString {
-                            append(accountLabel(calendar))
-                            if (!row.usesGlobalReminder) {
-                                append(" • ")
-                                append(row.reminderOverride?.let(ReminderDuration::label) ?: "No reminder")
-                            }
-                        },
+                        subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Icon(
                     if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = stringResource(
+                        if (expanded) R.string.settings_collapse else R.string.settings_expand,
+                    ),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Switch(checked = !row.isHidden, onCheckedChange = { onToggleHidden() })
@@ -595,11 +613,12 @@ private fun CalendarRowCard(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Show in Month", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                "Off keeps it in Day, Week and Agenda. A month cell is a few " +
-                                    "millimetres tall, so a calendar you fill in blocks crowds " +
-                                    "out the appointments worth seeing there.",
+                                stringResource(R.string.settings_show_in_month),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                stringResource(R.string.settings_show_in_month_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -614,7 +633,7 @@ private fun CalendarRowCard(
                     }
                     HorizontalDivider()
                     Text(
-                        "Reminder for new events here",
+                        stringResource(R.string.settings_calendar_reminder),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 6.dp),
                     )
@@ -625,8 +644,13 @@ private fun CalendarRowCard(
                             else -> ReminderSelection.Minutes(row.reminderOverride)
                         },
                         globalLabel = globalReminderMinutes
-                            ?.let { "Default · ${ReminderDuration.label(it)}" }
-                            ?: "Default · none",
+                            ?.let {
+                                stringResource(
+                                    R.string.settings_reminder_default,
+                                    reminderLabel(it).asString(),
+                                )
+                            }
+                            ?: stringResource(R.string.settings_reminder_default_none),
                         onSelect = onSelectReminder,
                     )
                     // Only for calendars kept on this phone. One that syncs belongs to the account
@@ -641,7 +665,7 @@ private fun CalendarRowCard(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text("Rename or recolour")
+                            Text(stringResource(R.string.settings_calendar_rename))
                         }
                         TextButton(
                             onClick = onDelete,
@@ -655,7 +679,7 @@ private fun CalendarRowCard(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text("Remove this calendar")
+                            Text(stringResource(R.string.settings_calendar_remove))
                         }
                     }
                 }
@@ -664,9 +688,14 @@ private fun CalendarRowCard(
     }
 }
 
+@Composable
 private fun accountLabel(calendar: Calendar): String {
-    val type = if (calendar.isLocal) "Local" else calendar.accountType
-    return "${calendar.accountName} • $type"
+    val type = if (calendar.isLocal) {
+        stringResource(R.string.settings_account_local)
+    } else {
+        calendar.accountType
+    }
+    return stringResource(R.string.settings_joined, calendar.accountName, type)
 }
 
 @Composable
@@ -694,13 +723,19 @@ private fun DeleteCalendarDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Remove ${pending.displayName}?") },
+        title = {
+            Text(stringResource(R.string.settings_remove_calendar_title, pending.displayName))
+        },
         text = {
             Text(
-                when (pending.eventCount) {
-                    0 -> "It has no events on it. This cannot be undone."
-                    1 -> "Its one event goes with it. This cannot be undone."
-                    else -> "Its ${pending.eventCount} events go with it. This cannot be undone."
+                if (pending.eventCount == 0) {
+                    stringResource(R.string.settings_remove_calendar_empty)
+                } else {
+                    pluralStringResource(
+                        R.plurals.settings_remove_calendar_events,
+                        pending.eventCount,
+                        pending.eventCount,
+                    )
                 },
             )
         },
@@ -711,10 +746,12 @@ private fun DeleteCalendarDialog(
                     contentColor = MaterialTheme.colorScheme.error,
                 ),
             ) {
-                Text("Remove")
+                Text(stringResource(R.string.action_remove))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -736,7 +773,7 @@ internal fun CalendarDialog(
     confirmLabel: String,
     initialName: String,
     initialColor: Int,
-    error: String?,
+    error: UiText?,
     onDismiss: () -> Unit,
     onConfirm: (String, Int) -> Unit,
 ) {
@@ -750,7 +787,7 @@ internal fun CalendarDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.settings_calendar_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -767,14 +804,13 @@ internal fun CalendarDialog(
                     }
                 }
                 Text(
-                    "Kept on this phone. Calendars that sync are named and coloured where they " +
-                        "sync from.",
+                    stringResource(R.string.settings_calendar_dialog_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (error != null) {
                     Text(
-                        error,
+                        error.asString(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -789,7 +825,9 @@ internal fun CalendarDialog(
                 Text(confirmLabel)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -822,13 +860,13 @@ private fun ThemeModePicker(
     modifier: Modifier = Modifier,
 ) {
     val options = listOf(
-        ThemeMode.SYSTEM to "System",
-        ThemeMode.LIGHT to "Light",
-        ThemeMode.DARK to "Dark",
+        ThemeMode.SYSTEM to stringResource(R.string.settings_theme_system),
+        ThemeMode.LIGHT to stringResource(R.string.settings_theme_light),
+        ThemeMode.DARK to stringResource(R.string.settings_theme_dark),
     )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Theme",
+            stringResource(R.string.settings_theme),
             style = MaterialTheme.typography.bodyMedium,
         )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -845,12 +883,6 @@ private fun ThemeModePicker(
     }
 }
 
-/**
- * `.ics` import and export, both driven by the Storage Access Framework so the app needs no
- * storage permission and can only touch the one document the user picks.
- */
-private const val NO_FILE_APP = "No app on this phone can pick a file."
-
 /** Hands the launcher its input and gives back whatever went wrong, or null if nothing did. */
 private fun <I> ManagedActivityResultLauncher<I, *>.launchSafely(input: I): Throwable? =
     runCatching { launch(input) }.exceptionOrNull()
@@ -858,12 +890,16 @@ private fun <I> ManagedActivityResultLauncher<I, *>.launchSafely(input: I): Thro
 /** Which of the transfer dialogs is open, if any. */
 private enum class TransferPicker { EXPORT, IMPORT, NEW_CALENDAR }
 
+/**
+ * `.ics` import and export, both driven by the Storage Access Framework so the app needs no
+ * storage permission and can only touch the one document the user picks.
+ */
 @Composable
 private fun ImportExportSection(
     rows: List<CalendarRow>,
     eventCounts: Map<Long, Int>,
     createdForImport: Long?,
-    createError: String?,
+    createError: UiText?,
     transfer: TransferState,
     onLoadCounts: () -> Unit,
     onExport: (Uri, Set<Long>) -> Unit,
@@ -883,7 +919,7 @@ private fun ImportExportSection(
     // stripped ROMs and work profiles ship without a documents provider, and the launcher throws
     // ActivityNotFoundException from a click handler, which takes the whole app down. The rest of
     // the app already answers this by catching around startActivity; these two never did.
-    var launchError by remember { mutableStateOf<String?>(null) }
+    var launchFailed by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(Ics.MIME_TYPE),
@@ -905,7 +941,7 @@ private fun ImportExportSection(
         importTarget = id
         onCreatedConsumed()
         if (importLauncher.launchSafely(IMPORT_MIME_TYPES) != null) {
-            launchError = NO_FILE_APP
+            launchFailed = true
             importTarget = null
         }
     }
@@ -914,25 +950,25 @@ private fun ImportExportSection(
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ActionRow(
-            title = "Export to .ics",
-            subtitle = "Pick the calendars to write out",
+            title = stringResource(R.string.settings_export_title),
+            subtitle = stringResource(R.string.settings_export_subtitle),
             icon = Icons.Outlined.FileUpload,
             enabled = !transfer.busy && calendars.isNotEmpty(),
             onClick = {
                 onDismissMessage()
-                launchError = null
+                launchFailed = false
                 onLoadCounts()
                 picking = TransferPicker.EXPORT
             },
         )
         ActionRow(
-            title = "Import from .ics",
-            subtitle = "Adds a file's events to a calendar you pick",
+            title = stringResource(R.string.settings_import_title),
+            subtitle = stringResource(R.string.settings_import_subtitle),
             icon = Icons.Outlined.FileDownload,
             enabled = !transfer.busy,
             onClick = {
                 onDismissMessage()
-                launchError = null
+                launchFailed = false
                 picking = TransferPicker.IMPORT
             },
         )
@@ -944,12 +980,15 @@ private fun ImportExportSection(
                 modifier = Modifier.padding(horizontal = 4.dp),
             ) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text("Working…", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(R.string.settings_working),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
-        launchError?.let { message ->
+        if (launchFailed) {
             Text(
-                message,
+                stringResource(R.string.settings_no_file_app),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(horizontal = 4.dp),
@@ -957,7 +996,7 @@ private fun ImportExportSection(
         }
         transfer.message?.let { message ->
             Text(
-                message,
+                message.asString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (transfer.failed) {
                     MaterialTheme.colorScheme.error
@@ -979,7 +1018,7 @@ private fun ImportExportSection(
             onExport = { ids ->
                 picking = null
                 exportSelection = ids
-                if (exportLauncher.launchSafely(exportName) != null) launchError = NO_FILE_APP
+                if (exportLauncher.launchSafely(exportName) != null) launchFailed = true
             },
         )
 
@@ -990,7 +1029,7 @@ private fun ImportExportSection(
                 picking = null
                 importTarget = id
                 if (importLauncher.launchSafely(IMPORT_MIME_TYPES) != null) {
-                    launchError = NO_FILE_APP
+                    launchFailed = true
                     importTarget = null
                 }
             },
@@ -998,8 +1037,8 @@ private fun ImportExportSection(
         )
 
         TransferPicker.NEW_CALENDAR -> CalendarDialog(
-            title = "New calendar",
-            confirmLabel = "Create and import",
+            title = stringResource(R.string.settings_calendar_new),
+            confirmLabel = stringResource(R.string.settings_create_and_import),
             initialName = "",
             initialColor = CalendarColors.pick(0),
             error = createError,
@@ -1165,19 +1204,19 @@ private fun ReminderChips(
             )
         }
         ReminderChip(
-            label = "None",
+            label = stringResource(R.string.settings_reminder_none),
             selected = selection == ReminderSelection.None,
             onClick = { onSelect(ReminderSelection.None) },
         )
         options.forEach { minutes ->
             ReminderChip(
-                label = ReminderDuration.label(minutes),
+                label = reminderLabel(minutes).asString(),
                 selected = current == minutes,
                 onClick = { onSelect(ReminderSelection.Minutes(minutes)) },
             )
         }
         ReminderChip(
-            label = "Custom…",
+            label = stringResource(R.string.settings_reminder_custom),
             selected = false,
             onClick = { picking = true },
         )

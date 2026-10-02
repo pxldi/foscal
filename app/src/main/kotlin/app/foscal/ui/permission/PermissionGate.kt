@@ -24,9 +24,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.data.CalendarPermissionState
 import app.foscal.notifications.ReminderSyncScheduler
 import dagger.hilt.EntryPoint
@@ -105,14 +107,14 @@ fun PermissionGate(content: @Composable () -> Unit) {
                 tint = MaterialTheme.colorScheme.primary,
             )
             Text(
-                "Foscal needs calendar access to show your events.",
+                stringResource(R.string.permission_calendar_rationale),
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(vertical = 16.dp),
             )
             Button(onClick = {
                 launcher.launch(CalendarPermissionState.REQUIRED_PERMISSIONS)
-            }) { Text("Grant access") }
+            }) { Text(stringResource(R.string.permission_grant_access)) }
         }
     }
 }

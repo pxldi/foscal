@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Onboarding: welcome step. -->
+    <string name="onboarding_tagline">A Material Design 3 open source calendar</string>
+    <string name="onboarding_point_private">No account, no network, no tracking.</string>
+    <string name="onboarding_point_sync">Syncs with Nextcloud, ownCloud and any CalDAV server through DAVx⁵.</string>
+    <string name="onboarding_point_views">Day, week, month and agenda views.</string>
+    <string name="onboarding_get_started">Get started</string>
+
+    <!-- Onboarding: the short waits between steps. -->
+    <string name="onboarding_checking_phone">Checking what\'s on this phone…</string>
+    <string name="onboarding_setting_up_calendar">Setting your calendar up…</string>
+    <string name="onboarding_setting_up">Setting up…</string>
+
+    <!-- Onboarding: choosing where events live. -->
+    <string name="onboarding_calendars_title">Your calendars</string>
+    <string name="onboarding_calendars_subtitle">Pick a starting point. You can change this later.</string>
+    <string name="onboarding_start_fresh_title">Start fresh</string>
+    <string name="onboarding_start_fresh_subtitle">A new calendar on this phone.</string>
+    <string name="onboarding_start_fresh_button">Create calendar</string>
+    <string name="onboarding_use_existing_title">Use what\'s already here</string>
+    <string name="onboarding_use_existing_subtitle">The ones your phone already has.</string>
+    <string name="onboarding_use_existing_button">Continue</string>
+    <string name="onboarding_caldav_title">Sync with CalDAV</string>
+    <string name="onboarding_caldav_subtitle_installed">Nextcloud, ownCloud and the rest, through DAVx⁵.</string>
+    <string name="onboarding_caldav_subtitle_missing">Needs DAVx⁵, free on F-Droid.</string>
+    <string name="onboarding_caldav_open">Open DAVx⁵</string>
+    <string name="onboarding_caldav_install">Install DAVx⁵</string>
+    <!-- The name given to the calendar "Start fresh" creates. The user can rename it later. -->
+    <string name="onboarding_local_calendar_name">My calendar</string>
+    <string name="onboarding_error_create_calendar">Couldn\'t create a calendar. Please grant calendar access and try again.</string>
+
+    <!-- Onboarding: last step, preferences. -->
+    <string name="onboarding_personalize_title">Make it yours</string>
+    <string name="onboarding_personalize_subtitle">You can change these settings later.</string>
+    <string name="onboarding_theme_title">Theme</string>
+    <string name="onboarding_theme_system">System</string>
+    <string name="onboarding_theme_light">Light</string>
+    <string name="onboarding_theme_dark">Dark</string>
+    <string name="onboarding_accent_title">Accent colour</string>
+    <string name="onboarding_reminders_title">Reminders</string>
+    <string name="onboarding_reminders_subtitle">A heads-up before your events.</string>
+    <string name="onboarding_notifications_off_title">Notifications are off</string>
+    <string name="onboarding_notifications_off_subtitle">Android will not ask again. Allow notifications for Foscal in settings to get reminders.</string>
+    <string name="onboarding_notifications_off_button">Open notification settings</string>
+    <string name="onboarding_battery_title">Reminders may arrive late</string>
+    <string name="onboarding_battery_subtitle">Battery saver holds them back until the phone wakes. Set Foscal to unrestricted to fix it.</string>
+    <string name="onboarding_battery_button">Open battery settings</string>
+    <!-- Toast when the phone has no screen for the battery exemption. -->
+    <string name="onboarding_no_battery_settings">This phone has no battery settings screen</string>
+    <string name="onboarding_maps_title">Pick locations on a map</string>
+    <string name="onboarding_maps_subtitle">Tap a place instead of typing it. Your search goes to OpenStreetMap.</string>
+    <string name="onboarding_done">Start using Foscal</string>
+
+    <!-- Calendar permission, shown by onboarding and by the gate in front of every screen. -->
+    <string name="permission_calendar_rationale">Foscal needs calendar access to show your events.</string>
+    <string name="permission_grant_access">Grant access</string>
+    <string name="permission_calendar_off_title">Calendar access is off</string>
+    <!-- Shown once Android stops showing the permission dialog. "Permissions" and "Calendar" are the labels on the system's app info page. -->
+    <string name="permission_calendar_off_body">Foscal keeps your events in Android\'s calendar storage, so it cannot show or save anything without access. Android will not ask again. In settings, open Permissions and allow Calendar.</string>
+    <string name="permission_open_app_settings">Open app settings</string>
+
+    <!-- Notification channel, listed in the system's notification settings for the app. -->
+    <string name="notification_channel_reminders_name">Event reminders</string>
+    <string name="notification_channel_reminders_description">Notifications for upcoming calendar events</string>
+    <!-- Notification title for an event that has no title of its own. -->
+    <string name="notification_untitled_event">Event</string>
+    <!-- Notification button. -->
+    <plurals name="notification_snooze">
+        <item quantity="one">Snooze %d min</item>
+        <item quantity="other">Snooze %d min</item>
+    </plurals>
+    <!-- When the event is, in a reminder notification. Used within the hour around its start. -->
+    <plurals name="notification_in_minutes">
+        <item quantity="one">In %d min</item>
+        <item quantity="other">In %d min</item>
+    </plurals>
+    <string name="notification_now">Now</string>
+    <plurals name="notification_minutes_ago">
+        <item quantity="one">%d min ago</item>
+        <item quantity="other">%d min ago</item>
+    </plurals>
+    <string name="notification_today">Today</string>
+    <string name="notification_tomorrow">Tomorrow</string>
+    <string name="notification_yesterday">Yesterday</string>
+    <!-- %1$s is a day ("Tomorrow", "Friday", "Tue, Sep 1"), %2$s a clock time ("09:00"). -->
+    <string name="notification_day_at_time">%1$s at %2$s</string>
+
+    <!-- Reminder diagnostics in Settings: what might stop reminders, and the button that fixes it. -->
+    <string name="health_no_calendar_title">No calendar access</string>
+    <string name="health_no_calendar_detail">Foscal can\'t read your events, so there\'s nothing to remind you about.</string>
+    <string name="health_no_calendar_fix">Grant access</string>
+    <string name="health_notifications_off_title">Notifications are off</string>
+    <string name="health_notifications_off_detail">Alarms still fire, but Android throws the notification away.</string>
+    <string name="health_notifications_off_fix">Open notifications</string>
+    <string name="health_background_blocked_title">Background use is blocked</string>
+    <string name="health_background_blocked_detail">Foscal can\'t re-read your calendar, so reminders run out within a week.</string>
+    <string name="health_app_settings_fix">App settings</string>
+    <string name="health_restricted_title">Android has restricted Foscal</string>
+    <string name="health_restricted_detail">Background work runs about once a day here. Opening Foscal now and then, or turning off battery optimization, gets it out.</string>
+    <string name="health_battery_settings_fix">Battery settings</string>
+    <string name="health_exact_alarms_title">Exact alarms are off</string>
+    <string name="health_exact_alarms_detail">Reminders still work, but Android may deliver them minutes or hours late.</string>
+    <string name="health_exact_alarms_fix">Allow exact alarms</string>
+    <string name="health_battery_title">Battery optimization is on</string>
+    <string name="health_battery_detail">It can hold reminders back until the phone wakes up. Foscal only wakes when one is due.</string>
+    <string name="health_rare_title">Foscal is opened rarely</string>
+    <string name="health_rare_detail">Android limits background work for apps you seldom use, so reminders refresh less often.</string>
+    <string name="health_vendor_title">This phone kills background apps</string>
+    <string name="health_vendor_detail">Some manufacturers stop apps whatever Android says. If reminders keep failing, allow Foscal to autostart.</string>
+    <string name="health_vendor_fix">Device settings</string>
+    <string name="health_read_failed_title">The last calendar read failed</string>
+    <string name="health_read_failed_detail">Your existing reminders were left alone. Foscal will retry on its own.</string>
+    <string name="health_resync_fix">Resync now</string>
+    <string name="health_never_synced_title">Reminders have never been set up</string>
+    <string name="health_never_synced_detail">No sync has finished on this phone yet.</string>
+    <string name="health_stale_title">Reminders are out of date</string>
+    <plurals name="health_stale_detail">
+        <item quantity="one">Nothing has synced for over %d hour, which usually means background work is being blocked.</item>
+        <item quantity="other">Nothing has synced for over %d hours, which usually means background work is being blocked.</item>
+    </plurals>
+</resources>

@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -141,20 +143,24 @@ fun LocationPickerRoute(
         }
     }
 
+    val lookingUpAddress = stringResource(R.string.location_looking_up)
     Scaffold(
         snackbarHost = { FeedbackSnackbarHost() },
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Pick location",
+                        stringResource(R.string.location_pick_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cancel")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_cancel),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -186,7 +192,7 @@ fun LocationPickerRoute(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search for a place or address") },
+                    placeholder = { Text(stringResource(R.string.location_search_hint)) },
                     singleLine = true,
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                     trailingIcon = {
@@ -199,7 +205,7 @@ fun LocationPickerRoute(
                     },
                     isError = state.searchNotFound,
                     supportingText = if (state.searchNotFound) {
-                        { Text("No match found") }
+                        { Text(stringResource(R.string.location_no_match)) }
                     } else {
                         null
                     },
@@ -243,7 +249,7 @@ fun LocationPickerRoute(
                     Button(
                         onClick = {
                             val center = mapView.mapCenter
-                            Toast.makeText(context, "Looking up address…", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, lookingUpAddress, Toast.LENGTH_SHORT).show()
                             viewModel.confirm(center.latitude, center.longitude)
                         },
                         enabled = !state.resolving && !state.preparing,
@@ -257,7 +263,7 @@ fun LocationPickerRoute(
                             )
                             Spacer(Modifier.size(8.dp))
                         }
-                        Text("Use this location")
+                        Text(stringResource(R.string.location_use_this))
                     }
                 }
             }

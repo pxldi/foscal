@@ -42,17 +42,20 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.foscal.R
 import app.foscal.core.model.Event
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
+import app.foscal.ui.util.localizedPattern
 import app.foscal.ui.util.timeFormatter
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -130,7 +133,10 @@ fun SearchRoute(
                 ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            stringResource(R.string.action_back),
+                        )
                     }
                 },
                 title = {
@@ -140,12 +146,15 @@ fun SearchRoute(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester),
-                        placeholder = { Text("Search events") },
+                        placeholder = { Text(stringResource(R.string.search_hint)) },
                         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                         trailingIcon = {
                             if (query.isNotEmpty()) {
                                 IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                    Icon(Icons.Outlined.Clear, contentDescription = "Clear")
+                                    Icon(
+                                        Icons.Outlined.Clear,
+                                        contentDescription = stringResource(R.string.search_clear),
+                                    )
                                 }
                             }
                         },
@@ -162,11 +171,11 @@ fun SearchRoute(
     ) { padding ->
         val q = query.trim()
         when {
-            q.isEmpty() -> EmptyState("Search by title, location, or notes.", padding)
+            q.isEmpty() -> EmptyState(stringResource(R.string.search_empty_hint), padding)
             // Blank while the first search for a query runs: the hint no longer applies and
             // "no matches" is not known yet.
             results.isEmpty() && !answered -> Box(Modifier.fillMaxSize().padding(padding))
-            results.isEmpty() -> EmptyState("No matching events.", padding)
+            results.isEmpty() -> EmptyState(stringResource(R.string.search_no_results), padding)
             else -> LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -257,6 +266,7 @@ private fun SearchResultRow(
     }
 }
 
+@Composable
 private fun buildSubtitle(
     event: Event,
     zone: java.time.ZoneId,
@@ -268,13 +278,13 @@ private fun buildSubtitle(
     val parts = mutableListOf<String>()
     val date = event.startLocalDate(zone)
     val dateText = if (isToday) {
-        "Today"
+        stringResource(R.string.view_today)
     } else {
-        date.format(DateTimeFormatter.ofPattern("EEE, MMM d", locale)) +
-            if (date.year != today.year) " ${date.year}" else ""
+        val skeleton = if (date.year != today.year) "EEEMMMdy" else "EEEMMMd"
+        date.format(DateTimeFormatter.ofPattern(localizedPattern(skeleton, locale), locale))
     }
     parts += if (event.allDay) {
-        "All day · $dateText"
+        stringResource(R.string.search_all_day_on, dateText)
     } else {
         val time = Dates.instantToLocal(event.start, zone).toLocalTime().format(timeFormatter(is24Hour, locale))
         "$dateText · $time"

@@ -57,6 +57,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import app.foscal.R
 import app.foscal.core.ui.theme.Motion
 import app.foscal.ui.calendars.CalendarRow
 import app.foscal.ui.contrastColor
@@ -94,12 +96,12 @@ fun ViewSheet(
     DragSheet(onDismiss = onDismiss) {
         ViewRow(current = current, onSelect = onSelect)
         SheetDivider()
-        SectionLabel("Calendars")
+        SectionLabel(stringResource(R.string.view_sheet_calendars))
         calendars.forEach { row ->
             CalendarToggle(row = row, onToggle = { onToggleCalendar(row) })
         }
         SheetDivider()
-        SheetAction(label = "Settings", onClick = onOpenSettings)
+        SheetAction(label = stringResource(R.string.view_sheet_settings), onClick = onOpenSettings)
     }
 }
 
@@ -384,7 +386,7 @@ private fun ViewRow(current: CalendarView, onSelect: (CalendarView) -> Unit) {
             ) {
                 ViewGlyph(view = view, tint = tint, modifier = Modifier.size(22.dp))
                 Text(
-                    view.label,
+                    stringResource(view.labelRes),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     color = tint,

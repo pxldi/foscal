@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Foscal</string>
+    <string name="app_name" translatable="false">Foscal</string>
     <string name="widget_description">Upcoming events at a glance, with quick-add.</string>
     <string name="widget_empty">No upcoming events</string>
     <string name="widget_refresh">Refresh</string>
     <string name="widget_quick_add">New event</string>
+    <!-- A row's time line on the widget. -->
+    <string name="widget_all_day">All day</string>
+    <!-- %1$s is the date the event ends on ("Aug 18"). -->
+    <string name="widget_all_day_until">All day until %1$s</string>
+    <!-- %1$s is the start time, %2$s the date the event ends on. -->
+    <string name="widget_time_until">%1$s until %2$s</string>
     <!-- Sample content for the widget picker's preview; never shown on a placed widget. -->
     <string name="widget_preview_weekday" translatable="false">Tuesday</string>
     <string name="widget_preview_date" translatable="false">August 18</string>
@@ -19,7 +25,13 @@
     <string name="widget_preview_row3_day" translatable="false">19</string>
     <string name="widget_preview_row3_title" translatable="false">Dentist</string>
     <string name="widget_preview_row3_subtitle" translatable="false">08:30 - 09:15</string>
-    <string name="quick_add_hint">e.g. "Dentist friday 9:30am"</string>
+    <!-- The parser only understands English, so the example inside the quotes must stay English
+         in every language. -->
+    <string name="quick_add_hint">e.g. “Dentist friday 9:30am”</string>
+    <string name="quick_add_label">What\'s the event?</string>
     <string name="quick_add_save">Add event</string>
     <string name="quick_add_title">Quick add</string>
+    <string name="quick_add_untitled">(Untitled)</string>
+    <string name="quick_add_all_day_event">All-day event</string>
+    <string name="quick_add_calendar">Calendar</string>
 </resources>

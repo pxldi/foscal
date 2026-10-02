@@ -42,10 +42,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import app.foscal.R
 import app.foscal.ui.contrastColor
 import java.util.Locale
 import kotlin.math.atan2
@@ -91,12 +93,14 @@ fun ColorPickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { onConfirm(argb) }) { Text("Select") }
+            TextButton(onClick = { onConfirm(argb) }) {
+                Text(stringResource(R.string.settings_color_select))
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
-        title = { Text("Custom color") },
+        title = { Text(stringResource(R.string.settings_color_custom_title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
