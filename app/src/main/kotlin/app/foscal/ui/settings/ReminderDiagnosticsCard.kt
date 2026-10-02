@@ -210,7 +210,14 @@ private fun IssueRow(issue: ReminderIssue, onFix: (ReminderFix) -> Unit) {
                 } else {
                     Icons.Outlined.WarningAmber
                 },
-                contentDescription = null,
+                // The icon is the only thing saying whether this stops reminders or only might.
+                contentDescription = stringResource(
+                    if (issue.severity == HealthSeverity.BLOCKING) {
+                        R.string.health_severity_blocking
+                    } else {
+                        R.string.health_severity_warning
+                    },
+                ),
                 tint = if (issue.severity == HealthSeverity.BLOCKING) {
                     MaterialTheme.colorScheme.error
                 } else {

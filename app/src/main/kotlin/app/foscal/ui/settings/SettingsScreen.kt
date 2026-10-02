@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -79,6 +80,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -795,9 +798,10 @@ internal fun CalendarDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    CalendarColors.presets.forEach { swatch ->
+                    CalendarColors.presets.forEachIndexed { index, swatch ->
                         ColorSwatch(
                             colorArgb = swatch,
+                            name = stringResource(CalendarColors.presetNames[index]),
                             selected = swatch == color,
                             onClick = { color = swatch },
                         )
@@ -832,13 +836,14 @@ internal fun CalendarDialog(
 }
 
 @Composable
-private fun ColorSwatch(colorArgb: Int, selected: Boolean, onClick: () -> Unit) {
+private fun ColorSwatch(colorArgb: Int, name: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
             .background(Color(colorArgb))
-            .clickable(role = Role.RadioButton, onClick = onClick),
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = name },
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {

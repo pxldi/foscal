@@ -158,4 +158,14 @@
     <string name="detail_status_not_going">Not going</string>
     <string name="detail_status_maybe">Maybe</string>
     <string name="detail_status_no_reply">No reply</string>
+
+    <!-- Moving an event without dragging it -->
+    <string name="detail_move">Move…</string>
+    <string name="move_title">Move event</string>
+    <string name="move_date">Date</string>
+    <string name="move_confirm">Move</string>
+    <!-- %1$s is the new end time. -->
+    <string name="move_ends_at">Ends at %1$s</string>
+    <!-- %1$s is the new end date, %2$s the end time. -->
+    <string name="move_ends_on">Ends %1$s at %2$s</string>
 </resources>

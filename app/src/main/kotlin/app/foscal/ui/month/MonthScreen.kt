@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -593,15 +597,26 @@ private fun DayCell(
         isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> dayNumberColor
     }
+    // The cell draws a number and some dots, which read aloud as "3". The date, whether it is today
+    // and how many events it holds are what a sighted user takes from it at a glance.
+    val dateText = date.format(rememberSkeletonFormatter("EEEEMMMMd"))
+    val dayText = if (isToday) stringResource(R.string.month_day_today, dateText) else dateText
+    val description = if (events.isEmpty()) {
+        dayText
+    } else {
+        pluralStringResource(R.plurals.month_day_events, events.size, events.size, dayText)
+    }
     Box(
         modifier = modifier
             .clip(shape)
-            .clickable(onClick = onClick),
+            .selectable(selected = isSelected, onClick = onClick)
+            .semantics { contentDescription = description },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 6.dp),
+                .padding(horizontal = 4.dp, vertical = 6.dp)
+                .clearAndSetSemantics {},
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(

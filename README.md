@@ -13,6 +13,15 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 > day and agenda views, event create/edit/delete, recurring events, reminders, and
 > offline local calendars all work. Rough edges remain (see [Roadmap](#roadmap)).
 
+## Install
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/pxldi/foscal"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="54" /></a>
+
+Signed APKs are attached to each [GitHub release](https://github.com/pxldi/foscal/releases).
+The badge opens [Obtainium](https://obtainium.imranr.dev) with this repository already filled in,
+so it installs the latest release and keeps it updated. Without Obtainium, download the `.apk`
+from the newest release and open it on the phone.
+
 ## Design goals
 
 - **Beautiful and modern.** Jetpack Compose + Material 3 with a custom, user-selectable
@@ -34,7 +43,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
   tap the month/year title to jump to a specific month, with an inline day
   preview under the grid), **Week**, **3 Days** and **Day** (an hourly schedule
   with a weekday strip, long-press drag-to-create, and long-press drag-to-move
-  timed events), and **Agenda** (a grouped schedule with pinned month-and-year
+  timed events, which TalkBack offers as actions instead), and **Agenda** (a grouped schedule with pinned month-and-year
   headers, a highlighted today, a "Today" jump button, and endless loading of
   older and newer events as you scroll). The same sheet shows or hides each
   calendar, and the tick is the one every calendar app on the phone shares. Calendars
@@ -85,7 +94,9 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 - **Home-screen widget** showing your upcoming events with real calendar
   colors, tap-to-open, and a "+" quick-add button.
 - **Quick add** — type a natural phrase ("Dentist friday 9:30am", "Lunch
-  tomorrow noon", "PTO all-day") and it parses the title, date, and time.
+  tomorrow noon", "PTO all-day") and it parses the title, date, and time. With German as the
+  language it reads German too: "Zahnarzt Freitag 9:30", "übermorgen um halb drei",
+  "Urlaub vom 19. bis 23. Okt", "Workshop morgen von 14 bis 16 Uhr".
 - **English and German** — follows the phone's language, or the one picked for Foscal under
   Settings → System → Languages → App languages on Android 13 and later.
 - **Import & export `.ics`** — export every event on your visible calendars to a
@@ -113,7 +124,7 @@ CalDAV-compatible server (Nextcloud, ownCloud, Radicale, Baïkal, …) via
 
 **Next up**
 
-- TalkBack and large-text support, with a non-drag way to move events.
+- Large-text support: checking every screen at the largest font sizes.
 - Landscape, tablet and foldable layouts.
 
 **Later / future goals**

@@ -20,6 +20,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.util.Locale
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class QuickAddViewModelTest {
@@ -36,7 +41,7 @@ class QuickAddViewModelTest {
         advanceUntilIdle()
 
         vm.updateQuery("Dentist tomorrow 3pm")
-        vm.save(use24Hour = true)
+        vm.save(use24Hour = true, locale = Locale.ENGLISH)
         advanceUntilIdle()
 
         assertTrue(vm.state.value.finished)
@@ -75,7 +80,7 @@ class QuickAddViewModelTest {
         advanceUntilIdle()
 
         vm.updateQuery("Call 3:30")
-        vm.save(use24Hour = false)
+        vm.save(use24Hour = false, locale = Locale.ENGLISH)
         advanceUntilIdle()
 
         val start = repo.created.single().start.atZone(java.time.ZoneId.systemDefault())
@@ -91,7 +96,7 @@ class QuickAddViewModelTest {
         advanceUntilIdle()
 
         vm.updateQuery("Dentist tomorrow 3pm")
-        vm.save(use24Hour = true)
+        vm.save(use24Hour = true, locale = Locale.ENGLISH)
         advanceUntilIdle()
 
         val state = vm.state.value
@@ -99,5 +104,39 @@ class QuickAddViewModelTest {
         assertFalse(state.saving)
         assertEquals("Dentist tomorrow 3pm", state.query)
         assertEquals(uiText(R.string.message_add_failed), messages.messages.first())
+    }
+
+    @Test
+    fun `a German range of hours saves its own end`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())
+        advanceUntilIdle()
+
+        vm.updateQuery("Workshop morgen von 14 bis 16 Uhr")
+        vm.save(use24Hour = true, locale = Locale.GERMAN)
+        advanceUntilIdle()
+
+        val event = repo.created.single()
+        val zone = ZoneId.systemDefault()
+        assertEquals("Workshop", event.title)
+        assertEquals(LocalTime.of(14, 0), event.start.atZone(zone).toLocalTime())
+        assertEquals(LocalTime.of(16, 0), event.end.atZone(zone).toLocalTime())
+    }
+
+    @Test
+    fun `a German range of days saves one all-day event spanning them`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = QuickAddViewModel(repo, FakePreferences(), UserMessages())
+        advanceUntilIdle()
+
+        vm.updateQuery("Urlaub 19.-23.10.2030")
+        vm.save(use24Hour = true, locale = Locale.GERMAN)
+        advanceUntilIdle()
+
+        val event = repo.created.single()
+        assertTrue(event.allDay)
+        assertEquals(LocalDate.of(2030, 10, 19), event.start.atZone(ZoneOffset.UTC).toLocalDate())
+        // Exclusive: midnight after the 23rd.
+        assertEquals(LocalDate.of(2030, 10, 24), event.end.atZone(ZoneOffset.UTC).toLocalDate())
     }
 }

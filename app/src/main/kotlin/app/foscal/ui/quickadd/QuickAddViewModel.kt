@@ -25,6 +25,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.Locale
 import javax.inject.Inject
 
 data class QuickAddUiState(
@@ -66,15 +67,18 @@ class QuickAddViewModel @Inject constructor(
 
     fun selectCalendar(id: Long) = mutate { it.copy(selectedCalendarId = id) }
 
-    /** [use24Hour] must be the value the preview was parsed with, so the event matches it. */
-    fun save(use24Hour: Boolean) {
+    /**
+     * [use24Hour] and [locale] must be the values the preview was parsed with, so the event matches
+     * it.
+     */
+    fun save(use24Hour: Boolean, locale: Locale) {
         val current = _state.value
         if (!current.canSave) return
         mutate { it.copy(saving = true) }
         viewModelScope.launch {
-            val parsed = QuickAddParser.parse(current.query, use24Hour = use24Hour)
+            val parsed = QuickAddParser.parse(current.query, use24Hour = use24Hour, locale = locale)
             val start = resolveStart(parsed)
-            val end = if (parsed.allDay) start.plusMillis(86_400_000L) else start.plusSeconds(3_600L)
+            val end = resolveEnd(parsed, start)
             val created = repository.createEvent(
                 EventInput(
                     calendarId = current.selectedCalendarId!!,
@@ -112,6 +116,16 @@ class QuickAddViewModel @Inject constructor(
             val time = parsed.time ?: nextHour()
             date.atTime(time).atZone(zone).toInstant()
         }
+    }
+
+    private fun resolveEnd(parsed: QuickAddResult, start: Instant): Instant {
+        val lastDay = parsed.endDate ?: parsed.date ?: LocalDate.now()
+        // All-day ends are exclusive: midnight after the last day.
+        if (parsed.allDay) return lastDay.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+        val startTime = start.atZone(zone)
+        val end = lastDay.atTime(parsed.endTime ?: startTime.toLocalTime().plusHours(1)).atZone(zone)
+        // "von 22 bis 1 Uhr" runs past midnight; an hour-long event from 23:30 does too.
+        return (if (end.isAfter(startTime)) end else end.plusDays(1)).toInstant()
     }
 
     private fun nextHour(): LocalTime =

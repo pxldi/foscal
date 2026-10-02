@@ -153,4 +153,7 @@
     <string name="settings_diag_open_failed">Diese Einstellungsseite ließ sich nicht öffnen</string>
 
     <string name="settings_about_sync">Foscal synchronisiert nicht selbst. DAVx⁵ oder die App deines Kontos hält die Kalender aktuell.</string>
+
+    <string name="health_severity_blocking">Fehler</string>
+    <string name="health_severity_warning">Warnung</string>
 </resources>

@@ -75,4 +75,15 @@
     <string name="import_title">Importieren</string>
     <string name="import_working">Bitte warten…</string>
     <string name="import_no_target">Es gibt noch keinen Kalender, in den du importieren kannst.</string>
+
+    <string name="timeline_event_description">%1$s, %2$s, %3$s bis %4$s</string>
+    <string name="timeline_move_earlier">15 Minuten früher</string>
+    <string name="timeline_move_later">15 Minuten später</string>
+    <string name="timeline_move_day_earlier">Einen Tag früher</string>
+    <string name="timeline_move_day_later">Einen Tag später</string>
+    <string name="month_day_today">Heute, %1$s</string>
+    <plurals name="month_day_events">
+        <item quantity="one">%2$s, %1$d Termin</item>
+        <item quantity="other">%2$s, %1$d Termine</item>
+    </plurals>
 </resources>

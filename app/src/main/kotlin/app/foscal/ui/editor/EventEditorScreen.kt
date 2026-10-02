@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -758,11 +759,11 @@ private fun ColorRow(
                     onClick = { onSelect(null) },
                 )
             }
-            CalendarColors.presets.forEach { swatch ->
+            CalendarColors.presets.forEachIndexed { index, swatch ->
                 EventColorSwatch(
                     colorArgb = swatch,
                     selected = selected == swatch,
-                    contentDescription = null,
+                    contentDescription = stringResource(CalendarColors.presetNames[index]),
                     onClick = { onSelect(swatch) },
                 )
             }
@@ -774,7 +775,7 @@ private fun ColorRow(
 private fun EventColorSwatch(
     colorArgb: Int,
     selected: Boolean,
-    contentDescription: String?,
+    contentDescription: String,
     onClick: () -> Unit,
 ) {
     Box(
@@ -782,8 +783,8 @@ private fun EventColorSwatch(
             .size(36.dp)
             .clip(CircleShape)
             .background(Color(colorArgb))
-            .clickable(role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription?.let { this.contentDescription = it } },
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.EditCalendar
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MoreVert
@@ -100,6 +101,8 @@ import app.foscal.core.ui.theme.LocalIsDarkTheme
 import app.foscal.core.ui.theme.Motion
 import app.foscal.location.openInMaps
 import app.foscal.ui.common.DeleteEventDialog
+import app.foscal.ui.common.RecurrenceScopeDialog
+import app.foscal.ui.common.ScopeAction
 import app.foscal.ui.editor.RecurrenceScope
 import app.foscal.ui.feedback.FeedbackSnackbarHost
 import app.foscal.ui.util.LocalUse24HourClock
@@ -109,6 +112,7 @@ import app.foscal.ui.util.localizedPattern
 import app.foscal.ui.util.recurrenceText
 import app.foscal.ui.util.reminderLabel
 import app.foscal.ui.util.timeFormatter
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -127,6 +131,10 @@ fun EventDetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Nothing left to look at once it is deleted, and the list underneath re-reads on resume.
     LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
+    LaunchedEffect(state.moved) { if (state.moved) onBack() }
+    var moving by remember { mutableStateOf(false) }
+    // A move of one occurrence waiting on "this, following or all"; null when nothing is.
+    var pendingMove by remember { mutableStateOf<Pair<Instant, Instant>?>(null) }
     // Reload on every resume so returning from the editor reflects edits; show the spinner
     // only for the first fetch, refresh silently afterwards.
     LifecycleResumeEffect(eventId, instanceStartMillis) {
@@ -220,10 +228,37 @@ fun EventDetailScreen(
                         .padding(4.dp),
                     onEdit = { onEdit(eventId, event.start.toEpochMilli()) }.takeUnless { readOnly },
                     onDuplicate = { onDuplicate(eventId, event.start.toEpochMilli()) },
+                    onMove = { moving = true }.takeUnless { readOnly },
                     onDelete = viewModel::askDelete.takeUnless { readOnly },
                 )
             }
         }
+    }
+
+    if (moving && event != null) {
+        MoveEventDialog(
+            event = event,
+            zone = ZoneId.systemDefault(),
+            onMove = { start, end ->
+                moving = false
+                if (event.isRecurring) {
+                    pendingMove = start to end
+                } else {
+                    viewModel.move(start.toEpochMilli(), end.toEpochMilli(), RecurrenceScope.SINGLE)
+                }
+            },
+            onDismiss = { moving = false },
+        )
+    }
+    pendingMove?.let { (start, end) ->
+        RecurrenceScopeDialog(
+            action = ScopeAction.MOVE,
+            onScope = { scope ->
+                pendingMove = null
+                viewModel.move(start.toEpochMilli(), end.toEpochMilli(), scope)
+            },
+            onDismiss = { pendingMove = null },
+        )
     }
 
     if (state.deletePrompt) {
@@ -249,6 +284,8 @@ private fun DetailActions(
     /** Null on a read-only calendar, which hides the action. */
     onEdit: (() -> Unit)?,
     onDuplicate: () -> Unit,
+    /** Null on a read-only calendar, like [onEdit]. */
+    onMove: (() -> Unit)?,
     onDelete: (() -> Unit)?,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -271,6 +308,16 @@ private fun DetailActions(
                         onDuplicate()
                     },
                 )
+                if (onMove != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.detail_move)) },
+                        leadingIcon = { Icon(Icons.Outlined.EditCalendar, contentDescription = null) },
+                        onClick = {
+                            open = false
+                            onMove()
+                        },
+                    )
+                }
                 if (onDelete != null) {
                     DropdownMenuItem(
                         text = {
