@@ -1,10 +1,23 @@
 # Release notes for each GitHub Release, written by git-cliff from Conventional Commits.
 # release.yml runs `git cliff --current`: the commits between the previous tag and the one being
 # released. Only what a user of the app would notice is listed.
+#
+# CHANGELOG.md is the same notes for every release, regenerated with `git cliff -o CHANGELOG.md`.
+# release.yml strips the header, so a release's notes start at its version line.
 
 [changelog]
-header = ""
+header = """
+# Changelog
+
+What changed for users in each release. Generated from the commit history with
+[git-cliff](https://git-cliff.org); regenerate it with `git cliff -o CHANGELOG.md`.
+"""
 body = """
+{% if version %}\
+## {{ version | trim_start_matches(pat="v") }} ({{ timestamp | date(format="%Y-%m-%d") }})
+{% else %}\
+## Unreleased
+{% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
 {% for commit in commits %}
@@ -12,7 +25,7 @@ body = """
 {%- endfor %}
 {% endfor %}
 """
-trim = true
+trim = false
 footer = ""
 
 [git]
