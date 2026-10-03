@@ -81,6 +81,22 @@ class AgendaViewModelTest {
     }
 
     @Test
+    fun `an empty agenda is only reported once the first read is back`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar()))
+        val vm = AgendaViewModel(repo, testPendingDeletes())
+
+        // The screen shows "No events" for an empty, loaded state; before the read it must not.
+        assertTrue(vm.state.value.items.isEmpty())
+        assertFalse(vm.state.value.loaded)
+
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.items.isEmpty())
+        assertTrue(vm.state.value.loaded)
+    }
+
+    @Test
     fun `paging widens the window and eventually stops widening it`() = runTest(dispatcher) {
         val vm = AgendaViewModel(
             FakeCalendarRepository(calendars = listOf(testCalendar())),

@@ -71,6 +71,7 @@ import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.Motion
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
+import app.foscal.ui.common.NoCalendarsShown
 import app.foscal.ui.common.pageOnSwipe
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
@@ -89,6 +90,7 @@ import java.util.Locale
 @Composable
 fun MonthRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
+    onChooseCalendars: () -> Unit,
     viewModel: MonthViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -196,7 +198,7 @@ fun MonthRoute(
                 modifier = Modifier.weight(1f),
             )
             if (!state.hasVisibleCalendars) {
-                EmptyStateHint()
+                NoCalendarsShown(onChooseCalendars)
             }
         }
     }
@@ -677,20 +679,3 @@ internal fun visibleMonthCells(
 
 /** Narrow enough to be a margin rather than a column, wide enough for two digits. */
 private val WeekNumberGutter = 22.dp
-
-@Composable
-private fun EmptyStateHint() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(20.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            stringResource(R.string.month_no_visible_calendars),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}

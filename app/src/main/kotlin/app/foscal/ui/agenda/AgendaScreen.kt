@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -52,6 +53,7 @@ import app.foscal.core.ui.theme.BricolageFamily
 import app.foscal.core.ui.theme.amberTextColor
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
+import app.foscal.ui.common.NoCalendarsShown
 import app.foscal.ui.util.Dates
 import app.foscal.ui.util.LocalUse24HourClock
 import app.foscal.ui.util.currentLocale
@@ -85,6 +87,7 @@ fun AgendaRoute(
      */
     headerHeightPx: Int,
     onHeaderHeight: (Int) -> Unit,
+    onChooseCalendars: () -> Unit,
     viewModel: AgendaViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -117,7 +120,11 @@ fun AgendaRoute(
         },
     ) { padding ->
         if (state.items.isEmpty()) {
-            AgendaEmpty(state.hasVisibleCalendars, Modifier.padding(padding))
+            // Nothing at all until the first read is back: saying "No events" first flashed that
+            // on every open, before a calendar with plenty in it had been read.
+            if (state.loaded) {
+                AgendaEmpty(state.hasVisibleCalendars, onChooseCalendars, Modifier.padding(padding))
+            }
             return@Scaffold
         }
         LazyColumn(
@@ -233,19 +240,38 @@ private fun AgendaPaging(
 }
 
 @Composable
-private fun AgendaEmpty(hasVisibleCalendars: Boolean, modifier: Modifier = Modifier) {
+private fun AgendaEmpty(
+    hasVisibleCalendars: Boolean,
+    onChooseCalendars: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
             .padding(24.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            if (hasVisibleCalendars) stringResource(R.string.agenda_no_events)
-            else stringResource(R.string.agenda_no_visible_calendars),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (!hasVisibleCalendars) {
+            NoCalendarsShown(onChooseCalendars)
+            return@Box
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.agenda_no_events),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                stringResource(R.string.agenda_empty_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

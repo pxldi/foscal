@@ -15,6 +15,10 @@
     <string name="view_sheet_calendars">Calendars</string>
     <string name="view_sheet_settings">Settings</string>
     <string name="home_search">Search</string>
+    <!-- Every calendar is unticked, so a view has nothing it may draw. The button opens the sheet
+         that holds the ticks. -->
+    <string name="view_no_calendars_shown">No calendars are shown.</string>
+    <string name="view_choose_calendars">Choose calendars</string>
 
     <!-- Month view and its month/year jump dialog. -->
     <string name="month_previous_year">Previous year</string>
@@ -27,7 +31,6 @@
         <item quantity="other">%d events</item>
     </plurals>
     <string name="month_empty_day_hint">Tap + to add something to this day.</string>
-    <string name="month_no_visible_calendars">No visible calendars. Turn one on under Calendars in the view menu.</string>
 
     <!-- Day, 3 Days and Week: the arrows that page back and forward by the shown span. -->
     <string name="week_previous">Previous</string>
@@ -35,7 +38,7 @@
 
     <!-- Agenda. -->
     <string name="agenda_no_events">No events.</string>
-    <string name="agenda_no_visible_calendars">No visible calendars. Open Settings to enable one.</string>
+    <string name="agenda_empty_hint">Tap + to add one.</string>
     <!-- An event that runs past midnight, on its first day. %1$s is its start time. -->
     <string name="agenda_overnight">%1$s → overnight</string>
     <!-- An event that started on an earlier day, on its last day. %1$s is its end time. -->
