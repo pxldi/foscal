@@ -12,6 +12,8 @@
     <string name="view_sheet_calendars">Kalender</string>
     <string name="view_sheet_settings">Einstellungen</string>
     <string name="home_search">Suchen</string>
+    <string name="view_no_calendars_shown">Es werden keine Kalender angezeigt.</string>
+    <string name="view_choose_calendars">Kalender auswählen</string>
 
     <string name="month_previous_year">Vorheriges Jahr</string>
     <string name="month_next_year">Nächstes Jahr</string>
@@ -22,13 +24,12 @@
         <item quantity="other">%d Termine</item>
     </plurals>
     <string name="month_empty_day_hint">Tippe auf +, um an diesem Tag etwas einzutragen.</string>
-    <string name="month_no_visible_calendars">Keine Kalender sichtbar. Schalte im Ansichtsmenü unter „Kalender“ einen ein.</string>
 
     <string name="week_previous">Vorheriger Zeitraum</string>
     <string name="week_next">Nächster Zeitraum</string>
 
     <string name="agenda_no_events">Keine Termine.</string>
-    <string name="agenda_no_visible_calendars">Keine Kalender sichtbar. Aktiviere einen in den Einstellungen.</string>
+    <string name="agenda_empty_hint">Tippe auf +, um einen einzutragen.</string>
     <string name="agenda_overnight">%1$s → über Nacht</string>
     <string name="agenda_until">Bis %1$s</string>
 

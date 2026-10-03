@@ -55,6 +55,7 @@ import app.foscal.core.ui.theme.Motion
 import app.foscal.core.ui.theme.onTodayDiscColor
 import app.foscal.core.ui.theme.todayDiscColor
 import app.foscal.core.ui.theme.weekendLabelColor
+import app.foscal.ui.common.NoCalendarsShown
 import app.foscal.ui.common.RecurrenceScopeDialog
 import app.foscal.ui.common.ScopeAction
 import app.foscal.ui.common.TimelineDay
@@ -90,6 +91,7 @@ fun TimelineRoute(
     onEventClick: (eventId: Long, instanceStartMillis: Long) -> Unit,
     onNewEvent: (startMillis: Long, endMillis: Long) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
+    onChooseCalendars: () -> Unit,
     viewModel: WeekViewModel = hiltViewModel(),
     behaviourViewModel: BehaviourViewModel = hiltViewModel(),
 ) {
@@ -168,6 +170,15 @@ fun TimelineRoute(
                 // sideways swipe no longer loses to the scroller it happens to start on top of.
                 .pageOnSwipe(onPrevious = viewModel::previous, onNext = viewModel::next),
         ) {
+            // Above the grid rather than over it: an empty grid still takes a drag to create an
+            // event, and that should keep working while the hint is up.
+            if (!state.hasVisibleCalendars) {
+                NoCalendarsShown(onChooseCalendars)
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    thickness = 0.5.dp,
+                )
+            }
             AnimatedContent(
                 targetState = state.anchor to state.spanDays,
                 transitionSpec = {

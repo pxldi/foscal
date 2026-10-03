@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -59,6 +60,16 @@ class WeekViewModelTest {
         repeat(20) { vm.next(); advanceUntilIdle() }
 
         assertTrue(repo.observedWindows.size > 1)
+    }
+
+    @Test
+    fun `hasVisibleCalendars is false when every calendar is hidden`() = runTest(dispatcher) {
+        val repo = FakeCalendarRepository(calendars = listOf(testCalendar(id = 7, visible = false)))
+        val vm = WeekViewModel(repo, FakePreferences(), testPendingDeletes(), UserMessages())
+        backgroundScope.launch(dispatcher) { vm.state.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(vm.state.value.hasVisibleCalendars)
     }
 
     @Test

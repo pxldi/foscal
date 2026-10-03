@@ -283,6 +283,7 @@ fun HomeRoute(
                 when (current) {
                     CalendarView.Month -> MonthRoute(
                         onEventClick = onEventClick,
+                        onChooseCalendars = { sheetOpen = true },
                         viewModel = monthViewModel,
                     )
                     CalendarView.Agenda -> AgendaRoute(
@@ -290,6 +291,7 @@ fun HomeRoute(
                         listState = agendaListState,
                         headerHeightPx = agendaHeaderHeight,
                         onHeaderHeight = { agendaHeaderHeight = it },
+                        onChooseCalendars = { sheetOpen = true },
                         viewModel = agendaViewModel,
                     )
                     else -> TimelineRoute(
@@ -316,6 +318,7 @@ fun HomeRoute(
                                 }
                             }
                         },
+                        onChooseCalendars = { sheetOpen = true },
                         viewModel = timelineViewModel,
                     )
                 }
