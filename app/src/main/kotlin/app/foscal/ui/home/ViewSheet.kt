@@ -108,6 +108,26 @@ fun ViewSheet(
 /** How much of the screen the sheet shows on opening, when it has more than that to show. */
 private const val OpenFraction = 0.5f
 
+/**
+ * A sheet up to this tall opens whole rather than stopping at [OpenFraction].
+ *
+ * Stopping at the halfway line is only worth it when a good part of the sheet is held back. Just
+ * over half, it held back a strip the height of one row, and that row was always the last one:
+ * Settings, with the navigation bar's padding below it, sitting half under the bar where a tap
+ * went to the bar instead. Nothing on screen said there was more to pull up.
+ */
+private const val OpenWholeFraction = 2f / 3f
+
+/**
+ * Where a sheet [sheetPx] tall rests when open on a screen [screenPx] tall, as the fraction of
+ * the sheet pushed off the bottom: 0 is fully open. Before the sheet is measured it is all hidden.
+ */
+internal fun sheetRestingFraction(sheetPx: Float, screenPx: Float): Float = when {
+    sheetPx <= 0f -> 1f
+    sheetPx <= screenPx * OpenWholeFraction -> 0f
+    else -> (sheetPx - screenPx * OpenFraction) / sheetPx
+}
+
 /** Never quite the whole screen: the strip of page left visible is what says this is a panel. */
 private const val MaxFraction = 0.92f
 
@@ -122,10 +142,11 @@ private val DismissTravel = 96.dp
  * itself. That is the right behaviour for a sheet with two meaningful states and the wrong one
  * here, where the useful height is however much of the calendar list you happen to want to see.
  *
- * So there are no anchors. The sheet opens to [OpenFraction] of the screen, the drag moves it one
- * pixel per pixel, and letting go leaves it exactly there. The only settle left is downward: drag
- * it [DismissTravel] below where it opened and releasing closes it, because a sheet you can park
- * over the bottom of the screen and not get rid of would be worse than one that snaps.
+ * So there are no anchors. The sheet opens whole if it fits in [OpenWholeFraction] of the screen
+ * and to [OpenFraction] otherwise, the drag moves it one pixel per pixel, and letting go leaves
+ * it exactly there. The only settle left is downward: drag it [DismissTravel] below where it
+ * opened and releasing closes it, because a sheet you can park over the bottom of the screen and
+ * not get rid of would be worse than one that snaps.
  *
  * Content scrolling and sheet dragging share one gesture through a nested-scroll connection: while
  * the sheet has room to rise it takes the drag, and the contents only start scrolling once it is
@@ -168,8 +189,7 @@ private fun DragSheet(
             var sheetPx by remember { mutableFloatStateOf(0f) }
 
             /**
-             * Where the sheet comes to rest when open: one shorter than half the screen has
-             * nothing to hold back and arrives whole, a taller one stops at the halfway line.
+             * Where the sheet comes to rest when open: see [sheetRestingFraction].
              *
              * Read through a function rather than held in a value, because the gesture handlers
              * below outlive the composition that made them — the nested-scroll connection is
@@ -180,9 +200,7 @@ private fun DragSheet(
              * stopped — including entirely off the bottom of the screen, with the scrim still up
              * over a calendar the user could no longer see or reach.
              */
-            fun restingFraction(): Float =
-                if (sheetPx <= 0f) 1f
-                else ((sheetPx - screenPx * OpenFraction).coerceAtLeast(0f) / sheetPx)
+            fun restingFraction(): Float = sheetRestingFraction(sheetPx, screenPx)
 
             // Both directions in one effect so they can never animate at once: setting `closing`
             // cancels the entry animation rather than racing it.
