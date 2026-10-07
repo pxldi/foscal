@@ -1,0 +1,35 @@
+Foscal ist ein Kalender für Android, der auf dem Kalenderspeicher des Handys
+aufsetzt. Mit lokalen Kalendern funktioniert er komplett offline, und über
+DAVx⁵ mit jedem CalDAV-Server – Nextcloud, ownCloud, Radicale, Baikal.
+
+Nichts aus deinem Kalender verlässt das Handy. Foscal hat keine Konten, keine
+Statistiken und keine eigenen Server. Die einzige Funktion, die ins Netz geht,
+ist die optionale Kartenauswahl, und die bleibt aus, bis du sie einschaltest.
+
+Ansichten
+* Monat, Woche, 3 Tage, Tag und Terminliste, jede merkt sich, wo du warst
+* Einen Kalender aus dem Monatsraster heraushalten, während er überall sonst
+  sichtbar bleibt
+* Kurze Termine im Monatsraster ausblenden, damit Zeitblöcke den Zahnarzt
+  nicht verdecken
+
+Termine
+* Anlegen, duplizieren, bearbeiten und löschen, auch einzelne Wiederholungen
+* Wiederholungen, wobei die Regel von CalDAV-Terminen unverändert bleibt
+* Erinnerungen pro Termin, mit einer Vorgabe pro Kalender
+* Gäste, mit einer Antwort auf Einladungen per Fingertipp
+* Ein Beitreten-Knopf für Videoanrufe aus den Notizen oder dem Ort
+* Eine Farbe pro Termin, oder die des Kalenders
+* Orte, mit Offline-Vorschlägen aus denen, die du schon verwendet hast
+* Schnell anlegen mit Sätzen wie „morgen 14 Uhr“ oder „nächsten Montag“
+
+Kalender
+* Kalender auf diesem Handy anlegen, umbenennen, umfärben und entfernen
+* .ics-Dateien importieren und exportieren, auch aus anderen Apps geöffnet
+
+Erinnerungen, die wirklich ankommen
+* Exakte Alarme, nach einem Neustart und einem Zeitzonenwechsel neu gestellt
+* Eine Diagnose, die sagt, warum eine Erinnerung zu spät kam, und die
+  Einstellung anbietet, die das behebt
+
+Foscal ist freie Software unter der GNU General Public License v3.

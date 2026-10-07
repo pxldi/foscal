@@ -1,0 +1,9 @@
+Ein neuer Willkommensbildschirm: Das Logo, die Wartezeiten und die Wahl des
+Designs sind jetzt animiert.
+
+Schnell anlegen versteht Deutsch: „morgen 14 Uhr“, „nächsten Montag“, „vom 19.
+bis 23. Okt“.
+
+Termine lassen sich ohne Ziehen verschieben: „Verschieben…“ im Menü des
+Termins wählt einen neuen Tag und eine neue Uhrzeit. TalkBack liest jetzt den
+Kalender vor, und die Blöcke in der Zeitleiste bieten Aktionen zum Verschieben.

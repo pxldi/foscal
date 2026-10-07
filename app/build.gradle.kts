@@ -91,6 +91,13 @@ android {
         generateLocaleConfig = true
     }
 
+    // AGP otherwise embeds the dependency tree in the APK signing block, encrypted with a key only
+    // Google can read. It is for Play's own checks, and every other store flags it.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
